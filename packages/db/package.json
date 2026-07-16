@@ -1,0 +1,25 @@
+{
+  "name": "@godeye/db",
+  "version": "0.1.0",
+  "private": true,
+  "main": "generated/client/index.js",
+  "types": "generated/client/index.d.ts",
+  "scripts": {
+    "build": "prisma generate",
+    "generate": "prisma generate",
+    "migrate:dev": "dotenv -e ../../.env -- prisma migrate dev",
+    "migrate:deploy": "dotenv -e ../../.env -- prisma migrate deploy",
+    "seed": "dotenv -e ../../.env -- tsx prisma/seed.ts",
+    "studio": "dotenv -e ../../.env -- prisma studio"
+  },
+  "dependencies": {
+    "@prisma/client": "^6.2.1"
+  },
+  "devDependencies": {
+    "argon2": "^0.41.1",
+    "dotenv-cli": "^8.0.0",
+    "prisma": "^6.2.1",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.3"
+  }
+}

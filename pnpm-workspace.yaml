@@ -1,0 +1,18 @@
+packages:
+  - "apps/web"
+  - "apps/api"
+  - "packages/*"
+
+# Network resilience — this project is often installed over slow/flaky links
+fetchTimeout: 900000
+fetchRetries: 10
+fetchRetryMaxtimeout: 60000
+networkConcurrency: 1
+allowBuilds:
+  '@prisma/client': true
+  '@prisma/engines': true
+  '@scarf/scarf': false
+  argon2: true
+  esbuild: true
+  prisma: true
+  sharp: true

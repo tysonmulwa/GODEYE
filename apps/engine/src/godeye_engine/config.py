@@ -1,0 +1,74 @@
+"""Engine configuration — reads the repo-root .env (shared with the Node apps)."""
+
+from __future__ import annotations
+
+from functools import lru_cache
+from pathlib import Path
+
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+def find_root_env() -> Path | None:
+    """Walk up from this file and from cwd looking for the repo-root .env."""
+    for start in (Path(__file__).resolve(), Path.cwd()):
+        node = start if start.is_dir() else start.parent
+        for _ in range(8):
+            candidate = node / ".env"
+            if candidate.is_file():
+                return candidate
+            if node.parent == node:
+                break
+            node = node.parent
+    return None
+
+
+class Settings(BaseSettings):
+    model_config = SettingsConfigDict(
+        env_file=find_root_env(), env_file_encoding="utf-8", extra="ignore"
+    )
+
+    database_url: str = "postgresql://godeye:godeye_dev_password@localhost:5432/godeye"
+    redis_url: str = "redis://localhost:6379/0"
+    engine_internal_secret: str = "dev-engine-secret"
+    token_encryption_key: str = "0" * 64
+
+    anthropic_api_key: str = ""
+    anthropic_model: str = "claude-sonnet-5"
+    openai_api_key: str = ""
+
+    # Image generation
+    image_provider: str = "openai"  # openai | google
+    openai_image_model: str = "gpt-image-1"
+    google_api_key: str = ""
+    google_image_model: str = "imagen-3.0-generate-002"
+
+    # Video generation
+    openai_tts_model: str = "tts-1"
+    ffmpeg_path: str = ""  # blank = find on PATH
+
+    # Object storage (MinIO locally, S3 in production)
+    s3_endpoint: str = "http://localhost:9000"
+    s3_access_key: str = "godeye"
+    s3_secret_key: str = "godeye_dev_secret"
+    s3_bucket: str = "godeye-media"
+    s3_region: str = "us-east-1"
+    # Public base URL for stored objects (MinIO bucket is download-public in dev)
+    s3_public_url: str = "http://localhost:9000"
+
+    reddit_client_id: str = ""
+    reddit_client_secret: str = ""
+    reddit_user_agent: str = "godeye/0.1"
+
+    engine_port: int = 8000
+
+    @property
+    def sqlalchemy_url(self) -> str:
+        # SQLAlchemy + psycopg3 needs the postgresql+psycopg:// scheme; strip
+        # Prisma-style query params like ?schema=public that psycopg rejects.
+        url = self.database_url.split("?")[0]
+        return url.replace("postgresql://", "postgresql+psycopg://", 1)
+
+
+@lru_cache
+def get_settings() -> Settings:
+    return Settings()

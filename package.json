@@ -1,0 +1,26 @@
+{
+  "name": "godeye",
+  "version": "0.1.0",
+  "private": true,
+  "description": "GODEYE — AI Marketing Operating System",
+  "packageManager": "pnpm@11.13.0",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "turbo run dev --parallel",
+    "build": "turbo run build",
+    "lint": "turbo run lint",
+    "test": "turbo run test",
+    "typecheck": "turbo run typecheck",
+    "db:generate": "pnpm --filter @godeye/db generate",
+    "db:migrate": "pnpm --filter @godeye/db migrate:dev",
+    "db:deploy": "pnpm --filter @godeye/db migrate:deploy",
+    "db:seed": "pnpm --filter @godeye/db seed",
+    "db:studio": "pnpm --filter @godeye/db studio"
+  },
+  "devDependencies": {
+    "turbo": "^2.3.3",
+    "typescript": "^5.7.3"
+  }
+}

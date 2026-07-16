@@ -1,0 +1,33 @@
+# dependencies
+node_modules/
+.pnpm-store/
+
+# builds
+dist/
+.next/
+out/
+.turbo/
+
+# environment
+.env
+.env.local
+.env.*.local
+
+# python
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+.ruff_cache/
+celerybeat-schedule*
+
+# prisma
+packages/db/generated/
+
+# misc
+.DS_Store
+*.log
+coverage/
+.idea/
+.vscode/*
+!.vscode/extensions.json

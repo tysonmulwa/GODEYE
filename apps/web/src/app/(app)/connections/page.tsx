@@ -1,0 +1,280 @@
+"use client";
+
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { motion } from "framer-motion";
+import { Facebook, Linkedin, MessageCircle, Send, Trash2, Twitter } from "lucide-react";
+import { useSearchParams } from "next/navigation";
+import { Suspense, useState } from "react";
+import { api } from "@/lib/api";
+import {
+  Badge,
+  Button,
+  Card,
+  EmptyState,
+  ErrorNote,
+  Input,
+  Label,
+  PageHeader,
+} from "@/components/ui";
+
+interface Connection {
+  id: string;
+  platform: string;
+  status: string;
+  displayName: string;
+  lastError: string | null;
+  createdAt: string;
+}
+
+type FormKind = "telegram" | "discord" | "reddit" | "x" | null;
+
+function ConnectionsInner() {
+  const params = useSearchParams();
+  const queryClient = useQueryClient();
+  const [openForm, setOpenForm] = useState<FormKind>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [fields, setFields] = useState<Record<string, string>>({});
+
+  const { data: connections = [], isLoading } = useQuery<Connection[]>({
+    queryKey: ["connections"],
+    queryFn: () => api("/connections"),
+  });
+
+  const connectMutation = useMutation({
+    mutationFn: async ({ kind, body }: { kind: string; body: Record<string, string> }) =>
+      api(`/connections/${kind}`, { method: "POST", body }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["connections"] });
+      setOpenForm(null);
+      setFields({});
+      setError(null);
+    },
+    onError: (e) => setError(e instanceof Error ? e.message : "Connection failed"),
+  });
+
+  const removeMutation = useMutation({
+    mutationFn: (id: string) => api(`/connections/${id}`, { method: "DELETE" }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["connections"] }),
+  });
+
+  const connectMeta = async () => {
+    try {
+      const { url } = await api<{ url: string }>("/connections/meta/authorize");
+      window.location.href = url;
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Meta authorization failed");
+    }
+  };
+
+  const connectLinkedin = async () => {
+    try {
+      const { url } = await api<{ url: string }>("/connections/linkedin/authorize");
+      window.location.href = url;
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "LinkedIn authorization failed");
+    }
+  };
+
+  const set = (key: string) => (e: React.ChangeEvent<HTMLInputElement>) =>
+    setFields((f) => ({ ...f, [key]: e.target.value }));
+
+  const forms: Record<Exclude<FormKind, null>, { fields: { key: string; label: string; placeholder: string; type?: string }[]; hint: string }> = {
+    telegram: {
+      hint: "Create a bot with @BotFather, add it to your channel as admin, then paste the token and channel handle.",
+      fields: [
+        { key: "botToken", label: "Bot token", placeholder: "123456789:AAF...", type: "password" },
+        { key: "chatId", label: "Channel / chat", placeholder: "@mychannel or -100123456789" },
+      ],
+    },
+    discord: {
+      hint: "Create an application at discord.com/developers, add a bot, invite it to your server with Send Messages permission.",
+      fields: [
+        { key: "botToken", label: "Bot token", placeholder: "MTAx...", type: "password" },
+        { key: "channelId", label: "Channel ID", placeholder: "Enable developer mode → right-click channel → Copy ID" },
+      ],
+    },
+    reddit: {
+      hint: "Requires the server's Reddit script app (see docs/SETUP.md). Uses your Reddit account credentials.",
+      fields: [
+        { key: "username", label: "Reddit username", placeholder: "without u/" },
+        { key: "password", label: "Reddit password", placeholder: "••••••••", type: "password" },
+        { key: "subreddit", label: "Default subreddit", placeholder: "without r/" },
+      ],
+    },
+    x: {
+      hint: "From developer.x.com: create a project + app with Read and Write, then generate the Consumer Keys and Access Token/Secret.",
+      fields: [
+        { key: "apiKey", label: "API key", placeholder: "Consumer API Key", type: "password" },
+        { key: "apiSecret", label: "API secret", placeholder: "Consumer API Secret", type: "password" },
+        { key: "accessToken", label: "Access token", placeholder: "Access Token", type: "password" },
+        { key: "accessSecret", label: "Access secret", placeholder: "Access Token Secret", type: "password" },
+      ],
+    },
+  };
+
+  const providers = [
+    { kind: "telegram" as const, name: "Telegram", icon: Send, desc: "Post to channels & groups" },
+    { kind: "discord" as const, name: "Discord", icon: MessageCircle, desc: "Post to server channels" },
+    { kind: "reddit" as const, name: "Reddit", icon: MessageCircle, desc: "Submit posts to subreddits" },
+    { kind: "x" as const, name: "X (Twitter)", icon: Twitter, desc: "Publish tweets" },
+  ];
+
+  return (
+    <>
+      <PageHeader
+        title="Connections"
+        subtitle="Connect the places GODEYE publishes to. Credentials are encrypted at rest."
+      />
+
+      {params.get("connected") && (
+        <p className="mb-4 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-600 dark:text-emerald-400">
+          {params.get("connected") === "meta" ? "Meta" : "LinkedIn"} connected —{" "}
+          {params.get("count")} account(s) added.
+        </p>
+      )}
+      {params.get("error") && <ErrorNote message={params.get("error")} />}
+
+      {/* Connected accounts */}
+      <section className="mb-8">
+        <h2 className="mb-3 text-sm font-medium text-ink-2">Connected accounts</h2>
+        {isLoading ? null : connections.length === 0 ? (
+          <EmptyState
+            title="Nothing connected yet"
+            hint="Connect at least one platform below so the AI has somewhere to publish."
+          />
+        ) : (
+          <div className="grid gap-3 sm:grid-cols-2">
+            {connections.map((c) => (
+              <Card key={c.id} className="flex items-center justify-between gap-3 !p-4">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    <p className="truncate text-sm font-medium">{c.displayName}</p>
+                    <Badge status={c.status} />
+                  </div>
+                  <p className="text-xs text-ink-3">{c.platform}</p>
+                  {c.lastError && (
+                    <p className="mt-1 truncate text-xs text-red-500">{c.lastError}</p>
+                  )}
+                </div>
+                <button
+                  onClick={() => removeMutation.mutate(c.id)}
+                  aria-label="Disconnect"
+                  className="rounded-lg p-2 text-ink-3 transition-colors hover:bg-red-500/10 hover:text-red-500"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              </Card>
+            ))}
+          </div>
+        )}
+      </section>
+
+      {/* Add new */}
+      <section>
+        <h2 className="mb-3 text-sm font-medium text-ink-2">Add a platform</h2>
+        <div className="grid gap-3 sm:grid-cols-2">
+          {providers.map(({ kind, name, icon: Icon, desc }) => (
+            <Card key={kind} className="!p-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-surface-3">
+                    <Icon className="h-4.5 w-4.5 text-accent" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium">{name}</p>
+                    <p className="text-xs text-ink-3">{desc}</p>
+                  </div>
+                </div>
+                <Button
+                  variant="secondary"
+                  onClick={() => {
+                    setOpenForm(openForm === kind ? null : kind);
+                    setFields({});
+                    setError(null);
+                  }}
+                >
+                  {openForm === kind ? "Close" : "Connect"}
+                </Button>
+              </div>
+
+              {openForm === kind && (
+                <motion.form
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: "auto" }}
+                  className="mt-4 space-y-3 overflow-hidden border-t border-line pt-4"
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    connectMutation.mutate({ kind, body: fields });
+                  }}
+                >
+                  <p className="text-xs text-ink-3">{forms[kind].hint}</p>
+                  {forms[kind].fields.map((f) => (
+                    <div key={f.key}>
+                      <Label>{f.label}</Label>
+                      <Input
+                        type={f.type ?? "text"}
+                        required
+                        value={fields[f.key] ?? ""}
+                        onChange={set(f.key)}
+                        placeholder={f.placeholder}
+                      />
+                    </div>
+                  ))}
+                  <ErrorNote message={error} />
+                  <Button type="submit" loading={connectMutation.isPending} className="w-full">
+                    Validate & connect
+                  </Button>
+                </motion.form>
+              )}
+            </Card>
+          ))}
+
+          <Card className="!p-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-surface-3">
+                  <Facebook className="h-4.5 w-4.5 text-accent" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium">Facebook & Instagram</p>
+                  <p className="text-xs text-ink-3">OAuth via your Meta business app</p>
+                </div>
+              </div>
+              <Button variant="secondary" onClick={connectMeta}>
+                Connect
+              </Button>
+            </div>
+          </Card>
+
+          <Card className="!p-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-surface-3">
+                  <Linkedin className="h-4.5 w-4.5 text-accent" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium">LinkedIn</p>
+                  <p className="text-xs text-ink-3">OAuth — post to your profile feed</p>
+                </div>
+              </div>
+              <Button variant="secondary" onClick={connectLinkedin}>
+                Connect
+              </Button>
+            </div>
+          </Card>
+        </div>
+        <p className="mt-4 text-xs text-ink-3">
+          More platforms (TikTok, YouTube, Pinterest, Threads…) arrive in upcoming phases.
+        </p>
+      </section>
+    </>
+  );
+}
+
+export default function ConnectionsPage() {
+  return (
+    <Suspense>
+      <ConnectionsInner />
+    </Suspense>
+  );
+}
