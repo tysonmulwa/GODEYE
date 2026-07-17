@@ -1,11 +1,11 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowRight, CalendarClock, CheckCircle2, Link2, PenSquare, XCircle } from "lucide-react";
 import Link from "next/link";
 import { api } from "@/lib/api";
 import { useAuthStore } from "@/lib/auth-store";
-import { Badge, Card, EmptyState, PageHeader } from "@/components/ui";
+import { Badge, Button, Card, EmptyState, PageHeader } from "@/components/ui";
 
 interface ScheduledPost {
   id: string;
@@ -20,6 +20,80 @@ interface ScheduledPost {
 interface Connection {
   id: string;
   status: string;
+}
+
+interface PendingContent {
+  id: string;
+  title: string | null;
+  body: string;
+  aiGenerated: boolean;
+  submittedAt: string | null;
+  submittedByName: string | null;
+}
+
+/** Review queue — visible to admins/owner when content is waiting for approval. */
+function ApprovalsQueue() {
+  const queryClient = useQueryClient();
+  const { organization } = useAuthStore();
+  const isReviewer = ["OWNER", "ADMIN"].includes(organization?.role ?? "");
+
+  const { data: pending = [] } = useQuery<PendingContent[]>({
+    queryKey: ["content", "PENDING_APPROVAL"],
+    queryFn: () => api("/content?status=PENDING_APPROVAL"),
+    enabled: isReviewer,
+    refetchInterval: 30_000,
+  });
+
+  const review = useMutation({
+    mutationFn: ({ id, action }: { id: string; action: "approve" | "reject" }) =>
+      api(`/content/${id}/${action}`, { method: "POST", body: {} }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["content", "PENDING_APPROVAL"] });
+      queryClient.invalidateQueries({ queryKey: ["schedule"] });
+    },
+  });
+
+  if (!isReviewer || pending.length === 0) return null;
+
+  return (
+    <div className="mb-8">
+      <h2 className="mb-3 text-sm font-medium text-ink-2">
+        Waiting for your approval ({pending.length})
+      </h2>
+      <div className="space-y-2">
+        {pending.map((item) => (
+          <Card key={item.id} className="flex items-center gap-4 !p-4">
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm">{item.title ?? item.body}</p>
+              <p className="mt-0.5 text-xs text-ink-3">
+                {item.aiGenerated ? "Autopilot draft" : item.submittedByName ?? "Teammate"}
+                {item.submittedAt &&
+                  ` · ${new Date(item.submittedAt).toLocaleString(undefined, {
+                    month: "short",
+                    day: "numeric",
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })}`}
+              </p>
+            </div>
+            <Button
+              loading={review.isPending}
+              onClick={() => review.mutate({ id: item.id, action: "approve" })}
+            >
+              Approve
+            </Button>
+            <Button
+              variant="ghost"
+              loading={review.isPending}
+              onClick={() => review.mutate({ id: item.id, action: "reject" })}
+            >
+              Reject
+            </Button>
+          </Card>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 export default function DashboardPage() {
@@ -77,6 +151,8 @@ export default function DashboardPage() {
           </Card>
         ))}
       </div>
+
+      <ApprovalsQueue />
 
       <div className="mb-3 flex items-center justify-between">
         <h2 className="text-sm font-medium text-ink-2">Recent activity</h2>

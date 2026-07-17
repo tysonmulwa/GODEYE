@@ -32,6 +32,15 @@ from .config import get_settings
 
 metadata = MetaData()
 
+Organization = Table(
+    "Organization",
+    metadata,
+    Column("id", String, primary_key=True),
+    Column("name", String, nullable=False),
+    Column("slug", String, nullable=False),
+    Column("requireApproval", Boolean, nullable=False, default=False),
+)
+
 AgentRun = Table(
     "AgentRun",
     metadata,
@@ -71,6 +80,11 @@ ContentItem = Table(
     Column("lastRecycledAt", DateTime(timezone=False)),
     Column("aiGenerated", Boolean, nullable=False),
     Column("agentRunId", String),
+    Column("submittedAt", DateTime(timezone=False)),
+    Column("submittedById", String),
+    Column("reviewedAt", DateTime(timezone=False)),
+    Column("reviewedById", String),
+    Column("reviewNote", Text),
     Column("createdAt", DateTime(timezone=False)),
     Column("updatedAt", DateTime(timezone=False)),
 )

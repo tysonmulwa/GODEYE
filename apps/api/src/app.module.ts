@@ -8,6 +8,7 @@ import { ConnectionsModule } from "./connections/connections.module";
 import { ContentModule } from "./content/content.module";
 import { EngineModule } from "./engine/engine.module";
 import { MediaModule } from "./media/media.module";
+import { MembersModule } from "./members/members.module";
 import { RealtimeModule } from "./realtime/realtime.module";
 import { SchedulingModule } from "./scheduling/scheduling.module";
 import { SeoModule } from "./seo/seo.module";
@@ -23,6 +24,7 @@ import { WebhooksModule } from "./webhooks/webhooks.module";
     ConnectionsModule,
     ContentModule,
     MediaModule,
+    MembersModule,
     SchedulingModule,
     SeoModule,
     RealtimeModule,

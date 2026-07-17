@@ -10,17 +10,19 @@ import {
 } from "@godeye/shared";
 import { CurrentAuth } from "../common/current-auth.decorator";
 import { AccessTokenPayload, JwtAuthGuard } from "../common/jwt-auth.guard";
+import { MinRole, RolesGuard } from "../common/roles.guard";
 import { ZodPipe } from "../common/zod.pipe";
 import { SchedulingService } from "./scheduling.service";
 
 @ApiTags("scheduling")
 @Controller()
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
 @ApiBearerAuth()
 export class SchedulingController {
   constructor(private readonly scheduling: SchedulingService) {}
 
   @Post("schedule")
+  @MinRole("EDITOR")
   @ApiOperation({ summary: "Schedule a content item to one or more connections" })
   schedule(
     @CurrentAuth() auth: AccessTokenPayload,
@@ -39,11 +41,13 @@ export class SchedulingController {
   }
 
   @Post("schedule/:id/cancel")
+  @MinRole("EDITOR")
   cancel(@CurrentAuth() auth: AccessTokenPayload, @Param("id") id: string) {
     return this.scheduling.cancel(auth.orgId, id, auth.sub);
   }
 
   @Post("posting-plans")
+  @MinRole("EDITOR")
   createPlan(
     @CurrentAuth() auth: AccessTokenPayload,
     @Body(new ZodPipe(postingPlanSchema)) body: PostingPlanInput,
@@ -57,6 +61,7 @@ export class SchedulingController {
   }
 
   @Patch("posting-plans/:id")
+  @MinRole("EDITOR")
   @ApiOperation({ summary: "Update a posting plan (toggle active, autopilot, cadence...)" })
   updatePlan(
     @CurrentAuth() auth: AccessTokenPayload,

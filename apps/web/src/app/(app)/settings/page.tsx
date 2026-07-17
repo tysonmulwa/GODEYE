@@ -14,6 +14,47 @@ interface BrandKit {
   watermarkEnabled: boolean;
 }
 
+const MANAGE_ROLES = ["OWNER", "ADMIN"];
+
+function ApprovalCard() {
+  const { organization, setRequireApproval } = useAuthStore();
+  const [error, setError] = useState<string | null>(null);
+  const canManage = MANAGE_ROLES.includes(organization?.role ?? "");
+  const enabled = organization?.requireApproval ?? false;
+
+  const save = useMutation({
+    mutationFn: (requireApproval: boolean) =>
+      api<{ requireApproval: boolean }>("/members/org/settings", {
+        method: "PATCH",
+        body: { requireApproval },
+      }),
+    onSuccess: (res) => {
+      setRequireApproval(res.requireApproval);
+      setError(null);
+    },
+    onError: (e) => setError(e instanceof Error ? e.message : "Failed to save"),
+  });
+
+  return (
+    <Card>
+      <h2 className="mb-1 text-sm font-semibold">Content approval</h2>
+      <p className="mb-4 text-xs text-ink-3">
+        When enabled, content (including autopilot drafts) must be approved by an admin or the
+        owner before it can be scheduled or published.
+      </p>
+      <Switch
+        checked={enabled}
+        onChange={(v) => canManage && save.mutate(v)}
+        label="Require approval before publishing"
+        hint={canManage ? undefined : "Only admins or the owner can change this"}
+      />
+      <div className="mt-3">
+        <ErrorNote message={error} />
+      </div>
+    </Card>
+  );
+}
+
 function BrandKitCard() {
   const queryClient = useQueryClient();
   const { data: kit } = useQuery<BrandKit>({
@@ -250,15 +291,15 @@ export default function SettingsPage() {
           </div>
         </Card>
 
+        <ApprovalCard />
+
         <BrandKitCard />
 
         <Card>
           <h2 className="mb-1 text-sm font-semibold">Coming in the next phases</h2>
           <ul className="list-inside list-disc space-y-1 text-xs text-ink-3">
-            <li>Short-video generation (script → scenes → voiceover → subtitles)</li>
-            <li>SEO engine & website analysis</li>
-            <li>Team members, roles & approval workflows</li>
             <li>Billing & subscription management</li>
+            <li>More platforms: TikTok, YouTube, Pinterest, Threads</li>
           </ul>
         </Card>
       </div>

@@ -16,6 +16,7 @@ export interface SessionOrg {
   slug: string;
   role: string;
   hasProfile: boolean;
+  requireApproval?: boolean;
 }
 
 interface SessionPayload {
@@ -31,6 +32,7 @@ interface AuthState {
   accessToken: string | null;
   setSession: (session: SessionPayload) => void;
   markProfileComplete: () => void;
+  setRequireApproval: (v: boolean) => void;
   clear: () => void;
 }
 
@@ -49,6 +51,10 @@ export const useAuthStore = create<AuthState>((set) => ({
   markProfileComplete: () =>
     set((s) => ({
       organization: s.organization ? { ...s.organization, hasProfile: true } : s.organization,
+    })),
+  setRequireApproval: (v) =>
+    set((s) => ({
+      organization: s.organization ? { ...s.organization, requireApproval: v } : s.organization,
     })),
   clear: () => set({ status: "guest", user: null, organization: null, accessToken: null }),
 }));

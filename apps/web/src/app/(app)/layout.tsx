@@ -1,5 +1,6 @@
 "use client";
 
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { motion } from "framer-motion";
 import {
   CalendarDays,
@@ -12,14 +13,15 @@ import {
   PenSquare,
   Rocket,
   Settings,
+  Users,
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect } from "react";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { cx } from "@/components/ui";
-import { API_URL } from "@/lib/api";
-import { useAuthStore } from "@/lib/auth-store";
+import { api, API_URL } from "@/lib/api";
+import { useAuthStore, type SessionOrg, type SessionUser } from "@/lib/auth-store";
 import { useRealtime } from "@/lib/socket";
 
 const NAV = [
@@ -29,8 +31,56 @@ const NAV = [
   { href: "/seo", label: "SEO", icon: Gauge },
   { href: "/calendar", label: "Calendar", icon: CalendarDays },
   { href: "/connections", label: "Connections", icon: Link2 },
+  { href: "/team", label: "Team", icon: Users },
   { href: "/settings", label: "Settings", icon: Settings },
 ];
+
+interface OrgMembershipRow {
+  orgId: string;
+  name: string;
+  slug: string;
+  role: string;
+}
+
+/** Dropdown shown only when the user belongs to more than one organization. */
+function OrgSwitcher() {
+  const queryClient = useQueryClient();
+  const { organization, setSession } = useAuthStore();
+  const { data: orgs } = useQuery({
+    queryKey: ["auth", "orgs"],
+    queryFn: () => api<OrgMembershipRow[]>("/auth/orgs"),
+    staleTime: 60_000,
+  });
+
+  if (!orgs || orgs.length < 2 || !organization) {
+    return <p className="truncate text-[11px] text-ink-3">{organization?.name}</p>;
+  }
+
+  const switchOrg = async (orgId: string) => {
+    if (orgId === organization.id) return;
+    const session = await api<{ user: SessionUser; organization: SessionOrg; accessToken: string }>(
+      "/auth/switch-org",
+      { method: "POST", body: { orgId } },
+    );
+    setSession(session);
+    queryClient.clear();
+  };
+
+  return (
+    <select
+      value={organization.id}
+      onChange={(e) => void switchOrg(e.target.value)}
+      className="mt-0.5 w-full truncate rounded border border-transparent bg-transparent text-[11px] text-ink-3 hover:border-line focus:outline-none"
+      title="Switch organization"
+    >
+      {orgs.map((o) => (
+        <option key={o.orgId} value={o.orgId}>
+          {o.name} · {o.role.toLowerCase()}
+        </option>
+      ))}
+    </select>
+  );
+}
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -92,9 +142,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
         <div className="border-t border-line p-3">
           <div className="mb-2 flex items-center justify-between">
-            <div className="min-w-0">
+            <div className="min-w-0 flex-1">
               <p className="truncate text-xs font-medium">{user?.name}</p>
-              <p className="truncate text-[11px] text-ink-3">{organization?.name}</p>
+              <OrgSwitcher />
             </div>
             <ThemeToggle />
           </div>

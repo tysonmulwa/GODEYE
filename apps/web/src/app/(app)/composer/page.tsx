@@ -6,9 +6,11 @@ import { CalendarClock, Sparkles, Wand2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { PLATFORM_DEFAULT_PRESET } from "@godeye/shared";
 import { api } from "@/lib/api";
+import { useAuthStore } from "@/lib/auth-store";
 import { ImageStudio } from "@/components/image-studio";
 import { VideoStudio } from "@/components/video-studio";
 import {
+  Badge,
   Button,
   Card,
   ErrorNote,
@@ -29,12 +31,14 @@ interface Connection {
 
 interface ContentItem {
   id: string;
+  status: string;
   title: string | null;
   body: string;
   hashtags: string[];
   variants: Record<string, { body: string; hashtags: string[] }> | null;
   abVariants: Record<string, { body: string; hashtags: string[] }> | null;
   evergreen?: boolean;
+  reviewNote?: string | null;
 }
 
 interface AgentRun {
@@ -49,6 +53,8 @@ interface AgentRun {
 
 export default function ComposerPage() {
   const queryClient = useQueryClient();
+  const { organization } = useAuthStore();
+  const isReviewer = ["OWNER", "ADMIN"].includes(organization?.role ?? "");
   const [goal, setGoal] = useState("");
   const [topic, setTopic] = useState("");
   const [tone, setTone] = useState("");
@@ -138,6 +144,25 @@ export default function ComposerPage() {
     },
     onError: (e) => setError(e instanceof Error ? e.message : "Scheduling failed"),
   });
+
+  const reviewMutation = useMutation({
+    mutationFn: (action: "submit" | "approve" | "reject") =>
+      api<ContentItem>(`/content/${content!.id}/${action}`, {
+        method: "POST",
+        body: {},
+      }),
+    onSuccess: (updated) => {
+      setContent(updated);
+      setError(null);
+    },
+    onError: (e) => setError(e instanceof Error ? e.message : "Review action failed"),
+  });
+
+  // Scheduling is blocked while the org requires approval and this item hasn't cleared review
+  const approvalPending =
+    (organization?.requireApproval ?? false) &&
+    !!content &&
+    !["APPROVED", "SCHEDULED", "PUBLISHED"].includes(content.status);
 
   const saveEdits = async (updated: ContentItem) => {
     setContent(updated);
@@ -398,6 +423,55 @@ export default function ComposerPage() {
                       hint="Autopilot plans with recycling can re-post this during quiet slots."
                     />
                   </div>
+                  {approvalPending && (
+                    <div className="mb-3 rounded-lg border border-amber-500/30 bg-amber-500/5 px-3 py-2.5">
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="flex items-center gap-2 text-xs font-medium">
+                            Approval required <Badge status={content.status} />
+                          </p>
+                          {content.status === "DRAFT" && content.reviewNote && (
+                            <p className="mt-1 text-xs text-red-500">
+                              Rejected: {content.reviewNote}
+                            </p>
+                          )}
+                        </div>
+                        <div className="flex shrink-0 gap-2">
+                          {content.status === "DRAFT" && (
+                            <Button
+                              variant="secondary"
+                              loading={reviewMutation.isPending}
+                              onClick={() => reviewMutation.mutate("submit")}
+                            >
+                              Submit for review
+                            </Button>
+                          )}
+                          {content.status === "PENDING_APPROVAL" && isReviewer && (
+                            <>
+                              <Button
+                                loading={reviewMutation.isPending}
+                                onClick={() => reviewMutation.mutate("approve")}
+                              >
+                                Approve
+                              </Button>
+                              <Button
+                                variant="danger"
+                                loading={reviewMutation.isPending}
+                                onClick={() => reviewMutation.mutate("reject")}
+                              >
+                                Reject
+                              </Button>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                      {content.status === "PENDING_APPROVAL" && !isReviewer && (
+                        <p className="mt-1 text-xs text-ink-3">
+                          Waiting for an admin or the owner to approve this content.
+                        </p>
+                      )}
+                    </div>
+                  )}
                   <Label>Publish time (your timezone)</Label>
                   <div className="flex gap-2">
                     <Input
@@ -408,7 +482,7 @@ export default function ComposerPage() {
                     />
                     <Button
                       loading={scheduleMutation.isPending}
-                      disabled={scheduled || !scheduledAt}
+                      disabled={scheduled || !scheduledAt || approvalPending}
                       onClick={() => scheduleMutation.mutate()}
                     >
                       <CalendarClock className="h-4 w-4" />

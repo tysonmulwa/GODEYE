@@ -86,17 +86,26 @@ export class ContentService {
     };
   }
 
+  private readonly reviewerInclude = {
+    submittedBy: { select: { name: true } },
+    reviewedBy: { select: { name: true } },
+  } as const;
+
   async listContent(orgId: string, status?: string) {
     const rows = await this.prisma.contentItem.findMany({
       where: { orgId, ...(status ? { status: status as never } : {}) },
       orderBy: { createdAt: "desc" },
       take: 100,
+      include: this.reviewerInclude,
     });
     return rows.map((c) => this.toDto(c));
   }
 
   async getContent(orgId: string, id: string) {
-    const row = await this.prisma.contentItem.findFirst({ where: { id, orgId } });
+    const row = await this.prisma.contentItem.findFirst({
+      where: { id, orgId },
+      include: this.reviewerInclude,
+    });
     if (!row) throw new NotFoundException("Content not found");
     return this.toDto(row);
   }
@@ -143,6 +152,95 @@ export class ContentService {
         variants: input.variants as never,
         evergreen: input.evergreen,
       },
+      include: this.reviewerInclude,
+    });
+    return this.toDto(row);
+  }
+
+  // ---------- Approval workflow ----------
+
+  async submitForReview(orgId: string, userId: string, id: string) {
+    const content = await this.prisma.contentItem.findFirst({ where: { id, orgId } });
+    if (!content) throw new NotFoundException("Content not found");
+    if (content.status !== "DRAFT") {
+      throw new BadRequestException(`Only drafts can be submitted (status: ${content.status})`);
+    }
+    const row = await this.prisma.contentItem.update({
+      where: { id },
+      data: {
+        status: "PENDING_APPROVAL",
+        submittedAt: new Date(),
+        submittedById: userId,
+        reviewedAt: null,
+        reviewedById: null,
+        reviewNote: null,
+      },
+      include: this.reviewerInclude,
+    });
+    this.audit.log({
+      orgId,
+      userId,
+      action: "content.submitted",
+      targetType: "ContentItem",
+      targetId: id,
+    });
+    return this.toDto(row);
+  }
+
+  async approve(orgId: string, userId: string, id: string) {
+    const content = await this.prisma.contentItem.findFirst({ where: { id, orgId } });
+    if (!content) throw new NotFoundException("Content not found");
+    if (content.status !== "PENDING_APPROVAL") {
+      throw new BadRequestException(`Only pending content can be approved (status: ${content.status})`);
+    }
+    const row = await this.prisma.contentItem.update({
+      where: { id },
+      data: { status: "APPROVED", reviewedAt: new Date(), reviewedById: userId, reviewNote: null },
+      include: this.reviewerInclude,
+    });
+    this.audit.log({
+      orgId,
+      userId,
+      action: "content.approved",
+      targetType: "ContentItem",
+      targetId: id,
+    });
+    return this.toDto(row);
+  }
+
+  /**
+   * Reject back to draft. Any still-pending scheduled posts (autopilot content
+   * awaits approval with its slots already booked) are cancelled.
+   */
+  async reject(orgId: string, userId: string, id: string, note?: string) {
+    const content = await this.prisma.contentItem.findFirst({ where: { id, orgId } });
+    if (!content) throw new NotFoundException("Content not found");
+    if (content.status !== "PENDING_APPROVAL") {
+      throw new BadRequestException(`Only pending content can be rejected (status: ${content.status})`);
+    }
+    const [row] = await this.prisma.$transaction([
+      this.prisma.contentItem.update({
+        where: { id },
+        data: {
+          status: "DRAFT",
+          reviewedAt: new Date(),
+          reviewedById: userId,
+          reviewNote: note ?? null,
+        },
+        include: this.reviewerInclude,
+      }),
+      this.prisma.scheduledPost.updateMany({
+        where: { contentItemId: id, orgId, status: "PENDING" },
+        data: { status: "CANCELLED" },
+      }),
+    ]);
+    this.audit.log({
+      orgId,
+      userId,
+      action: "content.rejected",
+      targetType: "ContentItem",
+      targetId: id,
+      metadata: note ? { note } : undefined,
     });
     return this.toDto(row);
   }
@@ -158,6 +256,11 @@ export class ContentService {
     abVariants?: unknown;
     evergreen?: boolean;
     aiGenerated: boolean;
+    submittedAt?: Date | null;
+    submittedBy?: { name: string } | null;
+    reviewedAt?: Date | null;
+    reviewedBy?: { name: string } | null;
+    reviewNote?: string | null;
     createdAt: Date;
     updatedAt: Date;
   }) {
@@ -172,6 +275,11 @@ export class ContentService {
       abVariants: c.abVariants ?? null,
       evergreen: c.evergreen ?? false,
       aiGenerated: c.aiGenerated,
+      submittedAt: c.submittedAt?.toISOString() ?? null,
+      submittedByName: c.submittedBy?.name ?? null,
+      reviewedAt: c.reviewedAt?.toISOString() ?? null,
+      reviewedByName: c.reviewedBy?.name ?? null,
+      reviewNote: c.reviewNote ?? null,
       createdAt: c.createdAt.toISOString(),
       updatedAt: c.updatedAt.toISOString(),
     };

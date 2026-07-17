@@ -9,6 +9,9 @@ function makePrisma() {
       findFirst: jest.fn(),
       update: jest.fn().mockReturnValue({ then: undefined }),
     },
+    organization: {
+      findUniqueOrThrow: jest.fn().mockResolvedValue({ requireApproval: false }),
+    },
     socialConnection: { findMany: jest.fn() },
     scheduledPost: {
       create: jest.fn(),
@@ -94,6 +97,38 @@ describe("SchedulingService", () => {
         timezone: "UTC",
       }),
     ).rejects.toThrow(BadRequestException);
+  });
+
+  it("blocks scheduling unapproved content when the org requires approval", async () => {
+    prisma.organization.findUniqueOrThrow.mockResolvedValue({ requireApproval: true });
+    prisma.contentItem.findFirst.mockResolvedValue({ id: "content1", status: "DRAFT" });
+    await expect(
+      service.schedule("org1", "user1", {
+        contentItemId: "content1",
+        connectionIds: ["conn1"],
+        scheduledAt: future,
+        timezone: "UTC",
+      }),
+    ).rejects.toThrow(/requires approval/);
+    expect(prisma.scheduledPost.create).not.toHaveBeenCalled();
+  });
+
+  it("schedules APPROVED content when the org requires approval", async () => {
+    prisma.organization.findUniqueOrThrow.mockResolvedValue({ requireApproval: true });
+    prisma.contentItem.findFirst.mockResolvedValue({ id: "content1", status: "APPROVED" });
+    prisma.socialConnection.findMany.mockResolvedValue([{ id: "conn1" }]);
+    prisma.scheduledPost.create.mockImplementation(({ data }: never) =>
+      Promise.resolve({ id: "sp", ...(data as object) }),
+    );
+    prisma.contentItem.update.mockResolvedValue({});
+
+    await service.schedule("org1", "user1", {
+      contentItemId: "content1",
+      connectionIds: ["conn1"],
+      scheduledAt: future,
+      timezone: "UTC",
+    });
+    expect(prisma.scheduledPost.create).toHaveBeenCalledTimes(1);
   });
 
   it("only cancels PENDING posts", async () => {

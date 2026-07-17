@@ -2,10 +2,11 @@ import {
   BadRequestException,
   ConflictException,
   Injectable,
+  NotFoundException,
   UnauthorizedException,
 } from "@nestjs/common";
 import { JwtService } from "@nestjs/jwt";
-import type { LoginInput, RegisterInput } from "@godeye/shared";
+import { passwordSchema, type AcceptInvitationInput, type LoginInput, type RegisterInput } from "@godeye/shared";
 import * as argon2 from "argon2";
 import { randomBytes } from "crypto";
 import { authenticator } from "otplib";
@@ -25,7 +26,14 @@ export interface RequestContext {
 
 export interface SessionResult {
   user: { id: string; email: string; name: string; avatarUrl: string | null; mfaEnabled: boolean };
-  organization: { id: string; name: string; slug: string; role: string; hasProfile: boolean };
+  organization: {
+    id: string;
+    name: string;
+    slug: string;
+    role: string;
+    hasProfile: boolean;
+    requireApproval: boolean;
+  };
   accessToken: string;
   refreshToken: string;
 }
@@ -152,8 +160,138 @@ export class AuthService {
         slug: org.slug,
         role: auth.role,
         hasProfile: !!org.businessProfile,
+        requireApproval: org.requireApproval,
       },
     };
+  }
+
+  // ---------- Invitations ----------
+
+  /** Public preview of an invite link: who invited you, to which org, as what role. */
+  async previewInvitation(tokenPlain: string) {
+    const invitation = await this.validInvitation(tokenPlain);
+    const account = await this.prisma.user.findUnique({
+      where: { email: invitation.email },
+      select: { id: true },
+    });
+    return {
+      orgName: invitation.org.name,
+      email: invitation.email,
+      role: invitation.role,
+      inviterName: invitation.invitedBy?.name ?? null,
+      accountExists: !!account,
+    };
+  }
+
+  /**
+   * Accept an invite. New emails create an account (name + strong password
+   * required); existing accounts verify their current password (+ MFA when
+   * enabled). Either way the caller ends up logged into the inviting org.
+   */
+  async acceptInvitation(input: AcceptInvitationInput, ctx: RequestContext): Promise<SessionResult> {
+    const invitation = await this.validInvitation(input.token);
+
+    let user = await this.prisma.user.findUnique({
+      where: { email: invitation.email },
+      include: { memberships: { select: { orgId: true } } },
+    });
+
+    if (user) {
+      if (!(await argon2.verify(user.passwordHash, input.password))) {
+        throw new UnauthorizedException("Invalid password for the invited account");
+      }
+      if (user.mfaEnabled) {
+        if (!input.mfaCode) {
+          throw new UnauthorizedException({ code: "MFA_REQUIRED", message: "MFA code required" });
+        }
+        this.assertValidMfaCode(user.mfaSecret, input.mfaCode);
+      }
+      if (user.memberships.some((m) => m.orgId === invitation.orgId)) {
+        await this.markInvitationAccepted(invitation.id);
+        throw new ConflictException("You are already a member of this organization");
+      }
+    } else {
+      if (!input.name) throw new BadRequestException("name is required to create your account");
+      const parsed = passwordSchema.safeParse(input.password);
+      if (!parsed.success) {
+        throw new BadRequestException(parsed.error.issues[0]?.message ?? "Password too weak");
+      }
+      const passwordHash = await argon2.hash(input.password, { type: argon2.argon2id });
+      user = await this.prisma.user.create({
+        data: { email: invitation.email, passwordHash, name: input.name },
+        include: { memberships: { select: { orgId: true } } },
+      });
+    }
+
+    const [membership] = await this.prisma.$transaction([
+      this.prisma.membership.create({
+        data: { userId: user.id, orgId: invitation.orgId, role: invitation.role },
+      }),
+      this.prisma.invitation.update({
+        where: { id: invitation.id },
+        data: { acceptedAt: new Date() },
+      }),
+    ]);
+
+    this.audit.log({
+      userId: user.id,
+      orgId: invitation.orgId,
+      action: "member.joined",
+      targetType: "Invitation",
+      targetId: invitation.id,
+      ip: ctx.ip,
+      userAgent: ctx.userAgent,
+      metadata: { role: invitation.role },
+    });
+    return this.createSession(user, invitation.org, membership.role, ctx, undefined);
+  }
+
+  // ---------- Multi-org ----------
+
+  async listOrgs(userId: string) {
+    const memberships = await this.prisma.membership.findMany({
+      where: { userId },
+      include: { org: { select: { id: true, name: true, slug: true } } },
+      orderBy: { createdAt: "asc" },
+    });
+    return memberships.map((m) => ({
+      orgId: m.org.id,
+      name: m.org.name,
+      slug: m.org.slug,
+      role: m.role,
+    }));
+  }
+
+  /** Issue a fresh session scoped to another org the user belongs to. */
+  async switchOrg(userId: string, orgId: string, ctx: RequestContext): Promise<SessionResult> {
+    const membership = await this.prisma.membership.findUnique({
+      where: { userId_orgId: { userId, orgId } },
+      include: { org: true, user: true },
+    });
+    if (!membership) throw new NotFoundException("You are not a member of that organization");
+    return this.createSession(membership.user, membership.org, membership.role, ctx, undefined);
+  }
+
+  private async validInvitation(tokenPlain: string) {
+    const tokenHash = this.crypto.sha256(tokenPlain);
+    const invitation = await this.prisma.invitation.findUnique({
+      where: { tokenHash },
+      include: {
+        org: true,
+        invitedBy: { select: { name: true } },
+      },
+    });
+    if (!invitation || invitation.revokedAt || invitation.acceptedAt) {
+      throw new NotFoundException("This invitation is no longer valid");
+    }
+    if (invitation.expiresAt < new Date()) {
+      throw new BadRequestException("This invitation has expired — ask for a new one");
+    }
+    return invitation;
+  }
+
+  private async markInvitationAccepted(id: string): Promise<void> {
+    await this.prisma.invitation.update({ where: { id }, data: { acceptedAt: new Date() } });
   }
 
   // ---------- MFA (TOTP) ----------
@@ -191,7 +329,7 @@ export class AuthService {
 
   private async createSession(
     user: { id: string; email: string; name: string; avatarUrl: string | null; mfaEnabled: boolean },
-    org: { id: string; name: string; slug: string },
+    org: { id: string; name: string; slug: string; requireApproval?: boolean },
     role: string,
     ctx: RequestContext,
     hasProfileOverride: boolean | undefined,
@@ -226,7 +364,14 @@ export class AuthService {
 
     return {
       user: this.publicUser(user),
-      organization: { id: org.id, name: org.name, slug: org.slug, role, hasProfile },
+      organization: {
+        id: org.id,
+        name: org.name,
+        slug: org.slug,
+        role,
+        hasProfile,
+        requireApproval: org.requireApproval ?? false,
+      },
       accessToken,
       refreshToken,
     };

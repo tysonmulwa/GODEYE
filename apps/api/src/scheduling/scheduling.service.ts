@@ -23,6 +23,16 @@ export class SchedulingService {
     });
     if (!content) throw new NotFoundException("Content not found");
 
+    const org = await this.prisma.organization.findUniqueOrThrow({
+      where: { id: orgId },
+      select: { requireApproval: true },
+    });
+    if (org.requireApproval && content.status !== "APPROVED") {
+      throw new BadRequestException(
+        "This organization requires approval before publishing — submit the content for review first",
+      );
+    }
+
     const scheduledAt = new Date(input.scheduledAt);
     if (Number.isNaN(scheduledAt.getTime())) throw new BadRequestException("Invalid scheduledAt");
     if (scheduledAt.getTime() < Date.now() - 60_000) {

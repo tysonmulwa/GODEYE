@@ -178,6 +178,39 @@ Results live on the `SeoAudit` row (findings, keywords, meta suggestions, schema
 artifacts); the SEO page polls while RUNNING and renders the score ring, grouped
 findings, keyword chips, and copy-ready rewrites.
 
+## Team, roles & approval workflows (Phase 6)
+
+**RBAC.** The JWT already carries the caller's org role (OWNER > ADMIN > EDITOR > VIEWER).
+`@MinRole(role)` + `RolesGuard` (`apps/api/src/common/roles.guard.ts`) enforce a floor per
+route: VIEWER is read-only; EDITOR creates/edits/schedules content; ADMIN also manages the
+team and reviews content. Grant/manage rules are strict-outrank: you can only assign roles
+strictly below your own, and only touch members you outrank (OWNER is untouchable and
+cannot leave their own org).
+
+**Invitations.** `POST /members/invitations` (ADMIN+) creates an `Invitation` row storing
+only the sha256 of a 32-byte token; the raw token appears once, inside the returned
+`/invite/{token}` link (7-day expiry, single-use, reissue revokes prior pending invites for
+the same email). The public accept endpoint either creates the account (new email; password
+policy enforced) or verifies the existing account's password/MFA, then attaches a
+`Membership` with the invited role. Multi-org users get `GET /auth/orgs` +
+`POST /auth/switch-org` (fresh token pair scoped to the chosen org) and an org switcher in
+the sidebar.
+
+**Approval workflow.** `Organization.requireApproval` (Settings toggle, ADMIN+) gates
+publishing:
+
+- Manual flow: DRAFT → `POST /content/:id/submit` → PENDING_APPROVAL →
+  `approve` (→ APPROVED, schedulable) or `reject` (→ DRAFT with a review note).
+  `/schedule` refuses non-APPROVED content while the gate is on; the composer disables
+  Schedule and shows submit/approve/reject controls, and the dashboard shows admins a
+  review queue.
+- Autopilot flow: the planner books the slots but writes the content as
+  PENDING_APPROVAL; the dispatcher's claim query joins ContentItem + Organization and
+  holds those posts until review. Approving releases them on the next 30s tick
+  (past-due slots publish immediately); rejecting cancels the pending posts.
+- Reviewer identity (`submittedBy`/`reviewedBy`, timestamps, note) is stored on the
+  content item and audit-logged.
+
 ## Repository layout
 
 See [README](../README.md#monorepo-layout). Conventions:

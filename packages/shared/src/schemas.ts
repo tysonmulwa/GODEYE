@@ -10,15 +10,17 @@ export const ttsVoiceSchema = z.enum(TTS_VOICES);
 
 // ---------- Auth ----------
 
+export const passwordSchema = z
+  .string()
+  .min(10, "Password must be at least 10 characters")
+  .max(128)
+  .regex(/[a-z]/, "Must include a lowercase letter")
+  .regex(/[A-Z0-9]/, "Must include an uppercase letter or digit");
+
 export const registerSchema = z.object({
   name: z.string().min(2).max(80),
   email: z.string().email(),
-  password: z
-    .string()
-    .min(10, "Password must be at least 10 characters")
-    .max(128)
-    .regex(/[a-z]/, "Must include a lowercase letter")
-    .regex(/[A-Z0-9]/, "Must include an uppercase letter or digit"),
+  password: passwordSchema,
   organizationName: z.string().min(2).max(80),
 });
 export type RegisterInput = z.infer<typeof registerSchema>;
@@ -28,6 +30,50 @@ export const loginSchema = z.object({
   password: z.string().min(1),
 });
 export type LoginInput = z.infer<typeof loginSchema>;
+
+// ---------- Team & invitations ----------
+
+/** Roles that can be granted to teammates. OWNER is never assignable. */
+export const assignableRoleSchema = z.enum(["ADMIN", "EDITOR", "VIEWER"]);
+export type AssignableRole = z.infer<typeof assignableRoleSchema>;
+
+export const inviteMemberSchema = z.object({
+  email: z.string().email(),
+  role: assignableRoleSchema.default("EDITOR"),
+});
+export type InviteMemberInput = z.infer<typeof inviteMemberSchema>;
+
+export const updateMemberRoleSchema = z.object({
+  role: assignableRoleSchema,
+});
+export type UpdateMemberRoleInput = z.infer<typeof updateMemberRoleSchema>;
+
+export const acceptInvitationSchema = z.object({
+  token: z.string().min(16).max(256),
+  // New accounts: name + password (complexity enforced server-side on create).
+  // Existing accounts: current password (+ MFA code when enabled).
+  name: z.string().min(2).max(80).optional(),
+  password: z.string().min(1).max(128),
+  mfaCode: z.string().min(6).max(8).optional(),
+});
+export type AcceptInvitationInput = z.infer<typeof acceptInvitationSchema>;
+
+export const switchOrgSchema = z.object({
+  orgId: z.string().min(1),
+});
+export type SwitchOrgInput = z.infer<typeof switchOrgSchema>;
+
+export const orgSettingsSchema = z.object({
+  requireApproval: z.boolean(),
+});
+export type OrgSettingsInput = z.infer<typeof orgSettingsSchema>;
+
+// ---------- Content approval ----------
+
+export const reviewContentSchema = z.object({
+  note: z.string().max(1000).optional(),
+});
+export type ReviewContentInput = z.infer<typeof reviewContentSchema>;
 
 // ---------- Business profile ----------
 

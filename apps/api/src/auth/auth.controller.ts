@@ -3,6 +3,7 @@ import {
   Controller,
   Get,
   HttpCode,
+  Param,
   Post,
   Req,
   Res,
@@ -10,7 +11,12 @@ import {
 } from "@nestjs/common";
 import { ApiBearerAuth, ApiOperation, ApiTags } from "@nestjs/swagger";
 import { Throttle } from "@nestjs/throttler";
-import { loginSchema, registerSchema } from "@godeye/shared";
+import {
+  acceptInvitationSchema,
+  loginSchema,
+  registerSchema,
+  switchOrgSchema,
+} from "@godeye/shared";
 import type { Request, Response } from "express";
 import { z } from "zod";
 import { CurrentAuth } from "../common/current-auth.decorator";
@@ -76,6 +82,49 @@ export class AuthController {
   @ApiBearerAuth()
   me(@CurrentAuth() auth: AccessTokenPayload) {
     return this.auth.me(auth);
+  }
+
+  @Get("invitations/:token")
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  @ApiOperation({ summary: "Preview an invite link (public)" })
+  previewInvitation(@Param("token") token: string) {
+    return this.auth.previewInvitation(token);
+  }
+
+  @Post("accept-invitation")
+  @HttpCode(200)
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  @ApiOperation({ summary: "Accept an invite — creates the account if the email is new" })
+  async acceptInvitation(
+    @Body(new ZodPipe(acceptInvitationSchema)) body: z.infer<typeof acceptInvitationSchema>,
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const session = await this.auth.acceptInvitation(body, this.ctx(req));
+    return this.respond(session, res);
+  }
+
+  @Get("orgs")
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: "List every organization the caller belongs to" })
+  listOrgs(@CurrentAuth() auth: AccessTokenPayload) {
+    return this.auth.listOrgs(auth.sub);
+  }
+
+  @Post("switch-org")
+  @HttpCode(200)
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: "Get a session scoped to another org you belong to" })
+  async switchOrg(
+    @CurrentAuth() auth: AccessTokenPayload,
+    @Body(new ZodPipe(switchOrgSchema)) body: z.infer<typeof switchOrgSchema>,
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const session = await this.auth.switchOrg(auth.sub, body.orgId, this.ctx(req));
+    return this.respond(session, res);
   }
 
   @Post("mfa/setup")

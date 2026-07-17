@@ -11,6 +11,7 @@ from ..celery_app import app
 from ..db import (
     ContentItem,
     MediaAsset,
+    Organization,
     ScheduledPost,
     SocialConnection,
     get_session,
@@ -27,6 +28,36 @@ MAX_ATTEMPTS = 3
 RETRY_DELAY_MINUTES = 2
 LOCK_TIMEOUT_MINUTES = 5
 
+# When an org requires approval, a due post only dispatches once its content
+# cleared review. SCHEDULED/PUBLISHED imply approval happened earlier (manual
+# scheduling is gated in the API; PUBLISHED appears when a sibling post ran first).
+APPROVAL_SATISFIED_STATUSES = ("APPROVED", "SCHEDULED", "PUBLISHED")
+
+
+def due_posts_query(now, stale_lock):
+    """Selects due, unclaimed posts — approval-gated orgs only release reviewed content."""
+    return (
+        select(ScheduledPost.c.id)
+        .select_from(
+            ScheduledPost.join(
+                ContentItem, ContentItem.c.id == ScheduledPost.c.contentItemId
+            ).join(Organization, Organization.c.id == ScheduledPost.c.orgId)
+        )
+        .where(
+            and_(
+                ScheduledPost.c.status == "PENDING",
+                ScheduledPost.c.scheduledAt <= now,
+                or_(ScheduledPost.c.lockedAt.is_(None), ScheduledPost.c.lockedAt < stale_lock),
+                or_(
+                    Organization.c.requireApproval.is_(False),
+                    ContentItem.c.status.in_(APPROVAL_SATISFIED_STATUSES),
+                ),
+            )
+        )
+        .with_for_update(skip_locked=True, of=ScheduledPost)
+        .limit(20)
+    )
+
 
 @app.task(name="godeye_engine.tasks.scheduler.dispatch_due_posts")
 def dispatch_due_posts() -> int:
@@ -35,18 +66,7 @@ def dispatch_due_posts() -> int:
     stale_lock = now - timedelta(minutes=LOCK_TIMEOUT_MINUTES)
 
     with get_session() as session:
-        rows = session.execute(
-            select(ScheduledPost.c.id)
-            .where(
-                and_(
-                    ScheduledPost.c.status == "PENDING",
-                    ScheduledPost.c.scheduledAt <= now,
-                    or_(ScheduledPost.c.lockedAt.is_(None), ScheduledPost.c.lockedAt < stale_lock),
-                )
-            )
-            .with_for_update(skip_locked=True)
-            .limit(20)
-        ).fetchall()
+        rows = session.execute(due_posts_query(now, stale_lock)).fetchall()
 
         ids = [r.id for r in rows]
         if ids:

@@ -10,11 +10,47 @@ export interface ApiUser {
   mfaEnabled: boolean;
 }
 
+export type OrgRole = "OWNER" | "ADMIN" | "EDITOR" | "VIEWER";
+
 export interface ApiOrganization {
   id: string;
   name: string;
   slug: string;
-  role: "OWNER" | "ADMIN" | "EDITOR" | "VIEWER";
+  role: OrgRole;
+  requireApproval?: boolean;
+}
+
+export interface ApiMember {
+  userId: string;
+  name: string;
+  email: string;
+  role: OrgRole;
+  joinedAt: string;
+}
+
+export interface ApiInvitation {
+  id: string;
+  email: string;
+  role: OrgRole;
+  invitedByName: string | null;
+  expiresAt: string;
+  createdAt: string;
+}
+
+export interface InvitationPreview {
+  orgName: string;
+  email: string;
+  role: OrgRole;
+  inviterName: string | null;
+  /** true when an account with the invited email already exists */
+  accountExists: boolean;
+}
+
+export interface ApiOrgMembership {
+  orgId: string;
+  name: string;
+  slug: string;
+  role: OrgRole;
 }
 
 export interface AuthResponse {
@@ -47,6 +83,11 @@ export interface ApiContentItem {
   hashtags: string[];
   variants: Record<string, PlatformVariant> | null;
   aiGenerated: boolean;
+  submittedAt?: string | null;
+  submittedByName?: string | null;
+  reviewedAt?: string | null;
+  reviewedByName?: string | null;
+  reviewNote?: string | null;
   createdAt: string;
   updatedAt: string;
 }

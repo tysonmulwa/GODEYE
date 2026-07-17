@@ -24,6 +24,7 @@ from ..db import (
     AgentRun,
     BusinessProfile,
     ContentItem,
+    Organization,
     PostingPlan,
     ScheduledPost,
     SocialConnection,
@@ -167,6 +168,13 @@ def autopilot_generate(plan_id: str, slot_iso: str, slot_index: int = 0) -> dict
                 SocialConnection.c.platform.in_(plan["platforms"]),
             )
         ).mappings().all()
+        require_approval = bool(
+            session.execute(
+                select(Organization.c.requireApproval).where(
+                    Organization.c.id == plan["orgId"]
+                )
+            ).scalar()
+        )
 
     if profile is None or not connections:
         return {"status": "skipped", "reason": "no profile or matching connections"}
@@ -191,6 +199,9 @@ def autopilot_generate(plan_id: str, slot_iso: str, slot_index: int = 0) -> dict
     now = utcnow()
     content_id = new_id()
     run_id = new_id()
+    # Approval-gated orgs get a review stop: content waits in PENDING_APPROVAL and
+    # the dispatcher holds its (already booked) slots until an admin approves.
+    content_status = "PENDING_APPROVAL" if require_approval else "SCHEDULED"
     with get_session() as session:
         session.execute(
             AgentRun.insert().values(
@@ -214,7 +225,7 @@ def autopilot_generate(plan_id: str, slot_iso: str, slot_index: int = 0) -> dict
                 id=content_id,
                 orgId=plan["orgId"],
                 type="SOCIAL_POST",
-                status="SCHEDULED",
+                status=content_status,
                 title=result.title,
                 body=result.body,
                 hashtags=result.hashtags,
@@ -223,6 +234,7 @@ def autopilot_generate(plan_id: str, slot_iso: str, slot_index: int = 0) -> dict
                 evergreen=False,
                 aiGenerated=True,
                 agentRunId=run_id,
+                submittedAt=now if require_approval else None,
                 createdAt=now,
                 updatedAt=now,
             )
@@ -258,9 +270,17 @@ def autopilot_generate(plan_id: str, slot_iso: str, slot_index: int = 0) -> dict
         {"type": "scheduled_post.updated", "scheduledPostId": content_id, "status": "PENDING"},
     )
     logger.info(
-        "Autopilot: '%s' scheduled to %d connection(s) at %s", result.title, len(connections), slot
+        "Autopilot: '%s' %s to %d connection(s) at %s",
+        result.title,
+        "awaiting approval, slots booked" if require_approval else "scheduled",
+        len(connections),
+        slot,
     )
-    return {"status": "SCHEDULED", "contentItemId": content_id, "connections": len(connections)}
+    return {
+        "status": "PENDING_APPROVAL" if require_approval else "SCHEDULED",
+        "contentItemId": content_id,
+        "connections": len(connections),
+    }
 
 
 def _queue_image_for_content(
