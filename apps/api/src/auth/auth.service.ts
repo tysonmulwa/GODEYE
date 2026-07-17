@@ -31,6 +31,7 @@ export interface SessionResult {
     name: string;
     slug: string;
     role: string;
+    type: string;
     hasProfile: boolean;
     requireApproval: boolean;
   };
@@ -53,8 +54,15 @@ export class AuthService {
     const existing = await this.prisma.user.findUnique({ where: { email: input.email } });
     if (existing) throw new ConflictException("An account with this email already exists");
 
+    const accountType = input.accountType ?? "BUSINESS";
+    // Solo creators get a personal workspace named after them unless they set a brand name
+    const orgName = input.organizationName?.trim() || input.name;
+    if (accountType === "BUSINESS" && !input.organizationName?.trim()) {
+      throw new BadRequestException("Business / organization name is required");
+    }
+
     const passwordHash = await argon2.hash(input.password, { type: argon2.argon2id });
-    const slug = await this.uniqueSlug(input.organizationName);
+    const slug = await this.uniqueSlug(orgName);
 
     const user = await this.prisma.user.create({
       data: {
@@ -64,7 +72,7 @@ export class AuthService {
         memberships: {
           create: {
             role: "OWNER",
-            org: { create: { name: input.organizationName, slug } },
+            org: { create: { name: orgName, slug, type: accountType } },
           },
         },
       },
@@ -159,6 +167,7 @@ export class AuthService {
         name: org.name,
         slug: org.slug,
         role: auth.role,
+        type: org.type,
         hasProfile: !!org.businessProfile,
         requireApproval: org.requireApproval,
       },
@@ -329,7 +338,7 @@ export class AuthService {
 
   private async createSession(
     user: { id: string; email: string; name: string; avatarUrl: string | null; mfaEnabled: boolean },
-    org: { id: string; name: string; slug: string; requireApproval?: boolean },
+    org: { id: string; name: string; slug: string; type?: string; requireApproval?: boolean },
     role: string,
     ctx: RequestContext,
     hasProfileOverride: boolean | undefined,
@@ -369,6 +378,7 @@ export class AuthService {
         name: org.name,
         slug: org.slug,
         role,
+        type: org.type ?? "BUSINESS",
         hasProfile,
         requireApproval: org.requireApproval ?? false,
       },

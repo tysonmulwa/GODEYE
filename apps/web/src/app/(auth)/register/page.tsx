@@ -1,16 +1,38 @@
 "use client";
 
+import { Building2, Clapperboard } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { registerSchema } from "@godeye/shared";
+import { registerSchema, type AccountType } from "@godeye/shared";
 import { API_URL } from "@/lib/api";
 import { useAuthStore } from "@/lib/auth-store";
-import { Button, Card, ErrorNote, Input, Label } from "@/components/ui";
+import { Button, Card, ErrorNote, Input, Label, cx } from "@/components/ui";
+
+const ACCOUNT_TYPES: Array<{
+  value: AccountType;
+  label: string;
+  hint: string;
+  icon: typeof Building2;
+}> = [
+  {
+    value: "CREATOR",
+    label: "Content creator",
+    hint: "I'm building my own audience — automate my posts, images & videos",
+    icon: Clapperboard,
+  },
+  {
+    value: "BUSINESS",
+    label: "Business / company",
+    hint: "We market a business — team seats, approvals & brand tools",
+    icon: Building2,
+  },
+];
 
 export default function RegisterPage() {
   const router = useRouter();
   const setSession = useAuthStore((s) => s.setSession);
+  const [accountType, setAccountType] = useState<AccountType>("CREATOR");
   const [form, setForm] = useState({
     name: "",
     email: "",
@@ -26,7 +48,7 @@ export default function RegisterPage() {
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
-    const parsed = registerSchema.safeParse(form);
+    const parsed = registerSchema.safeParse({ ...form, accountType });
     if (!parsed.success) {
       setError(parsed.error.issues[0].message);
       return;
@@ -61,17 +83,46 @@ export default function RegisterPage() {
       </p>
       <form onSubmit={submit} className="space-y-4">
         <div>
+          <Label>I am a…</Label>
+          <div className="grid grid-cols-2 gap-2">
+            {ACCOUNT_TYPES.map(({ value, label, hint, icon: Icon }) => (
+              <button
+                key={value}
+                type="button"
+                onClick={() => setAccountType(value)}
+                className={cx(
+                  "rounded-lg border p-3 text-left transition-colors",
+                  accountType === value
+                    ? "border-accent bg-accent/5"
+                    : "border-line hover:border-ink-3",
+                )}
+              >
+                <Icon
+                  className={cx(
+                    "mb-1.5 h-4 w-4",
+                    accountType === value ? "text-accent" : "text-ink-3",
+                  )}
+                />
+                <p className="text-xs font-semibold">{label}</p>
+                <p className="mt-0.5 text-[11px] leading-snug text-ink-3">{hint}</p>
+              </button>
+            ))}
+          </div>
+        </div>
+        <div>
           <Label htmlFor="name">Your name</Label>
           <Input id="name" required value={form.name} onChange={set("name")} placeholder="Jane Doe" />
         </div>
         <div>
-          <Label htmlFor="org">Business / organization name</Label>
+          <Label htmlFor="org">
+            {accountType === "CREATOR" ? "Brand name (optional)" : "Business / organization name"}
+          </Label>
           <Input
             id="org"
-            required
+            required={accountType === "BUSINESS"}
             value={form.organizationName}
             onChange={set("organizationName")}
-            placeholder="Acme Inc"
+            placeholder={accountType === "CREATOR" ? "Defaults to your name" : "Acme Inc"}
           />
         </div>
         <div>

@@ -11,12 +11,14 @@ export interface ApiUser {
 }
 
 export type OrgRole = "OWNER" | "ADMIN" | "EDITOR" | "VIEWER";
+export type OrgType = "BUSINESS" | "CREATOR";
 
 export interface ApiOrganization {
   id: string;
   name: string;
   slug: string;
   role: OrgRole;
+  type?: OrgType;
   requireApproval?: boolean;
 }
 

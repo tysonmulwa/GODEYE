@@ -17,12 +17,23 @@ export const passwordSchema = z
   .regex(/[a-z]/, "Must include a lowercase letter")
   .regex(/[A-Z0-9]/, "Must include an uppercase letter or digit");
 
-export const registerSchema = z.object({
-  name: z.string().min(2).max(80),
-  email: z.string().email(),
-  password: passwordSchema,
-  organizationName: z.string().min(2).max(80),
-});
+/** Solo creators get a personal workspace; businesses name their organization. */
+export const accountTypeSchema = z.enum(["CREATOR", "BUSINESS"]);
+export type AccountType = z.infer<typeof accountTypeSchema>;
+
+export const registerSchema = z
+  .object({
+    name: z.string().min(2).max(80),
+    email: z.string().email(),
+    password: passwordSchema,
+    accountType: accountTypeSchema.default("BUSINESS"),
+    // Optional for creators (defaults to their own name); required for businesses.
+    organizationName: z.string().min(2).max(80).optional().or(z.literal("")),
+  })
+  .refine((v) => v.accountType === "CREATOR" || (v.organizationName ?? "").trim().length >= 2, {
+    message: "Business / organization name is required",
+    path: ["organizationName"],
+  });
 export type RegisterInput = z.infer<typeof registerSchema>;
 
 export const loginSchema = z.object({

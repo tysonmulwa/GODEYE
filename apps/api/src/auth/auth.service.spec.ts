@@ -72,6 +72,7 @@ describe("AuthService", () => {
         name: "Jane",
         email: "jane@acme.com",
         password: "Str0ngPassw0rd!",
+        accountType: "BUSINESS",
         organizationName: "Acme",
       },
       {},
@@ -91,10 +92,57 @@ describe("AuthService", () => {
     prisma.user.findUnique.mockResolvedValue(baseUser);
     await expect(
       service.register(
-        { name: "J", email: "jane@acme.com", password: "Str0ngPassw0rd!", organizationName: "A" },
+        {
+          name: "J",
+          email: "jane@acme.com",
+          password: "Str0ngPassw0rd!",
+          accountType: "BUSINESS",
+          organizationName: "A",
+        },
         {},
       ),
     ).rejects.toThrow(ConflictException);
+  });
+
+  it("registers a solo creator with a personal workspace named after them", async () => {
+    prisma.user.findUnique.mockResolvedValue(null);
+    prisma.user.create.mockResolvedValue({
+      ...baseUser,
+      memberships: [{ orgId: org.id, role: "OWNER", org: { ...org, type: "CREATOR" } }],
+    });
+
+    const session = await service.register(
+      {
+        name: "Jane",
+        email: "jane@acme.com",
+        password: "Str0ngPassw0rd!",
+        accountType: "CREATOR",
+        organizationName: "",
+      },
+      {},
+    );
+
+    const createArgs = prisma.user.create.mock.calls[0][0];
+    const orgCreate = createArgs.data.memberships.create.org.create;
+    expect(orgCreate.name).toBe("Jane"); // defaults to the creator's own name
+    expect(orgCreate.type).toBe("CREATOR");
+    expect(session.organization.type).toBe("CREATOR");
+  });
+
+  it("requires an organization name for business accounts", async () => {
+    prisma.user.findUnique.mockResolvedValue(null);
+    await expect(
+      service.register(
+        {
+          name: "J2",
+          email: "biz@acme.com",
+          password: "Str0ngPassw0rd!",
+          accountType: "BUSINESS",
+          organizationName: "",
+        },
+        {},
+      ),
+    ).rejects.toThrow(/organization name is required/i);
   });
 
   it("logs in with correct credentials", async () => {

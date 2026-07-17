@@ -47,12 +47,24 @@ class GeneratedContent:
 
 
 def build_prompt(profile: dict[str, Any], request: ContentRequest) -> str:
-    """Assemble the user prompt from the business profile and the request."""
-    lines = [
-        "Create social media content for this business:",
-        "",
-        f"Business: {profile.get('businessName')}",
-        f"Industry: {profile.get('industry')}",
+    """Assemble the user prompt from the business/creator profile and the request."""
+    is_creator = profile.get("orgType") == "CREATOR"
+    if is_creator:
+        lines = [
+            "Create social media content for this solo content creator. Write in their",
+            "personal voice (first person where natural) — authentic and direct, not corporate.",
+            "",
+            f"Creator / brand: {profile.get('businessName')}",
+            f"Niche: {profile.get('industry')}",
+        ]
+    else:
+        lines = [
+            "Create social media content for this business:",
+            "",
+            f"Business: {profile.get('businessName')}",
+            f"Industry: {profile.get('industry')}",
+        ]
+    lines += [
         f"Description: {profile.get('description')}",
         f"Target audience: {profile.get('targetAudience')}",
     ]
@@ -67,7 +79,8 @@ def build_prompt(profile: dict[str, Any], request: ContentRequest) -> str:
     if profile.get("brandVoice"):
         lines.append(f"Brand voice: {profile['brandVoice']}")
     if profile.get("goals"):
-        lines.append(f"Business goals: {', '.join(profile['goals'])}")
+        goals_label = "Creator goals" if is_creator else "Business goals"
+        lines.append(f"{goals_label}: {', '.join(profile['goals'])}")
 
     lines += ["", f"Post goal: {request.goal}"]
     if request.topic:

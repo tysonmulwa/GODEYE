@@ -9,7 +9,16 @@ from sqlalchemy import select, update
 
 from ..ai import content_agent
 from ..celery_app import app
-from ..db import AgentRun, BusinessProfile, ContentItem, UsageRecord, get_session, new_id, utcnow
+from ..db import (
+    AgentRun,
+    BusinessProfile,
+    ContentItem,
+    Organization,
+    UsageRecord,
+    get_session,
+    new_id,
+    utcnow,
+)
 from ..events import publish_event
 
 logger = logging.getLogger(__name__)
@@ -38,15 +47,20 @@ def generate_content(
         profile_row = session.execute(
             select(BusinessProfile).where(BusinessProfile.c.orgId == org_id)
         ).mappings().first()
+        org_type = session.execute(
+            select(Organization.c.type).where(Organization.c.id == org_id)
+        ).scalar()
         session.commit()
 
     if profile_row is None:
         _fail_run(agent_run_id, org_id, "Business profile not found")
         return {"status": "FAILED"}
 
+    profile = {**dict(profile_row), "orgType": org_type or "BUSINESS"}
+
     try:
         result = content_agent.generate(
-            dict(profile_row),
+            profile,
             content_agent.ContentRequest(
                 goal=goal,
                 platforms=platforms,

@@ -38,6 +38,7 @@ Organization = Table(
     Column("id", String, primary_key=True),
     Column("name", String, nullable=False),
     Column("slug", String, nullable=False),
+    Column("type", String, nullable=False, default="BUSINESS"),  # BUSINESS | CREATOR
     Column("requireApproval", Boolean, nullable=False, default=False),
 )
 

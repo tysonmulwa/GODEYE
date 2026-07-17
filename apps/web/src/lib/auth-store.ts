@@ -15,6 +15,7 @@ export interface SessionOrg {
   name: string;
   slug: string;
   role: string;
+  type?: "BUSINESS" | "CREATOR";
   hasProfile: boolean;
   requireApproval?: boolean;
 }

@@ -9,13 +9,22 @@ import { api } from "@/lib/api";
 import { useAuthStore } from "@/lib/auth-store";
 import { Button, Card, ErrorNote, Input, Label, Textarea } from "@/components/ui";
 
-const GOAL_OPTIONS = [
+const BUSINESS_GOALS = [
   "Grow social media following",
   "Increase website traffic",
   "Generate more leads",
   "Boost online sales",
   "Build brand awareness",
   "Improve customer engagement",
+];
+
+const CREATOR_GOALS = [
+  "Grow my audience",
+  "Post consistently without burnout",
+  "Land brand deals & sponsorships",
+  "Monetize my content",
+  "Grow my newsletter / community",
+  "Build my personal brand",
 ];
 
 export default function OnboardingPage() {
@@ -55,6 +64,9 @@ export default function OnboardingPage() {
       </div>
     );
   }
+
+  const isCreator = organization?.type === "CREATOR";
+  const goalOptions = isCreator ? CREATOR_GOALS : BUSINESS_GOALS;
 
   const set =
     (key: keyof typeof form) =>
@@ -106,7 +118,7 @@ export default function OnboardingPage() {
     }
   };
 
-  const steps = ["Business", "Audience & goals", "Brand"];
+  const steps = [isCreator ? "About you" : "Business", "Audience & goals", "Brand"];
 
   return (
     <div className="mx-auto flex min-h-screen max-w-xl flex-col justify-center px-4 py-10">
@@ -143,24 +155,36 @@ export default function OnboardingPage() {
           {step === 0 && (
             <>
               <div>
-                <Label>Business name</Label>
+                <Label>{isCreator ? "Creator / brand name" : "Business name"}</Label>
                 <Input value={form.businessName} onChange={set("businessName")} />
               </div>
               <div>
-                <Label>Industry</Label>
+                <Label>{isCreator ? "Niche" : "Industry"}</Label>
                 <Input
                   value={form.industry}
                   onChange={set("industry")}
-                  placeholder="e.g. Specialty coffee, SaaS, Real estate"
+                  placeholder={
+                    isCreator
+                      ? "e.g. Fitness, Tech reviews, Food & travel, Comedy"
+                      : "e.g. Specialty coffee, SaaS, Real estate"
+                  }
                 />
               </div>
               <div>
-                <Label>What does the business do? (min 10 chars)</Label>
+                <Label>
+                  {isCreator
+                    ? "What do you create? (min 10 chars)"
+                    : "What does the business do? (min 10 chars)"}
+                </Label>
                 <Textarea
                   rows={4}
                   value={form.description}
                   onChange={set("description")}
-                  placeholder="We roast single-origin Kenyan coffee and sell online and in two Nairobi cafés..."
+                  placeholder={
+                    isCreator
+                      ? "I make short-form videos about budget travel across East Africa, plus a weekly newsletter..."
+                      : "We roast single-origin Kenyan coffee and sell online and in two Nairobi cafés..."
+                  }
                 />
               </div>
               <div className="grid grid-cols-2 gap-3">
@@ -179,18 +203,24 @@ export default function OnboardingPage() {
           {step === 1 && (
             <>
               <div>
-                <Label>Target audience (min 5 chars)</Label>
+                <Label>
+                  {isCreator ? "Who is your audience? (min 5 chars)" : "Target audience (min 5 chars)"}
+                </Label>
                 <Textarea
                   rows={3}
                   value={form.targetAudience}
                   onChange={set("targetAudience")}
-                  placeholder="Coffee lovers aged 25-45 who value quality and sustainability..."
+                  placeholder={
+                    isCreator
+                      ? "Young professionals who want to travel more on a budget, mostly 20-35..."
+                      : "Coffee lovers aged 25-45 who value quality and sustainability..."
+                  }
                 />
               </div>
               <div>
-                <Label>Marketing goals (choose at least one)</Label>
+                <Label>{isCreator ? "Goals (choose at least one)" : "Marketing goals (choose at least one)"}</Label>
                 <div className="flex flex-wrap gap-2">
-                  {GOAL_OPTIONS.map((goal) => (
+                  {goalOptions.map((goal) => (
                     <button
                       key={goal}
                       type="button"
@@ -207,16 +237,34 @@ export default function OnboardingPage() {
                 </div>
               </div>
               <div>
-                <Label>Products (comma-separated, optional)</Label>
+                <Label>
+                  {isCreator
+                    ? "Content formats (comma-separated, optional)"
+                    : "Products (comma-separated, optional)"}
+                </Label>
                 <Input
                   value={form.products}
                   onChange={set("products")}
-                  placeholder="Single-origin beans, Cold brew kits"
+                  placeholder={
+                    isCreator
+                      ? "Reels, YouTube videos, Newsletter, Podcast"
+                      : "Single-origin beans, Cold brew kits"
+                  }
                 />
               </div>
               <div>
-                <Label>Services (comma-separated, optional)</Label>
-                <Input value={form.services} onChange={set("services")} placeholder="Catering, Barista training" />
+                <Label>
+                  {isCreator
+                    ? "Offerings (comma-separated, optional)"
+                    : "Services (comma-separated, optional)"}
+                </Label>
+                <Input
+                  value={form.services}
+                  onChange={set("services")}
+                  placeholder={
+                    isCreator ? "Sponsorships, UGC, Coaching, Merch" : "Catering, Barista training"
+                  }
+                />
               </div>
             </>
           )}
@@ -224,17 +272,29 @@ export default function OnboardingPage() {
           {step === 2 && (
             <>
               <div>
-                <Label>Brand voice (optional but powerful)</Label>
+                <Label>{isCreator ? "Your voice (optional but powerful)" : "Brand voice (optional but powerful)"}</Label>
                 <Textarea
                   rows={3}
                   value={form.brandVoice}
                   onChange={set("brandVoice")}
-                  placeholder="Warm, knowledgeable, a little playful — never corporate."
+                  placeholder={
+                    isCreator
+                      ? "Casual and funny, first person, lots of storytelling — never salesy."
+                      : "Warm, knowledgeable, a little playful — never corporate."
+                  }
                 />
               </div>
               <div>
-                <Label>Competitors (comma-separated, optional)</Label>
-                <Input value={form.competitors} onChange={set("competitors")} placeholder="Brand A, Brand B" />
+                <Label>
+                  {isCreator
+                    ? "Creators you admire / compete with (comma-separated, optional)"
+                    : "Competitors (comma-separated, optional)"}
+                </Label>
+                <Input
+                  value={form.competitors}
+                  onChange={set("competitors")}
+                  placeholder={isCreator ? "@creator1, @creator2" : "Brand A, Brand B"}
+                />
               </div>
               <div>
                 <Label>Seasonality notes (optional)</Label>

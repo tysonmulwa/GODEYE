@@ -168,14 +168,13 @@ def autopilot_generate(plan_id: str, slot_iso: str, slot_index: int = 0) -> dict
                 SocialConnection.c.platform.in_(plan["platforms"]),
             )
         ).mappings().all()
-        require_approval = bool(
-            session.execute(
-                select(Organization.c.requireApproval).where(
-                    Organization.c.id == plan["orgId"]
-                )
-            ).scalar()
-        )
+        org = session.execute(
+            select(Organization.c.type, Organization.c.requireApproval).where(
+                Organization.c.id == plan["orgId"]
+            )
+        ).mappings().first()
 
+    require_approval = bool(org and org["requireApproval"])
     if profile is None or not connections:
         return {"status": "skipped", "reason": "no profile or matching connections"}
 
@@ -191,7 +190,9 @@ def autopilot_generate(plan_id: str, slot_iso: str, slot_index: int = 0) -> dict
         ab_test=bool(plan["abTesting"]),
     )
     try:
-        result = content_agent.generate(dict(profile), request)
+        result = content_agent.generate(
+            {**dict(profile), "orgType": (org["type"] if org else None) or "BUSINESS"}, request
+        )
     except Exception as e:  # noqa: BLE001
         logger.exception("Autopilot generation failed for plan %s", plan_id)
         return {"status": "FAILED", "error": str(e)}

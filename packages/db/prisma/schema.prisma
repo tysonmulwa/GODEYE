@@ -33,10 +33,18 @@ model User {
   reviewedContent  ContentItem[] @relation("ReviewedContent")
 }
 
+// A workspace is either a company/team or a solo content creator's studio.
+// The distinction drives UI language and how the AI frames its content.
+enum OrgType {
+  BUSINESS
+  CREATOR
+}
+
 model Organization {
   id              String   @id @default(cuid())
   name            String
   slug            String   @unique
+  type            OrgType  @default(BUSINESS)
   logoUrl         String?
   requireApproval Boolean  @default(false) // content must be APPROVED before scheduling/publishing
   createdAt       DateTime @default(now())
