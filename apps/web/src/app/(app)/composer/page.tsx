@@ -210,14 +210,24 @@ export default function ComposerPage() {
             <Label>Topic (optional)</Label>
             <Input value={topic} onChange={(e) => setTopic(e.target.value)} placeholder="Cold brew subscription launch" />
           </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
+          <div className="grid grid-cols-2 items-end gap-3">
+            <div className="flex flex-col">
               <Label>Tone (optional)</Label>
-              <Input value={tone} onChange={(e) => setTone(e.target.value)} placeholder="Excited, friendly" />
+              <Input
+                className="mt-auto"
+                value={tone}
+                onChange={(e) => setTone(e.target.value)}
+                placeholder="Excited, friendly"
+              />
             </div>
-            <div>
+            <div className="flex flex-col">
               <Label>Call to action (optional)</Label>
-              <Input value={cta} onChange={(e) => setCta(e.target.value)} placeholder="Link in bio" />
+              <Input
+                className="mt-auto"
+                value={cta}
+                onChange={(e) => setCta(e.target.value)}
+                placeholder="Link in bio"
+              />
             </div>
           </div>
 
