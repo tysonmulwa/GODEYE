@@ -14,10 +14,9 @@ export { cx };
 type ButtonVariant = "primary" | "secondary" | "ghost" | "danger";
 
 const buttonStyles: Record<ButtonVariant, string> = {
-  primary:
-    "bg-accent text-white hover:bg-accent-hover shadow-sm disabled:opacity-50",
+  primary: "bg-accent text-white hover:bg-accent-hover disabled:opacity-50",
   secondary:
-    "bg-surface-3 text-ink border border-line hover:border-ink-3 disabled:opacity-50",
+    "bg-surface-2 text-ink border border-line hover:border-line-hover disabled:opacity-50",
   ghost: "text-ink-2 hover:text-ink hover:bg-surface-3",
   danger: "bg-red-600 text-white hover:bg-red-500 disabled:opacity-50",
 };
@@ -34,7 +33,7 @@ export const Button = forwardRef<
       ref={ref}
       disabled={disabled || loading}
       className={cx(
-        "inline-flex items-center justify-center gap-2 rounded-lg px-3.5 py-2 text-sm font-medium",
+        "inline-flex h-9 items-center justify-center gap-2 rounded-[9px] px-3.5 text-[13.5px] font-semibold",
         "transition-colors duration-150 focus-visible:outline-2 focus-visible:outline-accent",
         buttonStyles[variant],
         className,
@@ -55,8 +54,8 @@ export const Input = forwardRef<HTMLInputElement, React.InputHTMLAttributes<HTML
       <input
         ref={ref}
         className={cx(
-          "w-full rounded-lg border border-line bg-surface-2 px-3 py-2 text-sm text-ink",
-          "placeholder:text-ink-3 focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/20",
+          "w-full rounded-lg border border-line bg-surface-2 px-3 py-2 text-[13px] text-ink",
+          "placeholder:text-ink-3 focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/15",
           className,
         )}
         {...props}
@@ -73,8 +72,8 @@ export const Textarea = forwardRef<
     <textarea
       ref={ref}
       className={cx(
-        "w-full rounded-lg border border-line bg-surface-2 px-3 py-2 text-sm text-ink",
-        "placeholder:text-ink-3 focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/20",
+        "w-full rounded-lg border border-line bg-surface-2 px-3 py-2 text-[13px] leading-relaxed text-ink",
+        "placeholder:text-ink-3 focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/15",
         className,
       )}
       {...props}
@@ -82,11 +81,35 @@ export const Textarea = forwardRef<
   );
 });
 
+/** Form/field label — the design sets every label in uppercase mono. */
 export function Label({ children, htmlFor }: { children: React.ReactNode; htmlFor?: string }) {
   return (
-    <label htmlFor={htmlFor} className="mb-1.5 block text-xs font-medium text-ink-2">
+    <label
+      htmlFor={htmlFor}
+      className="mb-1.5 block font-mono text-[10px] font-semibold uppercase tracking-[0.09em] text-ink-3"
+    >
       {children}
     </label>
+  );
+}
+
+/** Eyebrow/section label (mono, uppercase) for card sections. */
+export function MonoLabel({
+  children,
+  className,
+}: {
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <p
+      className={cx(
+        "font-mono text-[10px] font-semibold uppercase tracking-[0.1em] text-ink-3",
+        className,
+      )}
+    >
+      {children}
+    </p>
   );
 }
 
@@ -100,44 +123,221 @@ export function Card({
   children: React.ReactNode;
 }) {
   return (
-    <div className={cx("rounded-xl border border-line bg-surface-2 p-5", className)}>
+    <div
+      className={cx(
+        "rounded-[11px] border border-line bg-surface-2 p-4 transition-colors duration-150 hover:border-line-hover",
+        className,
+      )}
+    >
       {children}
     </div>
   );
 }
 
-// ---------- Badge ----------
+// ---------- Badge (status/role chips — mono, per the design every code is mono) ----------
 
 const badgeStyles: Record<string, string> = {
-  PENDING: "bg-amber-500/15 text-amber-600 dark:text-amber-400",
-  PROCESSING: "bg-blue-500/15 text-blue-600 dark:text-blue-400",
-  PUBLISHED: "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400",
-  FAILED: "bg-red-500/15 text-red-600 dark:text-red-400",
-  CANCELLED: "bg-zinc-500/15 text-zinc-500",
-  DRAFT: "bg-zinc-500/15 text-zinc-500",
-  PENDING_APPROVAL: "bg-amber-500/15 text-amber-600 dark:text-amber-400",
-  APPROVED: "bg-teal-500/15 text-teal-600 dark:text-teal-400",
-  SCHEDULED: "bg-violet-500/15 text-violet-600 dark:text-violet-400",
-  OWNER: "bg-accent/15 text-accent",
-  ADMIN: "bg-blue-500/15 text-blue-600 dark:text-blue-400",
-  EDITOR: "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400",
-  VIEWER: "bg-zinc-500/15 text-zinc-500",
-  ACTIVE: "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400",
-  ERROR: "bg-red-500/15 text-red-600 dark:text-red-400",
-  EXPIRED: "bg-amber-500/15 text-amber-600 dark:text-amber-400",
-  DISCONNECTED: "bg-zinc-500/15 text-zinc-500",
+  PENDING: "bg-amber-500/13 text-amber-600",
+  PROCESSING: "bg-blue-500/14 text-blue-600",
+  PUBLISHED: "bg-emerald-500/13 text-emerald-600",
+  FAILED: "bg-red-500/13 text-red-600",
+  CANCELLED: "bg-zinc-500/13 text-zinc-500",
+  DRAFT: "bg-zinc-500/13 text-zinc-500",
+  PENDING_APPROVAL: "bg-amber-500/13 text-amber-600",
+  APPROVED: "bg-teal-500/13 text-teal-600",
+  SCHEDULED: "bg-violet-500/14 text-violet-600",
+  ACTIVE: "bg-emerald-500/13 text-emerald-600",
+  ERROR: "bg-red-500/13 text-red-600",
+  EXPIRED: "bg-amber-500/13 text-amber-600",
+  DISCONNECTED: "bg-zinc-500/13 text-zinc-500",
+  OWNER: "bg-accent-soft text-accent-hover",
+  ADMIN: "bg-blue-500/14 text-blue-600",
+  EDITOR: "bg-emerald-500/13 text-emerald-600",
+  VIEWER: "bg-zinc-500/13 text-zinc-500",
+  DONE: "bg-emerald-500/13 text-emerald-600",
+  SUCCEEDED: "bg-emerald-500/13 text-emerald-600",
+  QUEUED: "bg-amber-500/13 text-amber-600",
+  RUNNING: "bg-blue-500/14 text-blue-600",
+  PAUSED: "bg-zinc-500/13 text-zinc-500",
 };
 
-export function Badge({ status }: { status: string }) {
+export function Badge({ status, className }: { status: string; className?: string }) {
   return (
     <span
       className={cx(
-        "inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium tracking-wide",
-        badgeStyles[status] ?? "bg-zinc-500/15 text-zinc-500",
+        "inline-flex items-center rounded-full px-2 py-0.5 font-mono text-[10px] font-semibold tracking-[0.04em]",
+        badgeStyles[status] ?? "bg-zinc-500/13 text-zinc-500",
+        className,
       )}
     >
-      {status}
+      {status.replace("_", " ")}
     </span>
+  );
+}
+
+/** Mono tag chip (plan ids, hashtags, keywords). */
+export function MonoChip({
+  children,
+  tone = "accent",
+  className,
+}: {
+  children: React.ReactNode;
+  tone?: "accent" | "faint";
+  className?: string;
+}) {
+  return (
+    <span
+      className={cx(
+        "inline-flex items-center rounded-md px-2 py-0.5 font-mono text-[11px]",
+        tone === "accent"
+          ? "bg-accent-soft text-accent-hover"
+          : "border border-line bg-surface-3 text-ink-2",
+        className,
+      )}
+    >
+      {children}
+    </span>
+  );
+}
+
+// ---------- Live status dot ----------
+
+export function LiveDot({
+  color = "#10b981",
+  pulse = true,
+  className,
+}: {
+  color?: string;
+  pulse?: boolean;
+  className?: string;
+}) {
+  return (
+    <span
+      aria-hidden
+      className={cx("inline-block h-1.5 w-1.5 shrink-0 rounded-full", pulse && "animate-pulse-dot", className)}
+      style={{ backgroundColor: color }}
+    />
+  );
+}
+
+// ---------- Platform glyph chips (square, brand color, short glyph) ----------
+
+const PLATFORM_GLYPHS: Record<string, { glyph: string; bg: string }> = {
+  INSTAGRAM: { glyph: "IG", bg: "#E1306C" },
+  TIKTOK: { glyph: "TT", bg: "#0f0f0f" },
+  X: { glyph: "X", bg: "#18181b" },
+  LINKEDIN: { glyph: "in", bg: "#0A66C2" },
+  FACEBOOK: { glyph: "f", bg: "#1877F2" },
+  PINTEREST: { glyph: "P", bg: "#E60023" },
+  YOUTUBE: { glyph: "YT", bg: "#FF0000" },
+  TELEGRAM: { glyph: "TG", bg: "#229ED9" },
+  DISCORD: { glyph: "DC", bg: "#5865F2" },
+  REDDIT: { glyph: "r/", bg: "#FF4500" },
+  THREADS: { glyph: "@", bg: "#101319" },
+};
+
+export function platformColor(platform: string): string {
+  return PLATFORM_GLYPHS[platform]?.bg ?? "#565d6b";
+}
+
+export function PlatformGlyph({
+  platform,
+  size = 24,
+  className,
+}: {
+  platform: string;
+  size?: number;
+  className?: string;
+}) {
+  const p = PLATFORM_GLYPHS[platform] ?? { glyph: platform.slice(0, 2), bg: "#565d6b" };
+  return (
+    <span
+      aria-label={platform}
+      className={cx(
+        "inline-flex shrink-0 items-center justify-center rounded-[6px] font-mono font-semibold text-white",
+        className,
+      )}
+      style={{
+        width: size,
+        height: size,
+        backgroundColor: p.bg,
+        fontSize: Math.max(9, Math.round(size * 0.38)),
+      }}
+    >
+      {p.glyph}
+    </span>
+  );
+}
+
+// ---------- Segmented control ----------
+
+export function Segmented<T extends string>({
+  options,
+  value,
+  onChange,
+  className,
+}: {
+  options: Array<{ value: T; label: string }>;
+  value: T;
+  onChange: (v: T) => void;
+  className?: string;
+}) {
+  return (
+    <div className={cx("inline-flex rounded-lg bg-surface-3 p-0.5", className)}>
+      {options.map((o) => (
+        <button
+          key={o.value}
+          type="button"
+          onClick={() => onChange(o.value)}
+          className={cx(
+            "rounded-md px-2.5 py-1 font-mono text-[11px] font-medium transition-colors",
+            o.value === value
+              ? "bg-surface-2 text-ink shadow-sm"
+              : "text-ink-3 hover:text-ink-2",
+          )}
+        >
+          {o.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+// ---------- Sparkline (indigo polyline + faint area fill) ----------
+
+export function Sparkline({
+  points,
+  width = 60,
+  height = 34,
+  className,
+}: {
+  points: number[];
+  width?: number;
+  height?: number;
+  className?: string;
+}) {
+  if (points.length < 2) return null;
+  const max = Math.max(...points, 1);
+  const min = Math.min(...points, 0);
+  const range = max - min || 1;
+  const step = width / (points.length - 1);
+  const coords = points.map(
+    (p, i) => [i * step, height - 3 - ((p - min) / range) * (height - 6)] as const,
+  );
+  const line = coords.map(([x, y]) => `${x.toFixed(1)},${y.toFixed(1)}`).join(" ");
+  const area = `0,${height} ${line} ${width},${height}`;
+  return (
+    <svg width={width} height={height} className={className} aria-hidden>
+      <polygon points={area} fill="var(--accent)" opacity={0.09} />
+      <polyline
+        points={line}
+        fill="none"
+        stroke="var(--accent)"
+        strokeWidth={1.5}
+        strokeLinejoin="round"
+        strokeLinecap="round"
+      />
+    </svg>
   );
 }
 
@@ -146,7 +346,7 @@ export function Badge({ status }: { status: string }) {
 export function ErrorNote({ message }: { message: string | null }) {
   if (!message) return null;
   return (
-    <p className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-600 dark:text-red-400">
+    <p className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-[13px] text-red-600">
       {message}
     </p>
   );
@@ -154,14 +354,14 @@ export function ErrorNote({ message }: { message: string | null }) {
 
 export function EmptyState({ title, hint }: { title: string; hint?: string }) {
   return (
-    <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-line py-14 text-center">
-      <p className="text-sm font-medium text-ink-2">{title}</p>
+    <div className="flex flex-col items-center justify-center rounded-[11px] border border-dashed border-line py-14 text-center">
+      <p className="text-[13px] font-medium text-ink-2">{title}</p>
       {hint && <p className="mt-1 max-w-sm text-xs text-ink-3">{hint}</p>}
     </div>
   );
 }
 
-// ---------- Switch ----------
+// ---------- Switch (36×20 pill, 14px knob) ----------
 
 export function Switch({
   checked,
@@ -178,7 +378,7 @@ export function Switch({
     <label className="flex cursor-pointer items-start justify-between gap-3">
       {(label || hint) && (
         <span className="min-w-0">
-          {label && <span className="block text-sm font-medium text-ink">{label}</span>}
+          {label && <span className="block text-[13px] font-medium text-ink">{label}</span>}
           {hint && <span className="mt-0.5 block text-xs text-ink-3">{hint}</span>}
         </span>
       )}
@@ -189,13 +389,13 @@ export function Switch({
         onClick={() => onChange(!checked)}
         className={cx(
           "relative mt-0.5 h-5 w-9 shrink-0 rounded-full transition-colors",
-          checked ? "bg-accent" : "bg-surface-3 border border-line",
+          checked ? "bg-accent" : "bg-line-hover",
         )}
       >
         <span
           className={cx(
-            "absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform",
-            checked ? "translate-x-4" : "translate-x-0.5",
+            "absolute top-[3px] h-3.5 w-3.5 rounded-full bg-white shadow transition-transform",
+            checked ? "translate-x-[19px]" : "translate-x-[3px]",
           )}
         />
       </button>
@@ -203,22 +403,29 @@ export function Switch({
   );
 }
 
+// ---------- Page header ----------
+
 export function PageHeader({
   title,
   subtitle,
   actions,
 }: {
   title: string;
-  subtitle?: string;
+  /** Rendered as a mono status sub-line (design: `live · synced 2s ago · 6 channels`). */
+  subtitle?: React.ReactNode;
   actions?: React.ReactNode;
 }) {
   return (
     <div className="mb-6 flex items-start justify-between gap-4">
-      <div>
-        <h1 className="text-xl font-semibold tracking-tight">{title}</h1>
-        {subtitle && <p className="mt-1 text-sm text-ink-2">{subtitle}</p>}
+      <div className="min-w-0">
+        <h1 className="text-[19px] font-bold tracking-[-0.02em]">{title}</h1>
+        {subtitle && (
+          <div className="mt-1 flex items-center gap-1.5 font-mono text-[11.5px] text-ink-3">
+            {subtitle}
+          </div>
+        )}
       </div>
-      {actions}
+      {actions && <div className="flex shrink-0 items-center gap-2">{actions}</div>}
     </div>
   );
 }

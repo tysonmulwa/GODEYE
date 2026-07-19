@@ -1,7 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { Eye } from "lucide-react";
+import { GodeyeLockup } from "@/components/logo";
 
 export default function AuthLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -12,11 +12,8 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
         transition={{ duration: 0.35, ease: "easeOut" }}
         className="w-full max-w-md"
       >
-        <div className="mb-8 flex items-center justify-center gap-2.5">
-          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-accent text-white">
-            <Eye className="h-5 w-5" />
-          </div>
-          <span className="text-lg font-semibold tracking-tight">GODEYE</span>
+        <div className="mb-8 flex justify-center">
+          <GodeyeLockup markClass="h-9 w-9" wordClass="text-[17px]" />
         </div>
         {children}
       </motion.div>

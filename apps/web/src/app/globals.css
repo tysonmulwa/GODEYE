@@ -3,42 +3,65 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 @theme {
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-jetbrains-mono), ui-monospace, "SFMono-Regular", monospace;
+  --font-display: var(--font-michroma), ui-sans-serif, sans-serif;
+
   --color-surface: var(--surface);
   --color-surface-2: var(--surface-2);
   --color-surface-3: var(--surface-3);
+  --color-sidebar: var(--sidebar);
   --color-ink: var(--ink);
   --color-ink-2: var(--ink-2);
   --color-ink-3: var(--ink-3);
+  --color-ink-4: var(--ink-4);
   --color-line: var(--line);
+  --color-line-soft: var(--line-soft);
+  --color-line-hover: var(--line-hover);
   --color-accent: var(--accent);
   --color-accent-hover: var(--accent-hover);
   --color-accent-soft: var(--accent-soft);
+  --color-accent-soft-2: var(--accent-soft-2);
+  --color-accent-border: var(--accent-border);
 }
 
+/* "Engineered" palette — cool gray ramp + one restrained indigo accent */
 :root {
-  --surface: #fafafa;
-  --surface-2: #ffffff;
-  --surface-3: #f4f4f5;
-  --ink: #18181b;
-  --ink-2: #52525b;
-  --ink-3: #a1a1aa;
-  --line: #e4e4e7;
+  --surface: #f6f7f9; /* canvas */
+  --surface-2: #ffffff; /* cards */
+  --surface-3: #f4f5f7; /* chrome, chips */
+  --sidebar: #fbfbfc;
+  --ink: #101319;
+  --ink-2: #565d6b;
+  --ink-3: #98a0ad;
+  --ink-4: #b0b6bf; /* faint: table headers, timestamps */
+  --line: #e4e7ec;
+  --line-soft: #eef0f3;
+  --line-hover: #cdd2da;
   --accent: #6366f1;
   --accent-hover: #4f46e5;
-  --accent-soft: #eef2ff;
+  --accent-soft: #eef1ff; /* wash: active nav, chips */
+  --accent-soft-2: #f7f8ff; /* selected card bg */
+  --accent-border: #c7ccf7;
 }
 
 .dark {
-  --surface: #09090b;
-  --surface-2: #101014;
-  --surface-3: #18181d;
-  --ink: #fafafa;
-  --ink-2: #a1a1aa;
-  --ink-3: #63636b;
-  --line: #232329;
+  --surface: #0b0d11;
+  --surface-2: #12151b;
+  --surface-3: #191d24;
+  --sidebar: #0e1015;
+  --ink: #f3f4f6;
+  --ink-2: #a8afbc;
+  --ink-3: #6b7280;
+  --ink-4: #565d6b;
+  --line: #242933;
+  --line-soft: #1d222b;
+  --line-hover: #3a4150;
   --accent: #818cf8;
   --accent-hover: #a5b4fc;
-  --accent-soft: #1e1b4b;
+  --accent-soft: #1e2140;
+  --accent-soft-2: #171930;
+  --accent-border: #37396b;
 }
 
 html,
@@ -68,4 +91,25 @@ body {
 }
 *::-webkit-scrollbar-track {
   background: transparent;
+}
+
+/* Live indicator dot (design system: 1.8s ease-in-out infinite) */
+@keyframes pulseDot {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.4;
+    transform: scale(0.7);
+  }
+}
+.animate-pulse-dot {
+  animation: pulseDot 1.8s ease-in-out infinite;
+}
+
+/* Every number in the system is tabular */
+.tnum {
+  font-variant-numeric: tabular-nums;
 }

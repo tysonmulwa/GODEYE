@@ -14,10 +14,18 @@ import {
   ErrorNote,
   Input,
   Label,
+  LiveDot,
+  MonoChip,
   PageHeader,
   Switch,
   cx,
 } from "@/components/ui";
+
+const kebab = (s: string) =>
+  s
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
 
 interface Connection {
   id: string;
@@ -141,7 +149,15 @@ export default function AutopilotPage() {
     <>
       <PageHeader
         title="Autopilot"
-        subtitle="Hands-off posting. GODEYE writes, schedules, and publishes on your cadence — optimizing times and testing angles automatically."
+        subtitle={
+          <>
+            <LiveDot pulse={plans.some((p) => p.active)} />
+            <span>
+              {plans.filter((p) => p.active).length} running ·{" "}
+              {plans.filter((p) => !p.active).length} paused
+            </span>
+          </>
+        }
         actions={
           <Button onClick={() => setCreating((v) => !v)}>
             <Plus className="h-4 w-4" /> {creating ? "Close" : "New plan"}
@@ -276,59 +292,69 @@ export default function AutopilotPage() {
         />
       ) : (
         <div className="space-y-3">
-          {plans.map((plan) => (
-            <Card key={plan.id} className="!p-4">
-              <div className="flex items-start justify-between gap-4">
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2">
-                    <p className="text-sm font-semibold">{plan.name}</p>
-                    <Badge status={plan.active ? "ACTIVE" : "DISCONNECTED"} />
-                    {plan.autoGenerate && (
-                      <span className="rounded-full bg-accent-soft px-2 py-0.5 text-[11px] font-medium text-accent">
-                        Autopilot
-                      </span>
-                    )}
+          {plans.map((plan) => {
+            const features = [
+              plan.autoGenerate && "auto-generate",
+              plan.abTesting && "a/b testing",
+              plan.recycleEvergreen && "evergreen",
+              plan.generateImages && "ai images",
+            ].filter(Boolean) as string[];
+            return (
+              <Card key={plan.id} className={cx("!p-4", !plan.active && "opacity-70")}>
+                <div className="flex items-center justify-between gap-4">
+                  <div className="flex min-w-0 items-center gap-2">
+                    <MonoChip>{kebab(plan.name)}</MonoChip>
+                    <Badge status={plan.active ? "ACTIVE" : "PAUSED"} />
                   </div>
-                  <p className="mt-1 text-xs text-ink-3">
-                    {CADENCE_LABEL[plan.cadence] ?? plan.cadence} ·{" "}
-                    {plan.platforms.map((p) => PLATFORM_INFO[p as Platform]?.label ?? p).join(", ")}
-                    {plan.preferredTimes.length > 0
-                      ? ` · ${plan.preferredTimes.join(", ")}`
-                      : " · best-time detection"}
-                  </p>
-                  <div className="mt-2 flex flex-wrap gap-1.5">
-                    {plan.abTesting && (
-                      <span className="rounded bg-surface-3 px-1.5 py-0.5 text-[11px] text-ink-2">
-                        A/B testing
-                      </span>
-                    )}
-                    {plan.recycleEvergreen && (
-                      <span className="rounded bg-surface-3 px-1.5 py-0.5 text-[11px] text-ink-2">
-                        Evergreen recycling
-                      </span>
-                    )}
-                    {plan.generateImages && (
-                      <span className="rounded bg-surface-3 px-1.5 py-0.5 text-[11px] text-ink-2">
-                        AI images
-                      </span>
-                    )}
-                    {plan.topics.slice(0, 3).map((t) => (
-                      <span key={t} className="rounded bg-surface-3 px-1.5 py-0.5 text-[11px] text-ink-2">
-                        {t}
-                      </span>
-                    ))}
-                    {plan.topics.length > 3 && (
-                      <span className="text-[11px] text-ink-3">+{plan.topics.length - 3} more</span>
-                    )}
-                  </div>
+                  <Switch
+                    checked={plan.active}
+                    onChange={(active) => toggleMutation.mutate({ id: plan.id, active })}
+                  />
                 </div>
-                <Switch
-                  checked={plan.active}
-                  onChange={(active) => toggleMutation.mutate({ id: plan.id, active })}
-                />
-              </div>
-            </Card>
-          ))}
+                <p className="mt-2 font-mono text-[11px] text-ink-3">
+                  {(CADENCE_LABEL[plan.cadence] ?? plan.cadence).toLowerCase().replace(/ /g, "")}
+                  {" · "}
+                  {plan.platforms.length} channel{plan.platforms.length === 1 ? "" : "s"}
+                  {" · "}
+                  {plan.preferredTimes.length > 0 ? plan.preferredTimes.join(" · ") : "best-time"}
+                </p>
+                <div className="mt-3 flex flex-wrap gap-1.5 border-t border-line-soft pt-3">
+                  {features.map((f) => (
+                    <span
+                      key={f}
+                      className="inline-flex items-center gap-1.5 rounded-md border border-line px-2 py-0.5 text-[11px] text-ink-2"
+                    >
+                      <span className="h-1 w-1 rounded-full bg-accent" /> {f}
+                    </span>
+                  ))}
+                  {plan.topics.slice(0, 4).map((t) => (
+                    <MonoChip key={t} tone="faint">
+                      {t}
+                    </MonoChip>
+                  ))}
+                  {plan.topics.length > 4 && (
+                    <span className="font-mono text-[11px] text-ink-4">
+                      +{plan.topics.length - 4}
+                    </span>
+                  )}
+                </div>
+                <div className="mt-3 flex items-center justify-between font-mono text-[10.5px] uppercase tracking-[0.06em] text-ink-4">
+                  <span>
+                    {plan.active
+                      ? plan.lastPlannedAt
+                        ? `last planned ${new Date(plan.lastPlannedAt).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}`
+                        : "waiting for first run"
+                      : "status paused"}
+                  </span>
+                  <span>
+                    {plan.platforms
+                      .map((p) => PLATFORM_INFO[p as Platform]?.label ?? p)
+                      .join(" · ")}
+                  </span>
+                </div>
+              </Card>
+            );
+          })}
         </div>
       )}
     </>

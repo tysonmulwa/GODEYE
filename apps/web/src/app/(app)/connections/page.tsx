@@ -2,7 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { motion } from "framer-motion";
-import { Facebook, Linkedin, MessageCircle, Send, Trash2, Twitter } from "lucide-react";
+import { Trash2 } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
 import { api } from "@/lib/api";
@@ -15,6 +15,7 @@ import {
   Input,
   Label,
   PageHeader,
+  PlatformGlyph,
 } from "@/components/ui";
 
 interface Connection {
@@ -113,17 +114,30 @@ function ConnectionsInner() {
   };
 
   const providers = [
-    { kind: "telegram" as const, name: "Telegram", icon: Send, desc: "Post to channels & groups" },
-    { kind: "discord" as const, name: "Discord", icon: MessageCircle, desc: "Post to server channels" },
-    { kind: "reddit" as const, name: "Reddit", icon: MessageCircle, desc: "Submit posts to subreddits" },
-    { kind: "x" as const, name: "X (Twitter)", icon: Twitter, desc: "Publish tweets" },
+    { kind: "telegram" as const, name: "Telegram", glyph: "TELEGRAM", desc: "Post to channels & groups" },
+    { kind: "discord" as const, name: "Discord", glyph: "DISCORD", desc: "Post to server channels" },
+    { kind: "reddit" as const, name: "Reddit", glyph: "REDDIT", desc: "Submit posts to subreddits" },
+    { kind: "x" as const, name: "X (Twitter)", glyph: "X", desc: "Publish tweets" },
   ];
+
+  const counts = {
+    active: connections.filter((c) => c.status === "ACTIVE").length,
+    expired: connections.filter((c) => c.status === "EXPIRED").length,
+    error: connections.filter((c) => c.status === "ERROR").length,
+  };
 
   return (
     <>
       <PageHeader
         title="Connections"
-        subtitle="Connect the places GODEYE publishes to. Credentials are encrypted at rest."
+        subtitle={
+          <span>
+            <span className="text-emerald-600">{counts.active} active</span>
+            {counts.expired > 0 && <span className="text-amber-600"> · {counts.expired} expired</span>}
+            {counts.error > 0 && <span className="text-red-600"> · {counts.error} error</span>}
+            <span> · credentials encrypted at rest</span>
+          </span>
+        }
       />
 
       {params.get("connected") && (
@@ -143,26 +157,38 @@ function ConnectionsInner() {
             hint="Connect at least one platform below so the AI has somewhere to publish."
           />
         ) : (
-          <div className="grid gap-3 sm:grid-cols-2">
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {connections.map((c) => (
-              <Card key={c.id} className="flex items-center justify-between gap-3 !p-4">
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2">
-                    <p className="truncate text-sm font-medium">{c.displayName}</p>
-                    <Badge status={c.status} />
+              <Card key={c.id} className="!p-4">
+                <div className="flex items-center gap-3">
+                  <PlatformGlyph platform={c.platform} size={36} className="!rounded-[9px]" />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[13px] font-semibold">
+                      {c.platform.charAt(0) + c.platform.slice(1).toLowerCase()}
+                    </p>
+                    <p className="truncate font-mono text-[10.5px] text-ink-3">{c.displayName}</p>
                   </div>
-                  <p className="text-xs text-ink-3">{c.platform}</p>
-                  {c.lastError && (
-                    <p className="mt-1 truncate text-xs text-red-500">{c.lastError}</p>
-                  )}
+                  <Badge status={c.status} />
                 </div>
-                <button
-                  onClick={() => removeMutation.mutate(c.id)}
-                  aria-label="Disconnect"
-                  className="rounded-lg p-2 text-ink-3 transition-colors hover:bg-red-500/10 hover:text-red-500"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </button>
+                <div className="mt-3 flex items-center justify-between border-t border-line-soft pt-2.5">
+                  <span className="font-mono text-[10.5px] uppercase tracking-[0.06em] text-ink-4">
+                    since{" "}
+                    {new Date(c.createdAt).toLocaleDateString(undefined, {
+                      month: "short",
+                      day: "numeric",
+                    })}
+                  </span>
+                  <button
+                    onClick={() => removeMutation.mutate(c.id)}
+                    aria-label="Disconnect"
+                    className="rounded-lg p-1.5 text-ink-3 transition-colors hover:bg-red-500/10 hover:text-red-500"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+                {c.lastError && (
+                  <p className="mt-2 truncate font-mono text-[10.5px] text-red-500">{c.lastError}</p>
+                )}
               </Card>
             ))}
           </div>
@@ -173,13 +199,11 @@ function ConnectionsInner() {
       <section>
         <h2 className="mb-3 text-sm font-medium text-ink-2">Add a platform</h2>
         <div className="grid gap-3 sm:grid-cols-2">
-          {providers.map(({ kind, name, icon: Icon, desc }) => (
+          {providers.map(({ kind, name, glyph, desc }) => (
             <Card key={kind} className="!p-4">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-surface-3">
-                    <Icon className="h-4.5 w-4.5 text-accent" />
-                  </div>
+                  <PlatformGlyph platform={glyph} size={36} className="!rounded-[9px]" />
                   <div>
                     <p className="text-sm font-medium">{name}</p>
                     <p className="text-xs text-ink-3">{desc}</p>
@@ -232,9 +256,7 @@ function ConnectionsInner() {
           <Card className="!p-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-surface-3">
-                  <Facebook className="h-4.5 w-4.5 text-accent" />
-                </div>
+                <PlatformGlyph platform="FACEBOOK" size={36} className="!rounded-[9px]" />
                 <div>
                   <p className="text-sm font-medium">Facebook & Instagram</p>
                   <p className="text-xs text-ink-3">OAuth via your Meta business app</p>
@@ -249,9 +271,7 @@ function ConnectionsInner() {
           <Card className="!p-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-surface-3">
-                  <Linkedin className="h-4.5 w-4.5 text-accent" />
-                </div>
+                <PlatformGlyph platform="LINKEDIN" size={36} className="!rounded-[9px]" />
                 <div>
                   <p className="text-sm font-medium">LinkedIn</p>
                   <p className="text-xs text-ink-3">OAuth — post to your profile feed</p>
@@ -262,10 +282,13 @@ function ConnectionsInner() {
               </Button>
             </div>
           </Card>
+
+          <div className="flex items-center justify-center rounded-[11px] border border-dashed border-line p-4">
+            <p className="font-mono text-[11px] text-ink-3">
+              soon · TikTok · YouTube · Pinterest · Threads
+            </p>
+          </div>
         </div>
-        <p className="mt-4 text-xs text-ink-3">
-          More platforms (TikTok, YouTube, Pinterest, Threads…) arrive in upcoming phases.
-        </p>
       </section>
     </>
   );

@@ -117,7 +117,14 @@ export default function TeamPage() {
     <>
       <PageHeader
         title="Team"
-        subtitle="Invite teammates and control what they can do in this organization."
+        subtitle={
+          <span>
+            {data?.members.length ?? 0} member{(data?.members.length ?? 0) === 1 ? "" : "s"}
+            {(data?.invitations.length ?? 0) > 0 && (
+              <span className="text-amber-600"> · {data!.invitations.length} pending</span>
+            )}
+          </span>
+        }
       />
       <div className="space-y-5">
         <ErrorNote message={error} />
@@ -195,14 +202,27 @@ export default function TeamPage() {
               {(data?.members ?? []).map((m) => {
                 const isSelf = m.userId === user?.id;
                 const canEdit = canManage && !isSelf && ROLE_RANK[m.role] < myRank;
+                const initials =
+                  m.name
+                    .trim()
+                    .split(/\s+/)
+                    .slice(0, 2)
+                    .map((p) => p[0])
+                    .join("")
+                    .toUpperCase() || "?";
                 return (
                   <li key={m.userId} className="flex items-center gap-3 py-3">
+                    <span className="flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-lg bg-ink font-mono text-[11px] font-semibold text-surface-2">
+                      {initials}
+                    </span>
                     <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-medium">
+                      <p className="truncate text-[13px] font-medium">
                         {m.name}
-                        {isSelf && <span className="ml-1.5 text-xs text-ink-3">(you)</span>}
+                        {isSelf && (
+                          <span className="ml-1.5 font-mono text-[10.5px] text-ink-4">you</span>
+                        )}
                       </p>
-                      <p className="truncate text-xs text-ink-3">{m.email}</p>
+                      <p className="truncate font-mono text-[10.5px] text-ink-3">{m.email}</p>
                     </div>
                     {canEdit ? (
                       <select
