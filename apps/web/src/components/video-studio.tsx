@@ -230,7 +230,7 @@ export function VideoStudio({
               {videoMeta?.durationSec ? ` · ${Math.round(videoMeta.durationSec)}s` : ""}
               {contentItemId ? " — attached to this post" : ""}
             </p>
-            {run?.costUsd && <span className="text-[11px] text-ink-3">${run.costUsd}</span>}
+            {run?.costUsd && <span className="text-[14px] text-ink-3">${run.costUsd}</span>}
           </div>
         </motion.div>
       )}

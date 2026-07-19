@@ -139,7 +139,7 @@ export default function OnboardingPage() {
             <div
               className={`h-1 rounded-full ${i <= step ? "bg-accent" : "bg-surface-3"} transition-colors`}
             />
-            <p className={`mt-1.5 text-[11px] ${i === step ? "text-ink" : "text-ink-3"}`}>{label}</p>
+            <p className={`mt-1.5 text-[14px] ${i === step ? "text-ink" : "text-ink-3"}`}>{label}</p>
           </div>
         ))}
       </div>

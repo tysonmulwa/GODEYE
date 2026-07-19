@@ -27,7 +27,7 @@ export function GodeyeMark({ className }: { className?: string }) {
 /** Horizontal lockup: symbol + Michroma wordmark. */
 export function GodeyeLockup({
   markClass = "h-[27px] w-[27px]",
-  wordClass = "text-[13px]",
+  wordClass = "text-[14px]",
 }: {
   markClass?: string;
   wordClass?: string;

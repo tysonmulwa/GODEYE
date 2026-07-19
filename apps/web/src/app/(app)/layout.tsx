@@ -60,7 +60,7 @@ function OrgSwitcher() {
   });
 
   const roleLine = (
-    <p className="truncate font-mono text-[10.5px] text-ink-3">
+    <p className="truncate font-mono text-[12px] text-ink-3">
       role:{(organization?.role ?? "").toLowerCase()}
     </p>
   );
@@ -81,7 +81,7 @@ function OrgSwitcher() {
     <select
       value={organization.id}
       onChange={(e) => void switchOrg(e.target.value)}
-      className="w-full truncate rounded border border-transparent bg-transparent font-mono text-[10.5px] text-ink-3 hover:border-line focus:outline-none"
+      className="w-full truncate rounded border border-transparent bg-transparent font-mono text-[12px] text-ink-3 hover:border-line focus:outline-none"
       title="Switch organization"
     >
       {orgs.map((o) => (
@@ -130,14 +130,14 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         <div className="px-3 pt-3">
           <div className="flex h-[34px] items-center gap-2 rounded-lg border border-line bg-surface-2 px-2.5">
             <Search className="h-3.5 w-3.5 text-ink-3" />
-            <span className="flex-1 text-[12.5px] text-ink-3">Search</span>
-            <kbd className="rounded border border-line bg-surface-3 px-1 font-mono text-[9.5px] text-ink-3">
+            <span className="flex-1 text-[14px] text-ink-3">Search</span>
+            <kbd className="rounded border border-line bg-surface-3 px-1 font-mono text-[14px] text-ink-3">
               ⌘K
             </kbd>
           </div>
         </div>
 
-        <p className="px-4 pb-1 pt-4 font-mono text-[10px] font-semibold uppercase tracking-[0.11em] text-ink-4">
+        <p className="px-4 pb-1 pt-4 font-mono text-[12px] font-semibold uppercase tracking-[0.11em] text-ink-4">
           Workspace
         </p>
         <nav className="flex-1 space-y-0.5 px-2 py-1">
@@ -148,7 +148,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                 key={href}
                 href={href}
                 className={cx(
-                  "relative flex items-center gap-2.5 rounded-lg px-[11px] py-2 text-[13.5px] transition-colors",
+                  "relative flex items-center gap-2.5 rounded-lg px-[11px] py-2 text-[14px] transition-colors",
                   active
                     ? "bg-accent-soft font-semibold text-accent-hover"
                     : "text-ink-2 hover:bg-surface-3 hover:text-ink",
@@ -166,11 +166,11 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
         <div className="border-t border-line-soft p-3">
           <div className="flex items-center gap-2.5">
-            <span className="flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-[7px] bg-ink font-mono text-[11px] font-semibold text-surface-2">
+            <span className="flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-[7px] bg-ink font-mono text-[14px] font-semibold text-surface-2">
               {initials(user?.name)}
             </span>
             <div className="min-w-0 flex-1">
-              <p className="truncate text-[12.5px] font-semibold">{user?.name}</p>
+              <p className="truncate text-[14px] font-semibold">{user?.name}</p>
               <OrgSwitcher />
             </div>
             <ThemeToggle />

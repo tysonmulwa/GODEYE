@@ -246,7 +246,7 @@ export default function ComposerPage() {
                     )}
                   >
                     <span className="truncate">{c.displayName}</span>
-                    <span className="ml-2 shrink-0 text-[11px] text-ink-3">{c.platform}</span>
+                    <span className="ml-2 shrink-0 text-[14px] text-ink-3">{c.platform}</span>
                   </button>
                 ))}
               </div>
@@ -305,7 +305,7 @@ export default function ComposerPage() {
                 <div className="flex items-center justify-between">
                   <p className="text-sm font-semibold">{content.title ?? "Draft"}</p>
                   {run?.costUsd && (
-                    <span className="text-[11px] text-ink-3">
+                    <span className="text-[14px] text-ink-3">
                       {(run.inputTokens ?? 0) + (run.outputTokens ?? 0)} tokens · ${run.costUsd}
                     </span>
                   )}

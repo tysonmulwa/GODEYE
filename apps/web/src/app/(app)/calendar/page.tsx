@@ -80,7 +80,7 @@ export default function CalendarPage() {
       <div className="mb-5 flex items-start justify-between gap-4">
         <div>
           <h1 className="text-[19px] font-bold tracking-[-0.02em]">Calendar</h1>
-          <p className="mt-1 font-mono text-[11.5px] text-ink-3">
+          <p className="mt-1 font-mono text-[14px] text-ink-3">
             {monthLabel.toLowerCase()} · week {weekNo} · {posts.length} scheduled
           </p>
         </div>
@@ -95,7 +95,7 @@ export default function CalendarPage() {
           {weekOffset !== 0 && (
             <button
               onClick={() => setWeekOffset(0)}
-              className="rounded-lg border border-line bg-surface-2 px-2.5 py-1.5 font-mono text-[11px] text-ink-2 transition-colors hover:border-line-hover"
+              className="rounded-lg border border-line bg-surface-2 px-2.5 py-1.5 font-mono text-[14px] text-ink-2 transition-colors hover:border-line-hover"
             >
               today
             </button>
@@ -128,7 +128,7 @@ export default function CalendarPage() {
                 >
                   <p
                     className={cx(
-                      "font-mono text-[10px] font-semibold tracking-[0.08em]",
+                      "font-mono text-[12px] font-semibold tracking-[0.08em]",
                       isToday ? "text-accent-hover" : "text-ink-4",
                     )}
                   >
@@ -153,7 +153,7 @@ export default function CalendarPage() {
                     >
                       <div className="flex items-center gap-1.5">
                         <PlatformGlyph platform={post.platform} size={16} />
-                        <span className="tnum font-mono text-[10.5px] text-ink-3">
+                        <span className="tnum font-mono text-[12px] text-ink-3">
                           {new Date(post.scheduledAt).toLocaleTimeString(undefined, {
                             hour: "2-digit",
                             minute: "2-digit",
@@ -161,7 +161,7 @@ export default function CalendarPage() {
                         </span>
                         <span
                           className={cx(
-                            "ml-auto font-mono text-[9px] font-semibold uppercase",
+                            "ml-auto font-mono text-[14px] font-semibold uppercase",
                             post.status === "PUBLISHED" && "text-emerald-600",
                             post.status === "FAILED" && "text-red-600",
                             post.status === "PENDING" && "text-amber-600",
@@ -192,7 +192,7 @@ export default function CalendarPage() {
                           </button>
                         )}
                       </div>
-                      <p className="mt-1 line-clamp-2 text-[11px] leading-snug">
+                      <p className="mt-1 line-clamp-2 text-[14px] leading-snug">
                         {post.contentPreview}
                       </p>
                     </div>

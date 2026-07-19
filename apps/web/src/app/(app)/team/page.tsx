@@ -177,7 +177,7 @@ export default function TeamPage() {
                   Invite link for {lastInvite.email} — share it now, it is only shown once:
                 </p>
                 <div className="mt-2 flex items-center gap-2">
-                  <code className="min-w-0 flex-1 truncate rounded bg-surface-3 px-2 py-1.5 text-[11px]">
+                  <code className="min-w-0 flex-1 truncate rounded bg-surface-3 px-2 py-1.5 text-[14px]">
                     {lastInvite.inviteUrl}
                   </code>
                   <Button variant="secondary" onClick={() => void copyInviteUrl()}>
@@ -185,7 +185,7 @@ export default function TeamPage() {
                     {copied ? "Copied" : "Copy"}
                   </Button>
                 </div>
-                <p className="mt-1.5 text-[11px] text-ink-3">
+                <p className="mt-1.5 text-[14px] text-ink-3">
                   Expires {new Date(lastInvite.expiresAt).toLocaleDateString()}
                 </p>
               </div>
@@ -212,17 +212,17 @@ export default function TeamPage() {
                     .toUpperCase() || "?";
                 return (
                   <li key={m.userId} className="flex items-center gap-3 py-3">
-                    <span className="flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-lg bg-ink font-mono text-[11px] font-semibold text-surface-2">
+                    <span className="flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-lg bg-ink font-mono text-[14px] font-semibold text-surface-2">
                       {initials}
                     </span>
                     <div className="min-w-0 flex-1">
-                      <p className="truncate text-[13px] font-medium">
+                      <p className="truncate text-[14px] font-medium">
                         {m.name}
                         {isSelf && (
-                          <span className="ml-1.5 font-mono text-[10.5px] text-ink-4">you</span>
+                          <span className="ml-1.5 font-mono text-[12px] text-ink-4">you</span>
                         )}
                       </p>
-                      <p className="truncate font-mono text-[10.5px] text-ink-3">{m.email}</p>
+                      <p className="truncate font-mono text-[12px] text-ink-3">{m.email}</p>
                     </div>
                     {canEdit ? (
                       <select

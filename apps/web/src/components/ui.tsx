@@ -33,7 +33,7 @@ export const Button = forwardRef<
       ref={ref}
       disabled={disabled || loading}
       className={cx(
-        "inline-flex h-9 items-center justify-center gap-2 rounded-[9px] px-3.5 text-[13.5px] font-semibold",
+        "inline-flex h-9 items-center justify-center gap-2 rounded-[9px] px-3.5 text-[14px] font-semibold",
         "transition-colors duration-150 focus-visible:outline-2 focus-visible:outline-accent",
         buttonStyles[variant],
         className,
@@ -54,7 +54,7 @@ export const Input = forwardRef<HTMLInputElement, React.InputHTMLAttributes<HTML
       <input
         ref={ref}
         className={cx(
-          "w-full rounded-lg border border-line bg-surface-2 px-3 py-2 text-[13px] text-ink",
+          "w-full rounded-lg border border-line bg-surface-2 px-3 py-2 text-[14px] text-ink",
           "placeholder:text-ink-3 focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/15",
           className,
         )}
@@ -72,7 +72,7 @@ export const Textarea = forwardRef<
     <textarea
       ref={ref}
       className={cx(
-        "w-full rounded-lg border border-line bg-surface-2 px-3 py-2 text-[13px] leading-relaxed text-ink",
+        "w-full rounded-lg border border-line bg-surface-2 px-3 py-2 text-[14px] leading-relaxed text-ink",
         "placeholder:text-ink-3 focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/15",
         className,
       )}
@@ -86,7 +86,7 @@ export function Label({ children, htmlFor }: { children: React.ReactNode; htmlFo
   return (
     <label
       htmlFor={htmlFor}
-      className="mb-1.5 block font-mono text-[10px] font-semibold uppercase tracking-[0.09em] text-ink-3"
+      className="mb-1.5 block font-mono text-[12px] font-semibold uppercase tracking-[0.09em] text-ink-3"
     >
       {children}
     </label>
@@ -104,7 +104,7 @@ export function MonoLabel({
   return (
     <p
       className={cx(
-        "font-mono text-[10px] font-semibold uppercase tracking-[0.1em] text-ink-3",
+        "font-mono text-[12px] font-semibold uppercase tracking-[0.1em] text-ink-3",
         className,
       )}
     >
@@ -165,7 +165,7 @@ export function Badge({ status, className }: { status: string; className?: strin
   return (
     <span
       className={cx(
-        "inline-flex items-center rounded-full px-2 py-0.5 font-mono text-[10px] font-semibold tracking-[0.04em]",
+        "inline-flex items-center rounded-full px-2 py-0.5 font-mono text-[12px] font-semibold tracking-[0.04em]",
         badgeStyles[status] ?? "bg-zinc-500/13 text-zinc-500",
         className,
       )}
@@ -188,7 +188,7 @@ export function MonoChip({
   return (
     <span
       className={cx(
-        "inline-flex items-center rounded-md px-2 py-0.5 font-mono text-[11px]",
+        "inline-flex items-center rounded-md px-2 py-0.5 font-mono text-[14px]",
         tone === "accent"
           ? "bg-accent-soft text-accent-hover"
           : "border border-line bg-surface-3 text-ink-2",
@@ -261,7 +261,7 @@ export function PlatformGlyph({
         width: size,
         height: size,
         backgroundColor: p.bg,
-        fontSize: Math.max(9, Math.round(size * 0.38)),
+        fontSize: Math.max(10, Math.round(size * 0.4)),
       }}
     >
       {p.glyph}
@@ -290,7 +290,7 @@ export function Segmented<T extends string>({
           type="button"
           onClick={() => onChange(o.value)}
           className={cx(
-            "rounded-md px-2.5 py-1 font-mono text-[11px] font-medium transition-colors",
+            "rounded-md px-2.5 py-1 font-mono text-[14px] font-medium transition-colors",
             o.value === value
               ? "bg-surface-2 text-ink shadow-sm"
               : "text-ink-3 hover:text-ink-2",
@@ -346,7 +346,7 @@ export function Sparkline({
 export function ErrorNote({ message }: { message: string | null }) {
   if (!message) return null;
   return (
-    <p className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-[13px] text-red-600">
+    <p className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-[14px] text-red-600">
       {message}
     </p>
   );
@@ -355,7 +355,7 @@ export function ErrorNote({ message }: { message: string | null }) {
 export function EmptyState({ title, hint }: { title: string; hint?: string }) {
   return (
     <div className="flex flex-col items-center justify-center rounded-[11px] border border-dashed border-line py-14 text-center">
-      <p className="text-[13px] font-medium text-ink-2">{title}</p>
+      <p className="text-[14px] font-medium text-ink-2">{title}</p>
       {hint && <p className="mt-1 max-w-sm text-xs text-ink-3">{hint}</p>}
     </div>
   );
@@ -378,7 +378,7 @@ export function Switch({
     <label className="flex cursor-pointer items-start justify-between gap-3">
       {(label || hint) && (
         <span className="min-w-0">
-          {label && <span className="block text-[13px] font-medium text-ink">{label}</span>}
+          {label && <span className="block text-[14px] font-medium text-ink">{label}</span>}
           {hint && <span className="mt-0.5 block text-xs text-ink-3">{hint}</span>}
         </span>
       )}
@@ -420,7 +420,7 @@ export function PageHeader({
       <div className="min-w-0">
         <h1 className="text-[19px] font-bold tracking-[-0.02em]">{title}</h1>
         {subtitle && (
-          <div className="mt-1 flex items-center gap-1.5 font-mono text-[11.5px] text-ink-3">
+          <div className="mt-1 flex items-center gap-1.5 font-mono text-[14px] text-ink-3">
             {subtitle}
           </div>
         )}

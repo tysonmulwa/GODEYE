@@ -109,34 +109,34 @@ function ApprovalsCard() {
   return (
     <Card>
       <div className="mb-3 flex items-center justify-between">
-        <h2 className="text-[13.5px] font-semibold">Approvals</h2>
+        <h2 className="text-[14px] font-semibold">Approvals</h2>
         {pending.length > 0 && (
-          <span className="rounded-full bg-amber-500/13 px-2 py-0.5 font-mono text-[10px] font-semibold text-amber-600">
+          <span className="rounded-full bg-amber-500/13 px-2 py-0.5 font-mono text-[12px] font-semibold text-amber-600">
             {pending.length} queued
           </span>
         )}
       </div>
       {pending.length === 0 ? (
-        <p className="font-mono text-[11px] text-ink-3">queue empty</p>
+        <p className="font-mono text-[14px] text-ink-3">queue empty</p>
       ) : (
         <ul className="space-y-3">
           {pending.slice(0, 4).map((item) => (
             <li key={item.id}>
-              <p className="line-clamp-2 text-[12.5px] leading-snug">{item.title ?? item.body}</p>
-              <p className="mt-0.5 font-mono text-[10.5px] text-ink-4">
+              <p className="line-clamp-2 text-[14px] leading-snug">{item.title ?? item.body}</p>
+              <p className="mt-0.5 font-mono text-[12px] text-ink-4">
                 {item.aiGenerated ? "autopilot" : (item.submittedByName ?? "teammate")}
                 {item.submittedAt ? ` · ${timeShort(item.submittedAt)}` : ""}
               </p>
               <div className="mt-1.5 flex gap-1.5">
                 <button
                   onClick={() => review.mutate({ id: item.id, action: "approve" })}
-                  className="rounded-md bg-accent px-2.5 py-1 text-[11.5px] font-semibold text-white transition-colors hover:bg-accent-hover"
+                  className="rounded-md bg-accent px-2.5 py-1 text-[14px] font-semibold text-white transition-colors hover:bg-accent-hover"
                 >
                   Approve
                 </button>
                 <button
                   onClick={() => review.mutate({ id: item.id, action: "reject" })}
-                  className="rounded-md border border-line px-2.5 py-1 text-[11.5px] font-medium text-ink-2 transition-colors hover:border-line-hover"
+                  className="rounded-md border border-line px-2.5 py-1 text-[14px] font-medium text-ink-2 transition-colors hover:border-line-hover"
                 >
                   Reject
                 </button>
@@ -202,7 +202,7 @@ export default function DashboardPage() {
           <h1 className="text-[19px] font-bold tracking-[-0.02em]">
             Overview
           </h1>
-          <div className="mt-1 flex items-center gap-1.5 font-mono text-[11.5px] text-ink-3">
+          <div className="mt-1 flex items-center gap-1.5 font-mono text-[14px] text-ink-3">
             <LiveDot />
             <span>
               live · {activeConnections} channel{activeConnections === 1 ? "" : "s"} ·{" "}
@@ -233,18 +233,18 @@ export default function DashboardPage() {
         <Card className="mb-3.5 flex flex-wrap items-center gap-x-4 gap-y-2 !py-3">
           <div className="flex items-center gap-2">
             <LiveDot color={autopilotPlan.active ? "#10b981" : "#98a0ad"} pulse={autopilotPlan.active} />
-            <span className="text-[13px] font-semibold">Autopilot</span>
+            <span className="text-[14px] font-semibold">Autopilot</span>
             <MonoChip>{kebab(autopilotPlan.name)}</MonoChip>
             <Badge status={autopilotPlan.active ? "ACTIVE" : "PAUSED"} />
           </div>
           <div className="flex min-w-0 flex-1 items-center justify-end gap-3">
             {autopilotPlan.preferredTimes.length > 0 && (
-              <span className="hidden truncate font-mono text-[11px] text-ink-3 md:block">
+              <span className="hidden truncate font-mono text-[14px] text-ink-3 md:block">
                 NEXT SLOTS · {autopilotPlan.preferredTimes.slice(0, 3).join(" · ")}
               </span>
             )}
             {nextPost && (
-              <span className="hidden font-mono text-[11px] text-ink-3 sm:block">
+              <span className="hidden font-mono text-[14px] text-ink-3 sm:block">
                 NEXT POST {timeShort(nextPost.scheduledAt)}
               </span>
             )}
@@ -259,10 +259,10 @@ export default function DashboardPage() {
       <div className="grid gap-3.5 lg:grid-cols-[1.62fr_1fr]">
         <Card className="!p-0">
           <div className="flex items-center justify-between px-4 pb-2 pt-4">
-            <h2 className="text-[13.5px] font-semibold">Recent activity</h2>
+            <h2 className="text-[14px] font-semibold">Recent activity</h2>
             <Link
               href="/calendar"
-              className="inline-flex items-center gap-1 font-mono text-[11px] text-accent-hover hover:underline"
+              className="inline-flex items-center gap-1 font-mono text-[14px] text-accent-hover hover:underline"
             >
               calendar <ArrowRight className="h-3 w-3" />
             </Link>
@@ -281,7 +281,7 @@ export default function DashboardPage() {
                   <span
                     key={i}
                     className={cx(
-                      "font-mono text-[10px] font-semibold uppercase tracking-[0.08em] text-ink-4",
+                      "font-mono text-[12px] font-semibold uppercase tracking-[0.08em] text-ink-4",
                       h === "STATUS" && "text-right",
                     )}
                   >
@@ -297,12 +297,12 @@ export default function DashboardPage() {
                   >
                     <PlatformGlyph platform={post.platform} size={24} />
                     <div className="min-w-0">
-                      <p className="truncate text-[13px]">{post.contentPreview}</p>
-                      <p className="truncate font-mono text-[10.5px] text-ink-4">
+                      <p className="truncate text-[14px]">{post.contentPreview}</p>
+                      <p className="truncate font-mono text-[12px] text-ink-4">
                         {post.connectionName}
                       </p>
                     </div>
-                    <span className="font-mono text-[11px] text-ink-3">
+                    <span className="font-mono text-[14px] text-ink-3">
                       {timeShort(post.scheduledAt)}
                     </span>
                     <span className="text-right">
@@ -319,7 +319,7 @@ export default function DashboardPage() {
           <ApprovalsCard />
           <Card>
             <MonoLabel className="mb-3">Signals</MonoLabel>
-            <ul className="space-y-2 font-mono text-[11.5px]">
+            <ul className="space-y-2 font-mono text-[14px]">
               <li className="flex items-center justify-between gap-3">
                 <span className="text-ink-2">published · total</span>
                 <span className="tnum font-semibold text-emerald-600">{published.length}</span>

@@ -163,15 +163,15 @@ function ConnectionsInner() {
                 <div className="flex items-center gap-3">
                   <PlatformGlyph platform={c.platform} size={36} className="!rounded-[9px]" />
                   <div className="min-w-0 flex-1">
-                    <p className="text-[13px] font-semibold">
+                    <p className="text-[14px] font-semibold">
                       {c.platform.charAt(0) + c.platform.slice(1).toLowerCase()}
                     </p>
-                    <p className="truncate font-mono text-[10.5px] text-ink-3">{c.displayName}</p>
+                    <p className="truncate font-mono text-[12px] text-ink-3">{c.displayName}</p>
                   </div>
                   <Badge status={c.status} />
                 </div>
                 <div className="mt-3 flex items-center justify-between border-t border-line-soft pt-2.5">
-                  <span className="font-mono text-[10.5px] uppercase tracking-[0.06em] text-ink-4">
+                  <span className="font-mono text-[12px] uppercase tracking-[0.06em] text-ink-4">
                     since{" "}
                     {new Date(c.createdAt).toLocaleDateString(undefined, {
                       month: "short",
@@ -187,7 +187,7 @@ function ConnectionsInner() {
                   </button>
                 </div>
                 {c.lastError && (
-                  <p className="mt-2 truncate font-mono text-[10.5px] text-red-500">{c.lastError}</p>
+                  <p className="mt-2 truncate font-mono text-[12px] text-red-500">{c.lastError}</p>
                 )}
               </Card>
             ))}
@@ -284,7 +284,7 @@ function ConnectionsInner() {
           </Card>
 
           <div className="flex items-center justify-center rounded-[11px] border border-dashed border-line p-4">
-            <p className="font-mono text-[11px] text-ink-3">
+            <p className="font-mono text-[14px] text-ink-3">
               soon · TikTok · YouTube · Pinterest · Threads
             </p>
           </div>

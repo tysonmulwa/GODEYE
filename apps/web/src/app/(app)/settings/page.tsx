@@ -117,7 +117,7 @@ function BrandKitCard() {
             // eslint-disable-next-line @next/next/no-img-element
             <img src={current.logoUrl} alt="Logo" className="max-h-full max-w-full" />
           ) : (
-            <span className="text-[10px] text-ink-3">No logo</span>
+            <span className="text-[12px] text-ink-3">No logo</span>
           )}
         </div>
         <label className="cursor-pointer">
@@ -268,7 +268,7 @@ export default function SettingsPage() {
               <code className="block break-all rounded-lg bg-surface-3 px-3 py-2 text-xs">
                 {mfaSetup.secret}
               </code>
-              <p className="break-all text-[11px] text-ink-3">{mfaSetup.otpauthUrl}</p>
+              <p className="break-all text-[14px] text-ink-3">{mfaSetup.otpauthUrl}</p>
               <div className="flex gap-2">
                 <Input
                   value={mfaCode}

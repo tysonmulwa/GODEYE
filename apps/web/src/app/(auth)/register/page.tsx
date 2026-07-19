@@ -104,7 +104,7 @@ export default function RegisterPage() {
                   )}
                 />
                 <p className="text-xs font-semibold">{label}</p>
-                <p className="mt-0.5 text-[11px] leading-snug text-ink-3">{hint}</p>
+                <p className="mt-0.5 text-[14px] leading-snug text-ink-3">{hint}</p>
               </button>
             ))}
           </div>

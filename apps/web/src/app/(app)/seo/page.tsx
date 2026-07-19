@@ -78,7 +78,7 @@ function ScoreRing({ score }: { score: number }) {
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center">
         <span className="text-2xl font-bold tabular-nums">{score}</span>
-        <span className="text-[10px] text-ink-3">SEO score</span>
+        <span className="text-[12px] text-ink-3">SEO score</span>
       </div>
     </div>
   );
@@ -204,7 +204,7 @@ export default function SeoPage() {
                 </div>
                 <div className="mt-1 flex items-center gap-2">
                   <Badge status={a.status === "SUCCEEDED" ? "PUBLISHED" : a.status === "RUNNING" ? "PROCESSING" : a.status} />
-                  <span className="text-[10px] text-ink-3">
+                  <span className="text-[12px] text-ink-3">
                     {new Date(a.createdAt).toLocaleDateString()}
                   </span>
                 </div>
@@ -278,7 +278,7 @@ export default function SeoPage() {
                         <div key={cluster.topic} className="rounded-lg border border-line p-3">
                           <div className="mb-1.5 flex items-center justify-between">
                             <p className="text-xs font-semibold">{cluster.topic}</p>
-                            <span className="rounded-full bg-surface-3 px-2 py-0.5 text-[10px] text-ink-2">
+                            <span className="rounded-full bg-surface-3 px-2 py-0.5 text-[12px] text-ink-2">
                               {cluster.intent}
                             </span>
                           </div>
@@ -286,7 +286,7 @@ export default function SeoPage() {
                             {cluster.keywords.map((keyword) => (
                               <span
                                 key={keyword}
-                                className="rounded bg-accent-soft px-1.5 py-0.5 text-[11px] text-accent"
+                                className="rounded bg-accent-soft px-1.5 py-0.5 text-[14px] text-accent"
                               >
                                 {keyword}
                               </span>
@@ -305,11 +305,11 @@ export default function SeoPage() {
                     <div className="space-y-3">
                       {detail.metaSuggestions.map((suggestion, i) => (
                         <div key={i} className="rounded-lg border border-line p-3">
-                          <p className="mb-2 truncate text-[11px] text-ink-3">{suggestion.page}</p>
+                          <p className="mb-2 truncate text-[14px] text-ink-3">{suggestion.page}</p>
                           <div className="space-y-1.5">
                             <div className="flex items-start justify-between gap-2">
                               <div className="min-w-0">
-                                <p className="text-[10px] uppercase tracking-wide text-ink-3">Title</p>
+                                <p className="text-[12px] uppercase tracking-wide text-ink-3">Title</p>
                                 <p className="text-sm font-medium">{suggestion.suggestedTitle}</p>
                               </div>
                               <button
@@ -321,7 +321,7 @@ export default function SeoPage() {
                             </div>
                             <div className="flex items-start justify-between gap-2">
                               <div className="min-w-0">
-                                <p className="text-[10px] uppercase tracking-wide text-ink-3">Description</p>
+                                <p className="text-[12px] uppercase tracking-wide text-ink-3">Description</p>
                                 <p className="text-xs text-ink-2">{suggestion.suggestedDescription}</p>
                               </div>
                               <button
@@ -361,10 +361,10 @@ export default function SeoPage() {
                               )}
                             />
                             <span className="flex-1 text-sm">{finding.message}</span>
-                            <span className="text-[10px] uppercase text-ink-3">{finding.severity}</span>
+                            <span className="text-[12px] uppercase text-ink-3">{finding.severity}</span>
                           </summary>
                           <div className="mt-2 space-y-1 pl-4">
-                            <p className="truncate text-[11px] text-ink-3">{finding.page}</p>
+                            <p className="truncate text-[14px] text-ink-3">{finding.page}</p>
                             <p className="text-xs text-ink-2">{finding.recommendation}</p>
                           </div>
                         </details>

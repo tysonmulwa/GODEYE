@@ -140,7 +140,7 @@ export default function InvitePage() {
             placeholder="••••••••••"
           />
           {!preview.accountExists && (
-            <p className="mt-1 text-[11px] text-ink-3">
+            <p className="mt-1 text-[14px] text-ink-3">
               At least 10 characters, with a lowercase letter and an uppercase letter or digit.
             </p>
           )}

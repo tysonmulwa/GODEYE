@@ -4,7 +4,9 @@
 
 @theme {
   --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
-  --font-mono: var(--font-jetbrains-mono), ui-monospace, "SFMono-Regular", monospace;
+  /* Readability override: "mono" data/labels render in the normal UI font.
+     Swap back to var(--font-jetbrains-mono) to restore the mono look. */
+  --font-mono: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
   --font-display: var(--font-michroma), ui-sans-serif, sans-serif;
 
   --color-surface: var(--surface);

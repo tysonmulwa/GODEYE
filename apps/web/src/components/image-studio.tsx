@@ -174,7 +174,7 @@ export function ImageStudio({
               ✓ Attached to this post — it will publish with the image.
             </p>
           )}
-          {run?.costUsd && <p className="mt-0.5 text-[11px] text-ink-3">Cost: ${run.costUsd}</p>}
+          {run?.costUsd && <p className="mt-0.5 text-[14px] text-ink-3">Cost: ${run.costUsd}</p>}
         </motion.div>
       )}
     </div>

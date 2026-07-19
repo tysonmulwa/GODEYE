@@ -311,7 +311,7 @@ export default function AutopilotPage() {
                     onChange={(active) => toggleMutation.mutate({ id: plan.id, active })}
                   />
                 </div>
-                <p className="mt-2 font-mono text-[11px] text-ink-3">
+                <p className="mt-2 font-mono text-[14px] text-ink-3">
                   {(CADENCE_LABEL[plan.cadence] ?? plan.cadence).toLowerCase().replace(/ /g, "")}
                   {" · "}
                   {plan.platforms.length} channel{plan.platforms.length === 1 ? "" : "s"}
@@ -322,7 +322,7 @@ export default function AutopilotPage() {
                   {features.map((f) => (
                     <span
                       key={f}
-                      className="inline-flex items-center gap-1.5 rounded-md border border-line px-2 py-0.5 text-[11px] text-ink-2"
+                      className="inline-flex items-center gap-1.5 rounded-md border border-line px-2 py-0.5 text-[14px] text-ink-2"
                     >
                       <span className="h-1 w-1 rounded-full bg-accent" /> {f}
                     </span>
@@ -333,12 +333,12 @@ export default function AutopilotPage() {
                     </MonoChip>
                   ))}
                   {plan.topics.length > 4 && (
-                    <span className="font-mono text-[11px] text-ink-4">
+                    <span className="font-mono text-[14px] text-ink-4">
                       +{plan.topics.length - 4}
                     </span>
                   )}
                 </div>
-                <div className="mt-3 flex items-center justify-between font-mono text-[10.5px] uppercase tracking-[0.06em] text-ink-4">
+                <div className="mt-3 flex items-center justify-between font-mono text-[12px] uppercase tracking-[0.06em] text-ink-4">
                   <span>
                     {plan.active
                       ? plan.lastPlannedAt
