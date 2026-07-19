@@ -211,6 +211,31 @@ publishing:
 - Reviewer identity (`submittedBy`/`reviewedBy`, timestamps, note) is stored on the
   content item and audit-logged.
 
+## Billing & plan limits (Phase 7)
+
+**Plans** (`Plan` rows, seeded): FREE ($0 — 30 posts/mo, 100K AI tokens, 3 channels,
+1 seat), PRO ($49), SCALE ($199). An org's effective plan comes from its `Subscription`
+(CANCELED or missing → FREE).
+
+**Metering** (`BillingService.usage`, computed live — no counters to drift):
+posts = `ScheduledPost` rows created this calendar month; AI tokens = sum of
+`AgentRun` input+output tokens this month; channels = non-disconnected
+`SocialConnection`s; seats = memberships + pending invitations.
+
+**Enforcement** — `assertWithinLimit(orgId, metric)` throws 403 with an upgrade hint from
+four choke points: scheduling (`/schedule`, counts one per destination), content
+generation (blocks once the monthly token budget is spent), connection creation (new
+connections only), and member invites. The engine's autopilot is intentionally not
+gated per-slot (plans are already limited by cadence).
+
+**Stripe (optional)** — everything above works without Stripe. When `STRIPE_SECRET_KEY`,
+`STRIPE_WEBHOOK_SECRET`, and `STRIPE_PRICE_PRO/SCALE` are set: `POST /billing/checkout`
+creates a Checkout Session (plain HTTPS calls — no SDK dependency) and
+`POST /webhooks/stripe` (HMAC signature verified, timing-safe) activates the subscription
+on `checkout.session.completed` and downgrades on `customer.subscription.deleted`.
+The Settings page shows the plan, live usage bars, and upgrade buttons that enable
+themselves when Stripe is configured.
+
 ## Repository layout
 
 See [README](../README.md#monorepo-layout). Conventions:

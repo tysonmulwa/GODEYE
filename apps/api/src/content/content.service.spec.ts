@@ -1,4 +1,5 @@
 import { BadRequestException } from "@nestjs/common";
+import { BillingService } from "../billing/billing.module";
 import { AuditService } from "../common/audit.service";
 import { EngineService } from "../engine/engine.service";
 import { ContentService } from "./content.service";
@@ -26,6 +27,7 @@ describe("ContentService approval workflow", () => {
       prisma as never,
       {} as EngineService,
       { log: jest.fn() } as unknown as AuditService,
+      { assertWithinLimit: jest.fn().mockResolvedValue(undefined) } as unknown as BillingService,
     );
     prisma.contentItem.update.mockImplementation(({ data }: never) =>
       Promise.resolve({

@@ -4,6 +4,7 @@ import type {
   SchedulePostInput,
   UpdatePostingPlanInput,
 } from "@godeye/shared";
+import { BillingService } from "../billing/billing.module";
 import { AuditService } from "../common/audit.service";
 import { PrismaService } from "../common/prisma.service";
 import { EngineService } from "../engine/engine.service";
@@ -14,6 +15,7 @@ export class SchedulingService {
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
     private readonly engine: EngineService,
+    private readonly billing: BillingService,
   ) {}
 
   /** Create one ScheduledPost per target connection. */
@@ -45,6 +47,8 @@ export class SchedulingService {
     if (connections.length !== input.connectionIds.length) {
       throw new BadRequestException("One or more connections not found or inactive");
     }
+
+    await this.billing.assertWithinLimit(orgId, "postsPerMonth", connections.length);
 
     // If the content carries A/B variants, split them evenly across connections.
     const isAb = !!content.abVariants;

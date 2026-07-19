@@ -1,4 +1,5 @@
 import { BadRequestException, ConflictException, ForbiddenException } from "@nestjs/common";
+import { BillingService } from "../billing/billing.module";
 import { AuditService } from "../common/audit.service";
 import { CryptoService } from "../common/crypto.service";
 import { AccessTokenPayload } from "../common/jwt-auth.guard";
@@ -45,6 +46,7 @@ describe("MembersService", () => {
       prisma as never,
       new CryptoService(),
       { log: jest.fn() } as unknown as AuditService,
+      { assertWithinLimit: jest.fn().mockResolvedValue(undefined) } as unknown as BillingService,
     );
     prisma.invitation.create.mockImplementation(({ data }: never) =>
       Promise.resolve({ id: "inv1", ...(data as object) }),

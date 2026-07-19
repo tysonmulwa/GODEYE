@@ -13,7 +13,7 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
         className="w-full max-w-md"
       >
         <div className="mb-8 flex justify-center">
-          <GodeyeLockup markClass="h-9 w-9" wordClass="text-[17px]" />
+          <GodeyeLockup size={40} wordClass="text-[17px]" />
         </div>
         {children}
       </motion.div>

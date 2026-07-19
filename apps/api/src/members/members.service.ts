@@ -7,6 +7,7 @@ import {
 } from "@nestjs/common";
 import type { InviteMemberInput, OrgSettingsInput, UpdateMemberRoleInput } from "@godeye/shared";
 import { randomBytes } from "crypto";
+import { BillingService } from "../billing/billing.module";
 import { AuditService } from "../common/audit.service";
 import { CryptoService } from "../common/crypto.service";
 import { env } from "../common/env";
@@ -22,6 +23,7 @@ export class MembersService {
     private readonly prisma: PrismaService,
     private readonly crypto: CryptoService,
     private readonly audit: AuditService,
+    private readonly billing: BillingService,
   ) {}
 
   async list(orgId: string) {
@@ -62,6 +64,7 @@ export class MembersService {
    */
   async invite(auth: AccessTokenPayload, input: InviteMemberInput) {
     this.assertGrantable(auth.role, input.role);
+    await this.billing.assertWithinLimit(auth.orgId, "seats");
 
     const existingUser = await this.prisma.user.findUnique({
       where: { email: input.email },

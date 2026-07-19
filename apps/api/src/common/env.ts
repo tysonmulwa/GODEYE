@@ -55,6 +55,14 @@ export const env = {
     redirectUri:
       process.env.LINKEDIN_REDIRECT_URI ?? "http://localhost:4000/connections/linkedin/callback",
   },
+  stripe: {
+    secretKey: process.env.STRIPE_SECRET_KEY ?? "",
+    webhookSecret: process.env.STRIPE_WEBHOOK_SECRET ?? "",
+    prices: {
+      PRO: process.env.STRIPE_PRICE_PRO ?? "",
+      SCALE: process.env.STRIPE_PRICE_SCALE ?? "",
+    } as Record<string, string>,
+  },
   meta: {
     appId: process.env.META_APP_ID ?? "",
     appSecret: process.env.META_APP_SECRET ?? "",

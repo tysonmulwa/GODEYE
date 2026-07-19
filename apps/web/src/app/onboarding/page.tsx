@@ -2,7 +2,7 @@
 
 import { motion } from "framer-motion";
 import { Loader2 } from "lucide-react";
-import { GodeyeMark } from "@/components/logo";
+import { GodeyeBadge } from "@/components/logo";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { businessProfileSchema } from "@godeye/shared";
@@ -124,7 +124,7 @@ export default function OnboardingPage() {
   return (
     <div className="mx-auto flex min-h-screen max-w-xl flex-col justify-center px-4 py-10">
       <div className="mb-8 flex items-center gap-3">
-        <GodeyeMark className="h-8 w-8 text-ink" />
+        <GodeyeBadge size={34} />
         <div>
           <p className="text-sm font-semibold">Set up your marketing brain</p>
           <p className="text-xs text-ink-3">

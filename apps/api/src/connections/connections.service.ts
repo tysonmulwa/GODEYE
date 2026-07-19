@@ -7,6 +7,7 @@ import type {
   XConnectInput,
 } from "@godeye/shared";
 import type { Platform, Prisma } from "@godeye/db";
+import { BillingService } from "../billing/billing.module";
 import { AuditService } from "../common/audit.service";
 import { CryptoService } from "../common/crypto.service";
 import { env } from "../common/env";
@@ -31,6 +32,7 @@ export class ConnectionsService {
     private readonly audit: AuditService,
     private readonly jwt: JwtService,
     private readonly engine: EngineService,
+    private readonly billing: BillingService,
   ) {}
 
   async list(orgId: string) {
@@ -209,6 +211,7 @@ export class ConnectionsService {
     const existing = await this.prisma.socialConnection.findFirst({
       where: { orgId, platform: data.platform, externalId: data.externalId },
     });
+    if (!existing) await this.billing.assertWithinLimit(orgId, "connections");
     const row = existing
       ? await this.prisma.socialConnection.update({
           where: { id: existing.id },

@@ -1,4 +1,5 @@
 import { BadRequestException, NotFoundException } from "@nestjs/common";
+import { BillingService } from "../billing/billing.module";
 import { AuditService } from "../common/audit.service";
 import { EngineService } from "../engine/engine.service";
 import { SchedulingService } from "./scheduling.service";
@@ -32,10 +33,17 @@ describe("SchedulingService", () => {
   const future = new Date(Date.now() + 3600_000).toISOString();
 
   const engine = { bestTimes: jest.fn(), validateX: jest.fn() } as unknown as EngineService;
+  const billing = { assertWithinLimit: jest.fn().mockResolvedValue(undefined) };
 
   beforeEach(() => {
     prisma = makePrisma();
-    service = new SchedulingService(prisma as never, audit, engine);
+    billing.assertWithinLimit.mockClear();
+    service = new SchedulingService(
+      prisma as never,
+      audit,
+      engine,
+      billing as unknown as BillingService,
+    );
   });
 
   it("creates one scheduled post per connection", async () => {

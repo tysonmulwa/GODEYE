@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { api } from "@/lib/api";
 import { useAuthStore } from "@/lib/auth-store";
-import { Button, Card, ErrorNote, Input, Label, PageHeader, Switch } from "@/components/ui";
+import { Button, Card, ErrorNote, Input, Label, PageHeader, Switch, cx } from "@/components/ui";
 
 interface BrandKit {
   primaryColor: string;
@@ -15,6 +15,139 @@ interface BrandKit {
 }
 
 const MANAGE_ROLES = ["OWNER", "ADMIN"];
+
+interface PlanLimits {
+  postsPerMonth: number;
+  aiTokensPerMonth: number;
+  connections: number;
+  seats: number;
+}
+
+interface BillingOverview {
+  plan: { code: string; name: string; priceMonthlyUsd: string };
+  subscriptionStatus: string | null;
+  limits: PlanLimits;
+  usage: PlanLimits;
+  plans: Array<{ code: string; name: string; priceMonthlyUsd: string; limits: PlanLimits }>;
+  stripeConfigured: boolean;
+}
+
+const USAGE_ROWS: Array<{ key: keyof PlanLimits; label: string }> = [
+  { key: "postsPerMonth", label: "Posts this month" },
+  { key: "aiTokensPerMonth", label: "AI tokens this month" },
+  { key: "connections", label: "Connected channels" },
+  { key: "seats", label: "Team seats" },
+];
+
+function UsageBar({ used, limit }: { used: number; limit: number }) {
+  const pct = Math.min(100, Math.round((used / Math.max(limit, 1)) * 100));
+  return (
+    <div className="h-1.5 w-full overflow-hidden rounded-full bg-surface-3">
+      <div
+        className={cx("h-full rounded-full", pct >= 100 ? "bg-red-500" : "bg-accent")}
+        style={{ width: `${pct}%` }}
+      />
+    </div>
+  );
+}
+
+function BillingCard() {
+  const { organization } = useAuthStore();
+  const canManage = MANAGE_ROLES.includes(organization?.role ?? "");
+  const [error, setError] = useState<string | null>(null);
+
+  const { data } = useQuery<BillingOverview>({
+    queryKey: ["billing"],
+    queryFn: () => api("/billing"),
+  });
+
+  const checkout = useMutation({
+    mutationFn: (planCode: string) =>
+      api<{ url: string }>("/billing/checkout", { method: "POST", body: { planCode } }),
+    onSuccess: ({ url }) => {
+      window.location.href = url;
+    },
+    onError: (e) => setError(e instanceof Error ? e.message : "Checkout failed"),
+  });
+
+  if (!data) return null;
+
+  return (
+    <Card>
+      <div className="mb-1 flex items-center justify-between">
+        <h2 className="text-sm font-semibold">Plan & usage</h2>
+        <span className="rounded-full bg-accent-soft px-2.5 py-0.5 text-[12px] font-semibold text-accent-hover">
+          {data.plan.name} · ${data.plan.priceMonthlyUsd}/mo
+        </span>
+      </div>
+      <p className="mb-4 text-xs text-ink-3">
+        Usage resets on the 1st of every month.
+        {data.subscriptionStatus === "PAST_DUE" && (
+          <span className="text-amber-600"> Payment past due — update your card.</span>
+        )}
+      </p>
+
+      <div className="space-y-3">
+        {USAGE_ROWS.map(({ key, label }) => (
+          <div key={key}>
+            <div className="mb-1 flex items-center justify-between text-[12px]">
+              <span className="text-ink-2">{label}</span>
+              <span className="tnum text-ink-3">
+                {data.usage[key].toLocaleString()} / {data.limits[key].toLocaleString()}
+              </span>
+            </div>
+            <UsageBar used={data.usage[key]} limit={data.limits[key]} />
+          </div>
+        ))}
+      </div>
+
+      <div className="mt-5 grid gap-2.5 border-t border-line-soft pt-4 sm:grid-cols-3">
+        {data.plans.map((p) => {
+          const current = p.code === data.plan.code;
+          return (
+            <div
+              key={p.code}
+              className={cx(
+                "rounded-lg border p-3",
+                current ? "border-accent-border bg-accent-soft-2" : "border-line",
+              )}
+            >
+              <div className="flex items-baseline justify-between">
+                <p className="text-[13px] font-semibold">{p.name}</p>
+                <p className="tnum text-[12px] text-ink-2">${p.priceMonthlyUsd}/mo</p>
+              </div>
+              <ul className="mt-1.5 space-y-0.5 text-[12px] text-ink-3">
+                <li>{p.limits.postsPerMonth.toLocaleString()} posts / mo</li>
+                <li>{(p.limits.aiTokensPerMonth / 1000).toLocaleString()}K AI tokens</li>
+                <li>
+                  {p.limits.connections} channels · {p.limits.seats} seat
+                  {p.limits.seats === 1 ? "" : "s"}
+                </li>
+              </ul>
+              {current ? (
+                <p className="mt-2.5 text-[12px] font-medium text-accent-hover">Current plan</p>
+              ) : p.code !== "FREE" && canManage ? (
+                <Button
+                  variant="secondary"
+                  className="mt-2.5 h-8 w-full"
+                  disabled={!data.stripeConfigured}
+                  loading={checkout.isPending}
+                  title={data.stripeConfigured ? "" : "Payments are not configured on this server yet"}
+                  onClick={() => checkout.mutate(p.code)}
+                >
+                  {data.stripeConfigured ? `Upgrade to ${p.name}` : "Payments coming soon"}
+                </Button>
+              ) : null}
+            </div>
+          );
+        })}
+      </div>
+      <div className="mt-3">
+        <ErrorNote message={error} />
+      </div>
+    </Card>
+  );
+}
 
 function ApprovalCard() {
   const { organization, setRequireApproval } = useAuthStore();
@@ -291,6 +424,8 @@ export default function SettingsPage() {
           </div>
         </Card>
 
+        <BillingCard />
+
         <ApprovalCard />
 
         <BrandKitCard />
@@ -298,8 +433,8 @@ export default function SettingsPage() {
         <Card>
           <h2 className="mb-1 text-sm font-semibold">Coming in the next phases</h2>
           <ul className="list-inside list-disc space-y-1 text-xs text-ink-3">
-            <li>Billing & subscription management</li>
             <li>More platforms: TikTok, YouTube, Pinterest, Threads</li>
+            <li>Deeper analytics: reach, engagement & follower growth</li>
           </ul>
         </Card>
       </div>

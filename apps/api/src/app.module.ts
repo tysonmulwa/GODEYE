@@ -2,6 +2,7 @@ import { Module } from "@nestjs/common";
 import { APP_GUARD } from "@nestjs/core";
 import { ThrottlerGuard, ThrottlerModule } from "@nestjs/throttler";
 import { AuthModule } from "./auth/auth.module";
+import { BillingModule } from "./billing/billing.module";
 import { BusinessProfileModule } from "./business-profile/business-profile.module";
 import { CommonModule } from "./common/common.module";
 import { ConnectionsModule } from "./connections/connections.module";
@@ -20,6 +21,7 @@ import { WebhooksModule } from "./webhooks/webhooks.module";
     CommonModule,
     EngineModule,
     AuthModule,
+    BillingModule,
     BusinessProfileModule,
     ConnectionsModule,
     ContentModule,

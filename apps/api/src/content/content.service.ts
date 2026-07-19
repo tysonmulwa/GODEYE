@@ -1,5 +1,6 @@
 import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
 import type { GenerateContentInput } from "@godeye/shared";
+import { BillingService } from "../billing/billing.module";
 import { AuditService } from "../common/audit.service";
 import { PrismaService } from "../common/prisma.service";
 import { EngineService } from "../engine/engine.service";
@@ -10,6 +11,7 @@ export class ContentService {
     private readonly prisma: PrismaService,
     private readonly engine: EngineService,
     private readonly audit: AuditService,
+    private readonly billing: BillingService,
   ) {}
 
   /**
@@ -21,6 +23,9 @@ export class ContentService {
     if (!profile) {
       throw new BadRequestException("Set up your business profile before generating content");
     }
+
+    // Token metering is post-hoc (runs record usage), so gate on what's already spent
+    await this.billing.assertWithinLimit(orgId, "aiTokensPerMonth", 0);
 
     const run = await this.prisma.agentRun.create({
       data: {
