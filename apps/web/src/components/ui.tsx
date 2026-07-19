@@ -1,7 +1,7 @@
 "use client";
 
-import { Loader2 } from "lucide-react";
-import { forwardRef } from "react";
+import { Eye, EyeOff, Loader2 } from "lucide-react";
+import { forwardRef, useState } from "react";
 
 function cx(...parts: Array<string | false | null | undefined>) {
   return parts.filter(Boolean).join(" ");
@@ -63,6 +63,42 @@ export const Input = forwardRef<HTMLInputElement, React.InputHTMLAttributes<HTML
     );
   },
 );
+
+/**
+ * Password / secret input with a show-hide eye toggle. Use for any field that
+ * hides its value (passwords, API keys, bot tokens) so people can verify what
+ * they typed. Omit `type` — it's always a masked field until revealed.
+ */
+export const PasswordInput = forwardRef<
+  HTMLInputElement,
+  Omit<React.InputHTMLAttributes<HTMLInputElement>, "type">
+>(function PasswordInput({ className, ...props }, ref) {
+  const [visible, setVisible] = useState(false);
+  return (
+    <div className="relative">
+      <input
+        ref={ref}
+        type={visible ? "text" : "password"}
+        className={cx(
+          "w-full rounded-lg border border-line bg-surface-2 py-2 pl-3 pr-10 text-[14px] text-ink",
+          "placeholder:text-ink-3 focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/15",
+          className,
+        )}
+        {...props}
+      />
+      <button
+        type="button"
+        onClick={() => setVisible((v) => !v)}
+        aria-label={visible ? "Hide" : "Show"}
+        title={visible ? "Hide" : "Show"}
+        tabIndex={-1}
+        className="absolute inset-y-0 right-0 flex w-10 items-center justify-center text-ink-3 transition-colors hover:text-ink"
+      >
+        {visible ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+      </button>
+    </div>
+  );
+});
 
 export const Textarea = forwardRef<
   HTMLTextAreaElement,

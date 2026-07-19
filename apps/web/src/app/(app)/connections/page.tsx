@@ -15,6 +15,7 @@ import {
   Input,
   Label,
   PageHeader,
+  PasswordInput,
   PlatformGlyph,
 } from "@/components/ui";
 
@@ -235,13 +236,21 @@ function ConnectionsInner() {
                   {forms[kind].fields.map((f) => (
                     <div key={f.key}>
                       <Label>{f.label}</Label>
-                      <Input
-                        type={f.type ?? "text"}
-                        required
-                        value={fields[f.key] ?? ""}
-                        onChange={set(f.key)}
-                        placeholder={f.placeholder}
-                      />
+                      {f.type === "password" ? (
+                        <PasswordInput
+                          required
+                          value={fields[f.key] ?? ""}
+                          onChange={set(f.key)}
+                          placeholder={f.placeholder}
+                        />
+                      ) : (
+                        <Input
+                          required
+                          value={fields[f.key] ?? ""}
+                          onChange={set(f.key)}
+                          placeholder={f.placeholder}
+                        />
+                      )}
                     </div>
                   ))}
                   <ErrorNote message={error} />

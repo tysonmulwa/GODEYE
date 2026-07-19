@@ -7,7 +7,7 @@ import { useState } from "react";
 import { registerSchema, type AccountType } from "@godeye/shared";
 import { API_URL } from "@/lib/api";
 import { useAuthStore } from "@/lib/auth-store";
-import { Button, Card, ErrorNote, Input, Label, cx } from "@/components/ui";
+import { Button, Card, ErrorNote, Input, Label, PasswordInput, cx } from "@/components/ui";
 
 const ACCOUNT_TYPES: Array<{
   value: AccountType;
@@ -139,9 +139,8 @@ export default function RegisterPage() {
         </div>
         <div>
           <Label htmlFor="password">Password</Label>
-          <Input
+          <PasswordInput
             id="password"
-            type="password"
             required
             autoComplete="new-password"
             value={form.password}

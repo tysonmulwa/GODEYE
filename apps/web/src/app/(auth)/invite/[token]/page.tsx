@@ -5,7 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { API_URL, ApiError } from "@/lib/api";
 import { useAuthStore } from "@/lib/auth-store";
-import { Badge, Button, Card, ErrorNote, Input, Label } from "@/components/ui";
+import { Badge, Button, Card, ErrorNote, Input, Label, PasswordInput } from "@/components/ui";
 
 interface InvitePreview {
   orgName: string;
@@ -130,9 +130,8 @@ export default function InvitePage() {
           <Label htmlFor="password">
             {preview.accountExists ? "Your password" : "Choose a password"}
           </Label>
-          <Input
+          <PasswordInput
             id="password"
-            type="password"
             required
             autoComplete={preview.accountExists ? "current-password" : "new-password"}
             value={password}
