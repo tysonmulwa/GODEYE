@@ -2,7 +2,6 @@ import { Injectable, NotFoundException } from "@nestjs/common";
 import { JwtService } from "@nestjs/jwt";
 import type {
   DiscordConnectInput,
-  RedditConnectInput,
   TelegramConnectInput,
   XConnectInput,
 } from "@godeye/shared";
@@ -19,8 +18,9 @@ import {
   metaAuthorizeUrl,
   metaExchangeCode,
   metaListPages,
+  redditAuthorizeUrl,
+  redditExchangeCode,
   validateDiscord,
-  validateReddit,
   validateTelegram,
 } from "./platform-clients";
 
@@ -88,20 +88,6 @@ export class ConnectionsService {
     });
   }
 
-  async connectReddit(orgId: string, userId: string, input: RedditConnectInput) {
-    const v = await validateReddit(input.username, input.password, input.subreddit);
-    return this.upsertConnection(orgId, userId, {
-      platform: "REDDIT",
-      externalId: v.username,
-      displayName: `u/${v.username} → r/${v.subreddit}`,
-      credentials: {
-        username: input.username,
-        password: input.password,
-        subreddit: v.subreddit,
-      },
-    });
-  }
-
   async connectX(orgId: string, userId: string, input: XConnectInput) {
     const account = await this.engine.validateX(input);
     return this.upsertConnection(orgId, userId, {
@@ -115,6 +101,41 @@ export class ConnectionsService {
         accessSecret: input.accessSecret,
       },
     });
+  }
+
+  // ---------- Reddit OAuth (click-to-connect) ----------
+
+  async redditAuthorize(orgId: string, userId: string): Promise<{ url: string }> {
+    const state = await this.jwt.signAsync(
+      { orgId, sub: userId, purpose: "reddit_oauth" },
+      { secret: env.jwtAccessSecret(), expiresIn: "10m" },
+    );
+    return { url: redditAuthorizeUrl(state) };
+  }
+
+  async redditCallback(code: string, state: string): Promise<{ connected: number }> {
+    const payload = await this.jwt.verifyAsync<{ orgId: string; sub: string; purpose: string }>(
+      state,
+      { secret: env.jwtAccessSecret() },
+    );
+    if (payload.purpose !== "reddit_oauth") throw new NotFoundException("Invalid state");
+
+    const account = await redditExchangeCode(code);
+    await this.upsertConnection(payload.orgId, payload.sub, {
+      platform: "REDDIT",
+      externalId: account.username,
+      // Zero-config default: posts go to the user's own Reddit profile (u/<name>),
+      // which always accepts self-posts. A target subreddit can be set later.
+      displayName: `u/${account.username}`,
+      credentials: {
+        refreshToken: account.refreshToken,
+        accessToken: account.accessToken,
+        subreddit: `u_${account.username}`,
+        username: account.username,
+      },
+      expiresAt: new Date(Date.now() + account.expiresInSeconds * 1000),
+    });
+    return { connected: 1 };
   }
 
   // ---------- LinkedIn OAuth ----------

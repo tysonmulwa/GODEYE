@@ -1,4 +1,4 @@
-"""Reddit publisher — script-app password grant + /api/submit."""
+"""Reddit publisher — OAuth refresh-token grant + /api/submit."""
 
 from __future__ import annotations
 
@@ -14,15 +14,17 @@ class RedditPublisher(BasePublisher):
         if not settings.reddit_client_id or not settings.reddit_client_secret:
             raise PublishError("Reddit app credentials missing on the server (.env)")
 
+        refresh_token = credentials.get("refreshToken")
+        if not refresh_token:
+            raise PublishError("Reddit connection has no refresh token — reconnect the account")
+
+        # Access tokens live ~1 hour, so exchange the stored refresh token for a
+        # fresh one at post time rather than trusting the cached access token.
         token_response = self._post(
             "https://www.reddit.com/api/v1/access_token",
             auth=(settings.reddit_client_id, settings.reddit_client_secret),
             headers={"User-Agent": settings.reddit_user_agent},
-            data={
-                "grant_type": "password",
-                "username": credentials["username"],
-                "password": credentials["password"],
-            },
+            data={"grant_type": "refresh_token", "refresh_token": refresh_token},
         )
         token = token_response.json().get("access_token")
         if not token:

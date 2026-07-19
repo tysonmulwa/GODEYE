@@ -28,7 +28,7 @@ interface Connection {
   createdAt: string;
 }
 
-type FormKind = "telegram" | "discord" | "reddit" | "x" | null;
+type FormKind = "telegram" | "discord" | "x" | null;
 
 function ConnectionsInner() {
   const params = useSearchParams();
@@ -77,6 +77,15 @@ function ConnectionsInner() {
     }
   };
 
+  const connectReddit = async () => {
+    try {
+      const { url } = await api<{ url: string }>("/connections/reddit/authorize");
+      window.location.href = url;
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Reddit authorization failed");
+    }
+  };
+
   const set = (key: string) => (e: React.ChangeEvent<HTMLInputElement>) =>
     setFields((f) => ({ ...f, [key]: e.target.value }));
 
@@ -95,14 +104,6 @@ function ConnectionsInner() {
         { key: "channelId", label: "Channel ID", placeholder: "Enable developer mode → right-click channel → Copy ID" },
       ],
     },
-    reddit: {
-      hint: "Requires the server's Reddit script app (see docs/SETUP.md). Uses your Reddit account credentials.",
-      fields: [
-        { key: "username", label: "Reddit username", placeholder: "without u/" },
-        { key: "password", label: "Reddit password", placeholder: "••••••••", type: "password" },
-        { key: "subreddit", label: "Default subreddit", placeholder: "without r/" },
-      ],
-    },
     x: {
       hint: "From developer.x.com: create a project + app with Read and Write, then generate the Consumer Keys and Access Token/Secret.",
       fields: [
@@ -117,7 +118,6 @@ function ConnectionsInner() {
   const providers = [
     { kind: "telegram" as const, name: "Telegram", glyph: "TELEGRAM", desc: "Post to channels & groups" },
     { kind: "discord" as const, name: "Discord", glyph: "DISCORD", desc: "Post to server channels" },
-    { kind: "reddit" as const, name: "Reddit", glyph: "REDDIT", desc: "Submit posts to subreddits" },
     { kind: "x" as const, name: "X (Twitter)", glyph: "X", desc: "Publish tweets" },
   ];
 
@@ -143,8 +143,10 @@ function ConnectionsInner() {
 
       {params.get("connected") && (
         <p className="mb-4 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-600 dark:text-emerald-400">
-          {params.get("connected") === "meta" ? "Meta" : "LinkedIn"} connected —{" "}
-          {params.get("count")} account(s) added.
+          {{ meta: "Meta", linkedin: "LinkedIn", reddit: "Reddit" }[
+            params.get("connected") as string
+          ] ?? "Account"}{" "}
+          connected — {params.get("count")} account(s) added.
         </p>
       )}
       {params.get("error") && <ErrorNote message={params.get("error")} />}
@@ -261,6 +263,21 @@ function ConnectionsInner() {
               )}
             </Card>
           ))}
+
+          <Card className="!p-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <PlatformGlyph platform="REDDIT" size={36} className="!rounded-[9px]" />
+                <div>
+                  <p className="text-sm font-medium">Reddit</p>
+                  <p className="text-xs text-ink-3">One click — sign in and authorize</p>
+                </div>
+              </div>
+              <Button variant="secondary" onClick={connectReddit}>
+                Connect
+              </Button>
+            </div>
+          </Card>
 
           <Card className="!p-4">
             <div className="flex items-center justify-between">

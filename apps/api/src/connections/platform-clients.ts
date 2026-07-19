@@ -64,19 +64,34 @@ export async function validateDiscord(
   };
 }
 
-// ---------- Reddit ----------
+// ---------- Reddit OAuth (click-to-connect) ----------
 
-export interface RedditValidation {
-  username: string;
-  subreddit: string;
+export function redditAuthorizeUrl(state: string): string {
+  if (!env.reddit.clientId) {
+    throw new BadRequestException(
+      "Reddit is not configured on this server (REDDIT_CLIENT_ID missing)",
+    );
+  }
+  const params = new URLSearchParams({
+    client_id: env.reddit.clientId,
+    response_type: "code",
+    state,
+    redirect_uri: env.reddit.redirectUri,
+    duration: "permanent", // returns a refresh_token so we can post later
+    scope: "identity submit read",
+  });
+  return `https://www.reddit.com/api/v1/authorize?${params}`;
 }
 
-export async function validateReddit(
-  username: string,
-  password: string,
-  subreddit: string,
-): Promise<RedditValidation> {
-  const { clientId, clientSecret, userAgent } = env.reddit;
+export interface RedditAccount {
+  accessToken: string;
+  refreshToken: string;
+  expiresInSeconds: number;
+  username: string;
+}
+
+export async function redditExchangeCode(code: string): Promise<RedditAccount> {
+  const { clientId, clientSecret, userAgent, redirectUri } = env.reddit;
   if (!clientId || !clientSecret) {
     throw new BadRequestException(
       "Reddit is not configured on this server (REDDIT_CLIENT_ID / REDDIT_CLIENT_SECRET missing)",
@@ -89,22 +104,33 @@ export async function validateReddit(
       "Content-Type": "application/x-www-form-urlencoded",
       "User-Agent": userAgent,
     },
-    body: new URLSearchParams({ grant_type: "password", username, password }),
+    body: new URLSearchParams({
+      grant_type: "authorization_code",
+      code,
+      redirect_uri: redirectUri,
+    }),
   });
   const token: any = await tokenRes.json().catch(() => ({}));
   if (!tokenRes.ok || !token.access_token) {
-    throw new BadRequestException("Reddit credentials rejected (check username/password and app type=script)");
+    throw new BadRequestException(
+      `Reddit token exchange failed: ${token.error ?? tokenRes.statusText}`,
+    );
   }
-  const authHeaders = {
-    Authorization: `Bearer ${token.access_token}`,
-    "User-Agent": userAgent,
+  if (!token.refresh_token) {
+    throw new BadRequestException(
+      "Reddit did not return a refresh token — re-try the authorization (duration=permanent).",
+    );
+  }
+  const me = await getJson("https://oauth.reddit.com/api/v1/me", {
+    headers: { Authorization: `Bearer ${token.access_token}`, "User-Agent": userAgent },
+  });
+  if (!me?.name) throw new BadRequestException("Could not read your Reddit username");
+  return {
+    accessToken: token.access_token,
+    refreshToken: token.refresh_token,
+    expiresInSeconds: token.expires_in ?? 3600,
+    username: me.name,
   };
-  const about = await getJson(
-    `https://oauth.reddit.com/r/${encodeURIComponent(subreddit)}/about`,
-    { headers: authHeaders },
-  );
-  if (!about?.data?.display_name) throw new BadRequestException(`Subreddit r/${subreddit} not found`);
-  return { username, subreddit: about.data.display_name };
 }
 
 // ---------- LinkedIn ----------

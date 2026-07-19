@@ -13,11 +13,9 @@ import { ApiBearerAuth, ApiOperation, ApiTags } from "@nestjs/swagger";
 import { Throttle } from "@nestjs/throttler";
 import {
   discordConnectSchema,
-  redditConnectSchema,
   telegramConnectSchema,
   xConnectSchema,
   type DiscordConnectInput,
-  type RedditConnectInput,
   type TelegramConnectInput,
   type XConnectInput,
 } from "@godeye/shared";
@@ -71,16 +69,35 @@ export class ConnectionsController {
     return this.connections.connectDiscord(auth.orgId, auth.sub, body);
   }
 
-  @Post("reddit")
+  @Get("reddit/authorize")
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
-  @Throttle({ default: { limit: 10, ttl: 60_000 } })
-  @ApiOperation({ summary: "Connect a Reddit account (script app) + default subreddit" })
-  connectReddit(
-    @CurrentAuth() auth: AccessTokenPayload,
-    @Body(new ZodPipe(redditConnectSchema)) body: RedditConnectInput,
+  @ApiOperation({ summary: "Get the Reddit OAuth dialog URL (click-to-connect)" })
+  redditAuthorize(@CurrentAuth() auth: AccessTokenPayload) {
+    return this.connections.redditAuthorize(auth.orgId, auth.sub);
+  }
+
+  @Get("reddit/callback")
+  @ApiOperation({ summary: "OAuth redirect target for Reddit — do not call directly" })
+  async redditCallback(
+    @Query("code") code: string,
+    @Query("state") state: string,
+    @Query("error") error: string | undefined,
+    @Res() res: Response,
   ) {
-    return this.connections.connectReddit(auth.orgId, auth.sub, body);
+    const base = `${env.webUrl}/connections`;
+    if (error || !code || !state) {
+      return res.redirect(
+        `${base}?error=${encodeURIComponent(error ?? "Reddit authorization failed")}`,
+      );
+    }
+    try {
+      await this.connections.redditCallback(code, state);
+      return res.redirect(`${base}?connected=reddit&count=1`);
+    } catch (e) {
+      const message = e instanceof Error ? e.message : "Reddit connection failed";
+      return res.redirect(`${base}?error=${encodeURIComponent(message)}`);
+    }
   }
 
   @Post("x")
