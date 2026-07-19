@@ -375,29 +375,25 @@ export function Switch({
   hint?: string;
 }) {
   return (
-    <label className="flex cursor-pointer items-start justify-between gap-3">
+    <label className="flex cursor-pointer items-center justify-between gap-3">
       {(label || hint) && (
         <span className="min-w-0">
           {label && <span className="block text-[14px] font-medium text-ink">{label}</span>}
-          {hint && <span className="mt-0.5 block text-xs text-ink-3">{hint}</span>}
+          {hint && <span className="mt-0.5 block text-xs leading-snug text-ink-3">{hint}</span>}
         </span>
       )}
+      {/* Flex-positioned knob: vertically centered, slides between exact 3px insets */}
       <button
         type="button"
         role="switch"
         aria-checked={checked}
         onClick={() => onChange(!checked)}
         className={cx(
-          "relative mt-0.5 h-5 w-9 shrink-0 rounded-full transition-colors",
-          checked ? "bg-accent" : "bg-line-hover",
+          "inline-flex h-5 w-9 shrink-0 items-center rounded-full px-[3px] transition-colors duration-150",
+          checked ? "justify-end bg-accent" : "justify-start bg-line-hover",
         )}
       >
-        <span
-          className={cx(
-            "absolute top-[3px] h-3.5 w-3.5 rounded-full bg-white shadow transition-transform",
-            checked ? "translate-x-[19px]" : "translate-x-[3px]",
-          )}
-        />
+        <span className="h-3.5 w-3.5 rounded-full bg-white shadow-sm" />
       </button>
     </label>
   );
