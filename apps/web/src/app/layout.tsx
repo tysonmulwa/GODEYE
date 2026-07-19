@@ -8,7 +8,7 @@ const jetbrainsMono = JetBrains_Mono({ subsets: ["latin"], variable: "--font-jet
 const michroma = Michroma({ subsets: ["latin"], weight: "400", variable: "--font-michroma" });
 
 export const metadata: Metadata = {
-  title: "GODEYE — AI Marketing OS",
+  title: "GODEYE",
   description:
     "Connect your business. Set your goals. GODEYE's AI agents handle content, publishing, SEO, and growth.",
 };

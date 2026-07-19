@@ -18,6 +18,7 @@ import {
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect } from "react";
+import { CommandPalette } from "@/components/command-palette";
 import { GodeyeLockup } from "@/components/logo";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { cx } from "@/components/ui";
@@ -128,13 +129,15 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         </div>
 
         <div className="px-3 pt-3">
-          <div className="flex h-[34px] items-center gap-2 rounded-lg border border-line bg-surface-2 px-2.5">
+          <button
+            type="button"
+            onClick={() => window.dispatchEvent(new Event("godeye:open-search"))}
+            className="flex h-[34px] w-full items-center gap-2 rounded-lg border border-line bg-surface-2 px-2.5 transition-colors hover:border-line-hover"
+          >
             <Search className="h-3.5 w-3.5 text-ink-3" />
-            <span className="flex-1 text-[14px] text-ink-3">Search</span>
-            <kbd className="rounded border border-line bg-surface-3 px-1 font-mono text-[14px] text-ink-3">
-              ⌘K
-            </kbd>
-          </div>
+            <span className="flex-1 text-left text-[14px] text-ink-3">Search</span>
+            <kbd className="rounded border border-line bg-surface-3 px-1 text-[12px] text-ink-3">⌘K</kbd>
+          </button>
         </div>
 
         <p className="px-4 pb-1 pt-4 font-mono text-[12px] font-semibold uppercase tracking-[0.11em] text-ink-4">
@@ -199,6 +202,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           {children}
         </motion.div>
       </main>
+
+      <CommandPalette items={NAV} />
     </div>
   );
 }
