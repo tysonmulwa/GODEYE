@@ -29,6 +29,20 @@ const REFRESH_COOKIE = "godeye_refresh";
 const loginWithMfaSchema = loginSchema.extend({ mfaCode: z.string().optional() });
 const mfaCodeSchema = z.object({ code: z.string().min(6).max(8) });
 
+/**
+ * In production the web app and API live on different domains (e.g. Vercel +
+ * a container host), so the refresh cookie must be SameSite=None + Secure or
+ * the browser won't send it on cross-site fetches. Locally they share
+ * localhost, where Lax works and Secure would drop the cookie over http.
+ */
+const crossSite = env.nodeEnv === "production";
+const REFRESH_COOKIE_OPTS = {
+  httpOnly: true,
+  secure: crossSite,
+  sameSite: crossSite ? ("none" as const) : ("lax" as const),
+  path: "/auth",
+};
+
 @ApiTags("auth")
 @Controller("auth")
 export class AuthController {
@@ -73,7 +87,7 @@ export class AuthController {
   @HttpCode(200)
   async logout(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
     await this.auth.logout(req.cookies?.[REFRESH_COOKIE] as string | undefined);
-    res.clearCookie(REFRESH_COOKIE, { path: "/auth" });
+    res.clearCookie(REFRESH_COOKIE, REFRESH_COOKIE_OPTS);
     return { ok: true };
   }
 
@@ -153,10 +167,7 @@ export class AuthController {
   private respond(session: SessionResult, res: Response) {
     const { refreshToken, ...rest } = session;
     res.cookie(REFRESH_COOKIE, refreshToken, {
-      httpOnly: true,
-      secure: env.nodeEnv === "production",
-      sameSite: "lax",
-      path: "/auth",
+      ...REFRESH_COOKIE_OPTS,
       maxAge: 30 * 24 * 3600 * 1000,
     });
     return rest;
