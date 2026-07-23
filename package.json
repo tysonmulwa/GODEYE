@@ -8,7 +8,9 @@
     "node": ">=20"
   },
   "scripts": {
-    "dev": "turbo run dev --parallel",
+    "dev": "node scripts/dev.mjs",
+    "dev:node": "turbo run dev --parallel",
+    "dev:engine": "cd apps/engine && python -m godeye_engine.run",
     "build": "turbo run build",
     "lint": "turbo run lint",
     "test": "turbo run test",
