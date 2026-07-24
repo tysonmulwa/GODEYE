@@ -35,6 +35,8 @@ class Settings(BaseSettings):
     anthropic_api_key: str = ""
     anthropic_model: str = "claude-sonnet-5"
     openai_api_key: str = ""
+    # Gemini (Google) can generate content text too — same GOOGLE_API_KEY as images
+    gemini_model: str = "gemini-2.0-flash"
 
     # Image generation
     image_provider: str = "openai"  # openai | google
