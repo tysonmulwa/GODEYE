@@ -83,6 +83,15 @@ export default function ComposerPage() {
     ),
   ];
 
+  // A single destination is the common case — pre-select it so the user can
+  // generate straight away instead of hunting for a click target.
+  useEffect(() => {
+    const active = connections.filter((c) => c.status === "ACTIVE");
+    if (active.length === 1) {
+      setSelectedConnections((sel) => (sel.length ? sel : [active[0].id]));
+    }
+  }, [connections]);
+
   // Poll the agent run while generating (the WS event invalidates queries too)
   const { data: run } = useQuery<AgentRun>({
     queryKey: ["agent-run", agentRunId],
@@ -281,6 +290,15 @@ export default function ComposerPage() {
             <Sparkles className="h-4 w-4" />
             {generating ? "Content Agent is writing…" : "Generate with AI"}
           </Button>
+          {!generating && (goal.trim().length < 3 || selectedConnections.length === 0) && (
+            <p className="text-center text-xs text-ink-3">
+              {selectedConnections.length === 0
+                ? activeConnections.length === 0
+                  ? "Connect a destination on the Connections page to generate."
+                  : "Select a destination under “Publish to” to enable generation."
+                : "Add a goal (a few words) to enable generation."}
+            </p>
+          )}
           <ErrorNote message={error} />
         </Card>
 
