@@ -8,6 +8,9 @@ dist/
 out/
 .turbo/
 
+# local media storage (STORAGE_BACKEND=local)
+.media/
+
 # environment
 .env
 .env.local

@@ -73,6 +73,14 @@ export class EngineService {
     return this.post("/storage/logo", payload);
   }
 
+  async storeMedia(payload: {
+    orgId: string;
+    dataBase64: string;
+    contentType: string;
+  }): Promise<{ storageKey: string; url: string; sizeBytes: number }> {
+    return this.post("/storage/upload", payload);
+  }
+
   /** OAuth1 signing lives in the engine — it validates X credentials for us. */
   async validateX(credentials: {
     apiKey: string;

@@ -5,9 +5,11 @@ import {
   brandKitSchema,
   generateImageSchema,
   generateVideoSchema,
+  uploadMediaSchema,
   type BrandKitInput,
   type GenerateImageInput,
   type GenerateVideoInput,
+  type UploadMediaInput,
 } from "@godeye/shared";
 import { z } from "zod";
 import { CurrentAuth } from "../common/current-auth.decorator";
@@ -47,6 +49,16 @@ export class MediaController {
     @Body(new ZodPipe(generateVideoSchema)) body: GenerateVideoInput,
   ) {
     return this.media.generateVideo(auth.orgId, auth.sub, body);
+  }
+
+  @Post("upload")
+  @Throttle({ default: { limit: 30, ttl: 60_000 } })
+  @ApiOperation({ summary: "Upload your own photo and attach it to a content item" })
+  upload(
+    @CurrentAuth() auth: AccessTokenPayload,
+    @Body(new ZodPipe(uploadMediaSchema)) body: UploadMediaInput,
+  ) {
+    return this.media.uploadPhoto(auth.orgId, auth.sub, body);
   }
 
   @Get()

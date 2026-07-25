@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from fastapi import Depends, FastAPI, Header, HTTPException
+from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import text
 
@@ -48,6 +49,12 @@ class GenerateImageRequest(BaseModel):
 class StoreLogoRequest(BaseModel):
     orgId: str
     filename: str
+    dataBase64: str
+    contentType: str = "image/png"
+
+
+class StoreUploadRequest(BaseModel):
+    orgId: str
     dataBase64: str
     contentType: str = "image/png"
 
@@ -172,6 +179,51 @@ def store_logo(request: StoreLogoRequest) -> dict:
     key = f"{request.orgId}/brand/logo-{new_id()}.{ext}"
     url = upload_bytes(key, data, request.contentType)
     return {"storageKey": key, "url": url}
+
+
+@app.post("/storage/upload", dependencies=[Depends(verify_internal_secret)])
+def store_upload(request: StoreUploadRequest) -> dict:
+    """Store an uploaded image/video and return its key + public URL."""
+    import base64
+
+    from .db import new_id
+    from .storage import upload_bytes
+
+    data = base64.b64decode(request.dataBase64)
+    if len(data) > 25_000_000:
+        raise HTTPException(status_code=400, detail="File exceeds 25 MB")
+    ext = {
+        "image/png": "png",
+        "image/jpeg": "jpg",
+        "image/jpg": "jpg",
+        "image/webp": "webp",
+        "image/gif": "gif",
+        "video/mp4": "mp4",
+    }.get(request.contentType, "bin")
+    key = f"{request.orgId}/uploads/{new_id()}.{ext}"
+    url = upload_bytes(key, data, request.contentType)
+    return {"storageKey": key, "url": url, "sizeBytes": len(data)}
+
+
+@app.get("/media/{key:path}")
+def serve_media(key: str) -> FileResponse:
+    """Serve a locally-stored object (STORAGE_BACKEND=local). Public by design —
+    images must be viewable without the internal secret."""
+    from .storage import _is_local, local_path
+
+    if not _is_local():
+        raise HTTPException(status_code=404, detail="Not found")
+    path = local_path(key)
+    # Contain traversal: the resolved path must stay under the media dir.
+    from .storage import local_media_dir
+
+    try:
+        path.resolve().relative_to(local_media_dir().resolve())
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid key") from None
+    if not path.is_file():
+        raise HTTPException(status_code=404, detail="Not found")
+    return FileResponse(path)
 
 
 @app.post("/validate/x", dependencies=[Depends(verify_internal_secret)])

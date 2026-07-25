@@ -1,5 +1,10 @@
 import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
-import type { BrandKitInput, GenerateImageInput, GenerateVideoInput } from "@godeye/shared";
+import type {
+  BrandKitInput,
+  GenerateImageInput,
+  GenerateVideoInput,
+  UploadMediaInput,
+} from "@godeye/shared";
 import { AuditService } from "../common/audit.service";
 import { PrismaService } from "../common/prisma.service";
 import { EngineService } from "../engine/engine.service";
@@ -122,6 +127,44 @@ export class MediaService {
       });
       throw e;
     }
+  }
+
+  /** Upload the user's own photo and attach it to a content item as a MediaAsset. */
+  async uploadPhoto(orgId: string, userId: string, input: UploadMediaInput) {
+    if (input.contentItemId) {
+      const content = await this.prisma.contentItem.findFirst({
+        where: { id: input.contentItemId, orgId },
+        select: { id: true },
+      });
+      if (!content) throw new NotFoundException("Content item not found");
+    }
+
+    const { storageKey, url, sizeBytes } = await this.engine.storeMedia({
+      orgId,
+      dataBase64: input.dataBase64,
+      contentType: input.contentType,
+    });
+
+    const asset = await this.prisma.mediaAsset.create({
+      data: {
+        orgId,
+        contentItemId: input.contentItemId ?? null,
+        kind: "IMAGE",
+        source: "UPLOADED",
+        storageKey,
+        url,
+        mimeType: input.contentType,
+        sizeBytes,
+      },
+    });
+    this.audit.log({
+      orgId,
+      userId,
+      action: "media.uploaded",
+      targetType: "MediaAsset",
+      targetId: asset.id,
+    });
+    return this.toDto(asset);
   }
 
   async list(orgId: string, contentItemId?: string) {

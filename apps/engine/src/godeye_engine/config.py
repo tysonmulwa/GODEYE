@@ -48,7 +48,11 @@ class Settings(BaseSettings):
     openai_tts_model: str = "tts-1"
     ffmpeg_path: str = ""  # blank = find on PATH
 
-    # Object storage (MinIO locally, S3 in production)
+    # Object storage. "s3" = MinIO/S3; "local" = filesystem served by the engine
+    # (handy for dev without Docker/MinIO). Uploaded media persists either way.
+    storage_backend: str = "s3"  # s3 | local
+    media_dir: str = ""  # local backend dir (blank = <repo>/.media)
+    engine_public_url: str = "http://localhost:8000"  # base for locally-served media
     s3_endpoint: str = "http://localhost:9000"
     s3_access_key: str = "godeye"
     s3_secret_key: str = "godeye_dev_secret"

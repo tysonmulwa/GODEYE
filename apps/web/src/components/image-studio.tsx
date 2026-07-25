@@ -2,8 +2,8 @@
 
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { motion } from "framer-motion";
-import { ImageIcon, Sparkles } from "lucide-react";
-import { useEffect, useState } from "react";
+import { ImageIcon, Sparkles, Upload } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import { IMAGE_PRESETS, IMAGE_PRESET_IDS } from "@godeye/shared";
 import { api } from "@/lib/api";
 import { Button, ErrorNote, Input, Label, cx } from "@/components/ui";
@@ -89,6 +89,43 @@ export function ImageStudio({
     onError: (e) => setError(e instanceof Error ? e.message : "Failed to start image generation"),
   });
 
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const upload = useMutation({
+    mutationFn: async (file: File) => {
+      const dataBase64 = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve((reader.result as string).split(",")[1] ?? "");
+        reader.onerror = () => reject(new Error("Could not read file"));
+        reader.readAsDataURL(file);
+      });
+      return api<{ url: string }>("/media/upload", {
+        method: "POST",
+        body: { contentItemId, contentType: file.type, dataBase64, filename: file.name },
+      });
+    },
+    onMutate: () => {
+      setError(null);
+      setImageUrl(null);
+    },
+    onSuccess: (data) => {
+      setImageUrl(data.url);
+      onGenerated?.(data.url);
+    },
+    onError: (e) => setError(e instanceof Error ? e.message : "Upload failed"),
+  });
+
+  const onPickFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // allow re-picking the same file
+    if (!file) return;
+    if (file.size > 25_000_000) {
+      setError("Image is larger than 25 MB");
+      return;
+    }
+    upload.mutate(file);
+  };
+
   const generating = generate.isPending || (!!agentRunId && run?.status !== "SUCCEEDED");
 
   return (
@@ -145,6 +182,28 @@ export function ImageStudio({
       >
         <Sparkles className="h-4 w-4" />
         {generating ? "Generating image…" : "Generate image"}
+      </Button>
+
+      <div className="flex items-center gap-3 py-0.5">
+        <span className="h-px flex-1 bg-line" />
+        <span className="text-[11px] uppercase tracking-wide text-ink-4">or</span>
+        <span className="h-px flex-1 bg-line" />
+      </div>
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/png,image/jpeg,image/webp,image/gif"
+        className="hidden"
+        onChange={onPickFile}
+      />
+      <Button
+        variant="secondary"
+        className="w-full"
+        loading={upload.isPending}
+        onClick={() => fileInputRef.current?.click()}
+      >
+        <Upload className="h-4 w-4" />
+        {upload.isPending ? "Uploading…" : "Upload your own photo"}
       </Button>
       <ErrorNote message={error} />
 
