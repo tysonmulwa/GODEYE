@@ -9,12 +9,13 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from . import provider
+from . import mission, provider
 
-PROMPT_SYSTEM = """You write vivid, concrete prompts for an AI image generator. \
-Return ONLY the prompt text — no preamble, no quotes. Describe subject, setting, \
-lighting, composition, and style. Never include text, words, logos, or watermarks \
-in the image (branding is added separately). Keep it under 80 words."""
+PROMPT_SYSTEM = mission.charter("image") + "\n\n" + (
+    "Return ONLY the image prompt text — no preamble, no quotes. Describe subject, "
+    "setting, lighting, composition, and style. Never include text, words, logos, "
+    "or watermarks in the image (branding is added separately). Under 80 words."
+)
 
 
 @dataclass

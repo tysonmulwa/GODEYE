@@ -5,13 +5,14 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from . import provider
+from . import mission, provider
 from .content_agent import parse_response
 
-SYSTEM_PROMPT = """You are the SEO Agent of GODEYE, an AI marketing platform. \
-You do practical, white-hat SEO: realistic keywords a small business can rank for, \
-compelling meta tags, and valid schema.org markup. \
-You respond ONLY with valid JSON — no markdown fences, no commentary."""
+SYSTEM_PROMPT = mission.charter("seo") + "\n\n" + (
+    "Deliver realistic keywords a small business can rank for, compelling meta "
+    "tags, and valid schema.org markup, grounded in the crawled site. "
+    "Respond ONLY with valid JSON — no markdown fences, no commentary."
+)
 
 
 def keyword_research(

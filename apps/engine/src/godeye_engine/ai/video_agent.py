@@ -10,13 +10,14 @@ import json
 from dataclasses import dataclass, field
 from typing import Any
 
-from . import provider
+from . import mission, provider
 from .content_agent import parse_response  # tolerant JSON extraction
 
-SYSTEM_PROMPT = """You are the Video Agent of GODEYE, an AI marketing platform. \
-You write scripts for short vertical social videos (TikTok / Reels / Shorts) that \
-hook viewers in the first two seconds and hold attention to the end. \
-You respond ONLY with valid JSON — no markdown fences, no commentary."""
+SYSTEM_PROMPT = mission.charter("video") + "\n\n" + (
+    "Write scripts for short vertical videos (TikTok / Reels / Shorts) that hook "
+    "in the first two seconds and hold attention to the end. "
+    "Respond ONLY with valid JSON — no markdown fences, no commentary."
+)
 
 MIN_SCENES = 2
 MAX_SCENES = 8

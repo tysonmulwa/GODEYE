@@ -7,7 +7,7 @@ import re
 from dataclasses import dataclass, field
 from typing import Any
 
-from . import provider
+from . import mission, provider
 
 PLATFORM_LIMITS = {
     "TELEGRAM": 4096,
@@ -20,10 +20,11 @@ PLATFORM_LIMITS = {
     "THREADS": 500,
 }
 
-SYSTEM_PROMPT = """You are the Content Agent of GODEYE, an AI marketing platform. \
-You write high-performing social media content that sounds human, matches the brand \
-voice exactly, and is tailored to each platform's culture and length limits. \
-You respond ONLY with valid JSON — no markdown fences, no commentary."""
+SYSTEM_PROMPT = mission.charter("content") + "\n\n" + (
+    "Write content that sounds human and matches the brand voice exactly, tailored "
+    "to each platform's culture and length limits. "
+    "Respond ONLY with valid JSON — no markdown fences, no commentary."
+)
 
 
 @dataclass
