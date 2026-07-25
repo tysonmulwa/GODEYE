@@ -35,6 +35,32 @@ export async function validateTelegram(
     `https://api.telegram.org/bot${botToken}/getChat?chat_id=${encodeURIComponent(chatId)}`,
   );
   if (!chat.ok) throw new BadRequestException("Telegram chat not found or bot not a member");
+
+  // A bot can't message itself — reject pointing the chat at the bot.
+  const botUsername = String(me.result.username ?? "").toLowerCase();
+  const chatUsername = String(chat.result.username ?? "").toLowerCase();
+  if (chat.result.id === me.result.id || (chatUsername && chatUsername === botUsername)) {
+    throw new BadRequestException(
+      "That points the bot at itself. Create a channel or group, add this bot as an " +
+        "admin with 'Post Messages', then use the channel's @handle here.",
+    );
+  }
+
+  // For channels/supergroups the bot must be an administrator to post.
+  if (chat.result.type === "channel" || chat.result.type === "supergroup") {
+    const member = await getJson(
+      `https://api.telegram.org/bot${botToken}/getChatMember` +
+        `?chat_id=${encodeURIComponent(chatId)}&user_id=${me.result.id}`,
+    );
+    const statusName = member.ok ? member.result.status : null;
+    if (statusName !== "administrator" && statusName !== "creator") {
+      throw new BadRequestException(
+        `The bot isn't an admin of "${chat.result.title ?? chatId}". Add @${me.result.username} ` +
+          "as an administrator with 'Post Messages' permission, then reconnect.",
+      );
+    }
+  }
+
   return {
     botUsername: me.result.username,
     chatId: String(chat.result.id),
@@ -240,6 +266,28 @@ export interface MetaPage {
   pageAccessToken: string;
   igUserId: string | null;
   igUsername: string | null;
+}
+
+/** Granted permission scopes on a token (via debug_token), or null if unknown.
+ *  Lets us warn at connect time when a token can't publish. */
+export async function metaTokenScopes(token: string): Promise<string[] | null> {
+  try {
+    const appToken = `${env.meta.appId}|${env.meta.appSecret}`;
+    const res = await getJson(
+      graph(
+        `/debug_token?input_token=${encodeURIComponent(token)}` +
+          `&access_token=${encodeURIComponent(appToken)}`,
+      ),
+    );
+    const data = res.data;
+    // Only trust scopes from a valid token; an invalid token reports scopes: []
+    // (empty is truthy in JS) which must not be read as "missing permission".
+    if (!data || data.is_valid === false) return null;
+    const scopes = data.scopes;
+    return Array.isArray(scopes) && scopes.length > 0 ? (scopes as string[]) : null;
+  } catch {
+    return null;
+  }
 }
 
 /** Treat the token as a Page access token and read that one Page directly.

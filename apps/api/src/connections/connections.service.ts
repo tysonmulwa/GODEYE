@@ -21,6 +21,7 @@ import {
   metaExchangeUserToken,
   metaListPages,
   metaPageFromToken,
+  metaTokenScopes,
   type MetaPage,
   redditAuthorizeUrl,
   redditExchangeCode,
@@ -214,6 +215,17 @@ export class ConnectionsService {
       token = await metaExchangeUserToken(token);
     } catch {
       // Already long-lived, or a Page token that can't be exchanged — use as-is.
+    }
+
+    // Catch the common "connects but can't post" case up front: publishing needs
+    // pages_manage_posts. (Scopes unknown → skip, don't block.)
+    const scopes = await metaTokenScopes(token);
+    if (scopes && !scopes.includes("pages_manage_posts")) {
+      throw new BadRequestException(
+        "This token can read your Pages but can't publish — it's missing the " +
+          "pages_manage_posts permission. In the Graph API Explorer, grant " +
+          "pages_manage_posts (and pages_read_engagement), generate a new token, and retry.",
+      );
     }
 
     // A User token lists all managed Pages via /me/accounts; a Page token
