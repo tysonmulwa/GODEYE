@@ -28,6 +28,11 @@ const updateContentSchema = z.object({
   hashtags: z.array(z.string().max(100)).max(50).optional(),
   status: z.enum(["DRAFT", "ARCHIVED"]).optional(),
   variants: z.record(z.object({ body: z.string(), hashtags: z.array(z.string()) })).optional(),
+  // Pass null to drop the A/B split (e.g. after the user picks a winning variant).
+  abVariants: z
+    .record(z.object({ body: z.string(), hashtags: z.array(z.string()) }))
+    .nullable()
+    .optional(),
   evergreen: z.boolean().optional(),
 });
 

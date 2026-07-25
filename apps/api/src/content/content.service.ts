@@ -1,4 +1,5 @@
 import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
+import { Prisma } from "@godeye/db";
 import type { GenerateContentInput } from "@godeye/shared";
 import { BillingService } from "../billing/billing.module";
 import { AuditService } from "../common/audit.service";
@@ -142,6 +143,7 @@ export class ContentService {
       hashtags?: string[];
       status?: string;
       variants?: unknown;
+      abVariants?: unknown;
       evergreen?: boolean;
     },
   ) {
@@ -155,6 +157,13 @@ export class ContentService {
         hashtags: input.hashtags,
         status: input.status as never,
         variants: input.variants as never,
+        // null clears the A/B split; undefined leaves it unchanged.
+        abVariants:
+          input.abVariants === undefined
+            ? undefined
+            : input.abVariants === null
+              ? Prisma.JsonNull
+              : (input.abVariants as never),
         evergreen: input.evergreen,
       },
       include: this.reviewerInclude,

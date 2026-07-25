@@ -181,6 +181,16 @@ export default function ComposerPage() {
     }).catch(() => undefined);
   };
 
+  // Pick a winning A/B variant: it becomes the post, and the A/B split is turned off.
+  const chooseVariant = async (v: { body: string; hashtags: string[] }) => {
+    if (!content) return;
+    setContent({ ...content, body: v.body, hashtags: v.hashtags, abVariants: null });
+    await api(`/content/${content.id}`, {
+      method: "PATCH",
+      body: { body: v.body, hashtags: v.hashtags, abVariants: null },
+    }).catch(() => undefined);
+  };
+
   const generating =
     generateMutation.isPending || (!!agentRunId && run?.status !== "SUCCEEDED" && !content);
 
@@ -363,10 +373,13 @@ export default function ComposerPage() {
 
                 {content.abVariants && (
                   <div>
-                    <Label>A/B variants (split across destinations)</Label>
+                    <Label>A/B variants — pick the one to use</Label>
                     <div className="grid gap-2 sm:grid-cols-2">
                       {Object.entries(content.abVariants).map(([key, v]) => (
-                        <div key={key} className="rounded-lg border border-accent/40 bg-accent-soft/40 px-3 py-2">
+                        <div
+                          key={key}
+                          className="flex flex-col rounded-lg border border-accent/40 bg-accent-soft/40 px-3 py-2"
+                        >
                           <p className="mb-1 text-xs font-semibold text-accent">Variant {key}</p>
                           <p className="whitespace-pre-wrap text-sm">{v.body}</p>
                           {v.hashtags.length > 0 && (
@@ -374,9 +387,20 @@ export default function ComposerPage() {
                               {v.hashtags.map((t) => `#${t}`).join(" ")}
                             </p>
                           )}
+                          <Button
+                            variant="secondary"
+                            className="mt-2 w-full"
+                            onClick={() => chooseVariant(v)}
+                          >
+                            Use variant {key}
+                          </Button>
                         </div>
                       ))}
                     </div>
+                    <p className="mt-1.5 text-xs text-ink-3">
+                      Picking one replaces the post above with that script and turns off the A/B
+                      split, so it publishes as a single post.
+                    </p>
                   </div>
                 )}
 
