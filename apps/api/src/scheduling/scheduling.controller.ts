@@ -46,6 +46,12 @@ export class SchedulingController {
     return this.scheduling.cancel(auth.orgId, id, auth.sub);
   }
 
+  @Post("schedule/:id/retry")
+  @MinRole("EDITOR")
+  retry(@CurrentAuth() auth: AccessTokenPayload, @Param("id") id: string) {
+    return this.scheduling.retry(auth.orgId, id, auth.sub);
+  }
+
   @Post("posting-plans")
   @MinRole("EDITOR")
   createPlan(

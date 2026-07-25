@@ -140,6 +140,27 @@ export class SchedulingService {
     return { id: updated.id, status: updated.status };
   }
 
+  /** Re-queue a failed post: reset to PENDING so the scheduler dispatches it again. */
+  async retry(orgId: string, id: string, userId: string) {
+    const post = await this.prisma.scheduledPost.findFirst({ where: { id, orgId } });
+    if (!post) throw new NotFoundException("Scheduled post not found");
+    if (post.status !== "FAILED") {
+      throw new BadRequestException(`Only failed posts can be retried (status ${post.status})`);
+    }
+    const updated = await this.prisma.scheduledPost.update({
+      where: { id },
+      data: { status: "PENDING", error: null, lockedAt: null, attempts: 0 },
+    });
+    this.audit.log({
+      orgId,
+      userId,
+      action: "post.retried",
+      targetType: "ScheduledPost",
+      targetId: id,
+    });
+    return { id: updated.id, status: updated.status };
+  }
+
   // ---------- Posting plans ----------
 
   async createPlan(orgId: string, userId: string, input: PostingPlanInput) {

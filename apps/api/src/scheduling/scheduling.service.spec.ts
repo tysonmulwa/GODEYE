@@ -144,6 +144,23 @@ describe("SchedulingService", () => {
     await expect(service.cancel("org1", "sp1", "user1")).rejects.toThrow(BadRequestException);
   });
 
+  it("retries a FAILED post by resetting it to PENDING", async () => {
+    prisma.scheduledPost.findFirst.mockResolvedValue({ id: "sp1", status: "FAILED" });
+    prisma.scheduledPost.update.mockResolvedValue({ id: "sp1", status: "PENDING" });
+    const result = await service.retry("org1", "sp1", "user1");
+    expect(result).toEqual({ id: "sp1", status: "PENDING" });
+    expect(prisma.scheduledPost.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ status: "PENDING", error: null, attempts: 0 }),
+      }),
+    );
+  });
+
+  it("only retries FAILED posts", async () => {
+    prisma.scheduledPost.findFirst.mockResolvedValue({ id: "sp1", status: "PENDING" });
+    await expect(service.retry("org1", "sp1", "user1")).rejects.toThrow(BadRequestException);
+  });
+
   it("assigns A/B variant keys alternately when content has abVariants", async () => {
     prisma.contentItem.findFirst.mockResolvedValue({
       id: "content1",

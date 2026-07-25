@@ -1,7 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ChevronLeft, ChevronRight, ExternalLink, XCircle } from "lucide-react";
+import { ChevronLeft, ChevronRight, ExternalLink, RotateCcw, XCircle } from "lucide-react";
 import { useState } from "react";
 import { api } from "@/lib/api";
 import { PlatformGlyph, cx, platformColor } from "@/components/ui";
@@ -52,6 +52,11 @@ export default function CalendarPage() {
 
   const cancelMutation = useMutation({
     mutationFn: (id: string) => api(`/schedule/${id}/cancel`, { method: "POST" }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["schedule"] }),
+  });
+
+  const retryMutation = useMutation({
+    mutationFn: (id: string) => api(`/schedule/${id}/retry`, { method: "POST" }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["schedule"] }),
   });
 
@@ -191,10 +196,26 @@ export default function CalendarPage() {
                             <XCircle className="h-3 w-3" />
                           </button>
                         )}
+                        {post.status === "FAILED" && (
+                          <button
+                            onClick={() => retryMutation.mutate(post.id)}
+                            disabled={retryMutation.isPending}
+                            aria-label="Retry"
+                            title={post.error ?? "Retry this post"}
+                            className="text-ink-3 hover:text-accent"
+                          >
+                            <RotateCcw className="h-3 w-3" />
+                          </button>
+                        )}
                       </div>
                       <p className="mt-1 line-clamp-2 text-[14px] leading-snug">
                         {post.contentPreview}
                       </p>
+                      {post.status === "FAILED" && post.error && (
+                        <p className="mt-0.5 line-clamp-2 font-mono text-[11px] text-red-500">
+                          {post.error}
+                        </p>
+                      )}
                     </div>
                   ))}
                 </div>
