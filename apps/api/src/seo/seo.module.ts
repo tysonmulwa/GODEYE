@@ -2,6 +2,7 @@ import { Module } from "@nestjs/common";
 import {
   BadRequestException,
   Body,
+  ConflictException,
   Controller,
   Delete,
   Get,
@@ -22,6 +23,16 @@ import { PrismaService } from "../common/prisma.service";
 import { ZodPipe } from "../common/zod.pipe";
 import { EngineService } from "../engine/engine.service";
 
+/** Bare hostname (no protocol, no www) for comparing site ownership. */
+function hostOf(u?: string | null): string | null {
+  if (!u) return null;
+  try {
+    return new URL(u).hostname.replace(/^www\./, "").toLowerCase();
+  } catch {
+    return null;
+  }
+}
+
 @Injectable()
 export class SeoService {
   constructor(
@@ -32,18 +43,29 @@ export class SeoService {
 
   /** Kick off a site audit; the SEO Agent runs it in the engine. */
   async runAudit(orgId: string, userId: string, input: RunSeoAuditInput) {
-    let url = input.url;
-    if (!url) {
-      const profile = await this.prisma.businessProfile.findUnique({
-        where: { orgId },
-        select: { website: true },
-      });
-      url = profile?.website ?? undefined;
-    }
+    const profile = await this.prisma.businessProfile.findUnique({
+      where: { orgId },
+      select: { website: true },
+    });
+    const url = input.url ?? profile?.website ?? undefined;
     if (!url) {
       throw new BadRequestException(
         "No URL provided and no website set on the business profile",
       );
+    }
+
+    // Ownership gate: if the URL isn't the org's registered website, ask the user
+    // to confirm before scanning a site they don't own. Plan-based limits on how
+    // many sites a workspace may add (e.g. premium 2, vip 3) are intentionally
+    // NOT enforced yet — kept inactive while billing is still under test.
+    const ownedHost = hostOf(profile?.website);
+    const requestedHost = hostOf(url);
+    const isForeign = !!ownedHost && !!requestedHost && ownedHost !== requestedHost;
+    if (isForeign && !input.allowForeign) {
+      throw new ConflictException({
+        code: "SITE_NOT_OWNED",
+        message: `${requestedHost} isn't your registered site (${ownedHost}). Scan it anyway?`,
+      });
     }
 
     const run = await this.prisma.agentRun.create({

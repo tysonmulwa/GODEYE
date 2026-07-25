@@ -173,6 +173,10 @@ export type GenerateVideoInput = z.infer<typeof generateVideoSchema>;
 export const runSeoAuditSchema = z.object({
   url: z.string().url().optional().describe("defaults to the business profile website"),
   maxPages: z.number().int().min(1).max(50).default(20),
+  // Set true to scan a site that isn't the org's registered website (the UI asks
+  // for confirmation first). Plan-based limits on how many sites you can add are
+  // intentionally not enforced yet — see SeoService.runAudit.
+  allowForeign: z.boolean().default(false),
 });
 export type RunSeoAuditInput = z.infer<typeof runSeoAuditSchema>;
 

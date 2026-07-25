@@ -1,4 +1,4 @@
-import { BadRequestException, NotFoundException } from "@nestjs/common";
+import { BadRequestException, ConflictException, NotFoundException } from "@nestjs/common";
 import { AuditService } from "../common/audit.service";
 import { EngineService } from "../engine/engine.service";
 import { SeoService } from "./seo.module";
@@ -35,12 +35,36 @@ describe("SeoService", () => {
     const result = await service.runAudit("org1", "user1", {
       url: "https://example.com",
       maxPages: 20,
+      allowForeign: false,
     });
     expect(result).toEqual({ auditId: "audit1", agentRunId: "run1", taskId: "task1" });
     expect(engine.enqueueSeoAudit).toHaveBeenCalledWith(
       expect.objectContaining({ url: "https://example.com", auditId: "audit1" }),
     );
-    expect(prisma.businessProfile.findUnique).not.toHaveBeenCalled();
+  });
+
+  it("blocks a site that isn't the org's registered website until confirmed", async () => {
+    prisma.businessProfile.findUnique.mockResolvedValue({ website: "https://acme.co" });
+    await expect(
+      service.runAudit("org1", "user1", {
+        url: "https://mjinicollection.com",
+        maxPages: 20,
+        allowForeign: false,
+      }),
+    ).rejects.toThrow(ConflictException);
+    expect(engine.enqueueSeoAudit).not.toHaveBeenCalled();
+  });
+
+  it("scans a foreign site once allowForeign is set", async () => {
+    prisma.businessProfile.findUnique.mockResolvedValue({ website: "https://acme.co" });
+    await service.runAudit("org1", "user1", {
+      url: "https://mjinicollection.com",
+      maxPages: 20,
+      allowForeign: true,
+    });
+    expect(engine.enqueueSeoAudit).toHaveBeenCalledWith(
+      expect.objectContaining({ url: "https://mjinicollection.com" }),
+    );
   });
 
   it("falls back to the business profile website", async () => {
@@ -61,7 +85,11 @@ describe("SeoService", () => {
   it("marks run and audit FAILED when the engine enqueue throws", async () => {
     engine.enqueueSeoAudit.mockRejectedValue(new Error("engine down"));
     await expect(
-      service.runAudit("org1", "user1", { url: "https://example.com", maxPages: 20 }),
+      service.runAudit("org1", "user1", {
+        url: "https://example.com",
+        maxPages: 20,
+        allowForeign: false,
+      }),
     ).rejects.toThrow("engine down");
     expect(prisma.seoAudit.update).toHaveBeenCalledWith(
       expect.objectContaining({ data: expect.objectContaining({ status: "FAILED" }) }),

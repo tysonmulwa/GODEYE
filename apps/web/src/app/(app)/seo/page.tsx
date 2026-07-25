@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { motion } from "framer-motion";
 import { Copy, Download, Gauge, Globe, Search, Trash2 } from "lucide-react";
 import { useState } from "react";
-import { api, API_URL } from "@/lib/api";
+import { api, API_URL, ApiError } from "@/lib/api";
 import { useAuthStore } from "@/lib/auth-store";
 import {
   Badge,
@@ -114,17 +114,27 @@ export default function SeoPage() {
   });
 
   const runAudit = useMutation({
-    mutationFn: () =>
+    mutationFn: (allowForeign: boolean) =>
       api<{ auditId: string }>("/seo/audit", {
         method: "POST",
-        body: { url: url || undefined, maxPages: 20 },
+        body: { url: url || undefined, maxPages: 20, allowForeign },
       }),
     onMutate: () => setError(null),
     onSuccess: (data) => {
       setSelectedId(data.auditId);
       queryClient.invalidateQueries({ queryKey: ["seo-audits"] });
     },
-    onError: (e) => setError(e instanceof Error ? e.message : "Failed to start audit"),
+    onError: (e) => {
+      // The site isn't the org's registered website — confirm, then scan anyway.
+      if (
+        e instanceof ApiError &&
+        (e.details as { code?: string } | undefined)?.code === "SITE_NOT_OWNED"
+      ) {
+        if (window.confirm(`${e.message}`)) runAudit.mutate(true);
+        return;
+      }
+      setError(e instanceof Error ? e.message : "Failed to start audit");
+    },
   });
 
   const clearAll = useMutation({
@@ -190,7 +200,7 @@ export default function SeoPage() {
               placeholder={`https://… (blank = your profile website${org ? "" : ""})`}
             />
           </div>
-          <Button loading={runAudit.isPending} onClick={() => runAudit.mutate()}>
+          <Button loading={runAudit.isPending} onClick={() => runAudit.mutate(false)}>
             <Search className="h-4 w-4" /> Run audit
           </Button>
           {audits.length > 0 && (
