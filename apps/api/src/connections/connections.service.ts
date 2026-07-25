@@ -1,7 +1,8 @@
-import { Injectable, NotFoundException } from "@nestjs/common";
+import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
 import { JwtService } from "@nestjs/jwt";
 import type {
   DiscordConnectInput,
+  MetaTokenConnectInput,
   TelegramConnectInput,
   XConnectInput,
 } from "@godeye/shared";
@@ -17,7 +18,9 @@ import {
   linkedinExchangeCode,
   metaAuthorizeUrl,
   metaExchangeCode,
+  metaExchangeUserToken,
   metaListPages,
+  type MetaPage,
   redditAuthorizeUrl,
   redditExchangeCode,
   validateDiscord,
@@ -191,10 +194,54 @@ export class ConnectionsService {
 
     const userToken = await metaExchangeCode(code);
     const pages = await metaListPages(userToken);
+    return { connected: await this.storeMetaPages(payload.orgId, payload.sub, pages) };
+  }
 
+  /**
+   * Connect Meta by pasting an access token (e.g. from the Graph API Explorer)
+   * instead of the OAuth redirect. Works for the app's own admins/testers even
+   * before App Review, and skips redirect-URI whitelisting entirely.
+   */
+  async connectMetaWithToken(
+    orgId: string,
+    userId: string,
+    input: MetaTokenConnectInput,
+  ): Promise<{ connected: number }> {
+    // Best-effort upgrade to a long-lived token so derived Page tokens persist.
+    let token = input.accessToken.trim();
+    try {
+      token = await metaExchangeUserToken(token);
+    } catch {
+      // Already long-lived, or a Page token that can't be exchanged — use as-is.
+    }
+
+    let pages: MetaPage[];
+    try {
+      pages = await metaListPages(token);
+    } catch (e) {
+      throw new BadRequestException(
+        e instanceof Error ? e.message : "Could not read Pages from that token",
+      );
+    }
+    if (pages.length === 0) {
+      throw new BadRequestException(
+        "That token has no manageable Pages. In the Graph API Explorer, grant " +
+          "pages_show_list, pages_manage_posts and pages_read_engagement (plus " +
+          "instagram_basic + instagram_content_publish for Instagram), then copy the token.",
+      );
+    }
+    return { connected: await this.storeMetaPages(orgId, userId, pages) };
+  }
+
+  /** Upsert Facebook Pages (and any linked Instagram accounts) as connections. */
+  private async storeMetaPages(
+    orgId: string,
+    userId: string,
+    pages: MetaPage[],
+  ): Promise<number> {
     let connected = 0;
     for (const page of pages) {
-      await this.upsertConnection(payload.orgId, payload.sub, {
+      await this.upsertConnection(orgId, userId, {
         platform: "FACEBOOK",
         externalId: page.pageId,
         displayName: page.pageName,
@@ -202,7 +249,7 @@ export class ConnectionsService {
       });
       connected++;
       if (page.igUserId) {
-        await this.upsertConnection(payload.orgId, payload.sub, {
+        await this.upsertConnection(orgId, userId, {
           platform: "INSTAGRAM",
           externalId: page.igUserId,
           displayName: `@${page.igUsername ?? page.igUserId}`,
@@ -211,7 +258,7 @@ export class ConnectionsService {
         connected++;
       }
     }
-    return { connected };
+    return connected;
   }
 
   // ---------- Internals ----------

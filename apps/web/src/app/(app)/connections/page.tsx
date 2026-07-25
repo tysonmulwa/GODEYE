@@ -36,6 +36,8 @@ function ConnectionsInner() {
   const [openForm, setOpenForm] = useState<FormKind>(null);
   const [error, setError] = useState<string | null>(null);
   const [fields, setFields] = useState<Record<string, string>>({});
+  const [metaToken, setMetaToken] = useState("");
+  const [showMetaToken, setShowMetaToken] = useState(false);
 
   const { data: connections = [], isLoading } = useQuery<Connection[]>({
     queryKey: ["connections"],
@@ -57,6 +59,21 @@ function ConnectionsInner() {
   const removeMutation = useMutation({
     mutationFn: (id: string) => api(`/connections/${id}`, { method: "DELETE" }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["connections"] }),
+  });
+
+  const metaTokenMutation = useMutation({
+    mutationFn: () =>
+      api<{ connected: number }>("/connections/meta/token", {
+        method: "POST",
+        body: { accessToken: metaToken.trim() },
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["connections"] });
+      setMetaToken("");
+      setShowMetaToken(false);
+      setError(null);
+    },
+    onError: (e) => setError(e instanceof Error ? e.message : "Meta token connection failed"),
   });
 
   const connectMeta = async () => {
@@ -285,12 +302,54 @@ function ConnectionsInner() {
                 <PlatformGlyph platform="FACEBOOK" size={36} className="!rounded-[9px]" />
                 <div>
                   <p className="text-sm font-medium">Facebook & Instagram</p>
-                  <p className="text-xs text-ink-3">OAuth via your Meta business app</p>
+                  <p className="text-xs text-ink-3">OAuth, or paste a Page access token</p>
                 </div>
               </div>
               <Button variant="secondary" onClick={connectMeta}>
                 Connect
               </Button>
+            </div>
+            <div className="mt-3 border-t border-line pt-3">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowMetaToken((v) => !v);
+                  setError(null);
+                }}
+                className="text-xs font-medium text-accent hover:underline"
+              >
+                {showMetaToken ? "Cancel" : "Or paste a Page access token (Graph API Explorer)"}
+              </button>
+              {showMetaToken && (
+                <motion.form
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: "auto" }}
+                  className="mt-3 space-y-2 overflow-hidden"
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    metaTokenMutation.mutate();
+                  }}
+                >
+                  <p className="text-xs text-ink-3">
+                    In the Graph API Explorer, grant <span className="font-mono">pages_show_list</span>,{" "}
+                    <span className="font-mono">pages_manage_posts</span>,{" "}
+                    <span className="font-mono">pages_read_engagement</span> (plus{" "}
+                    <span className="font-mono">instagram_basic</span> +{" "}
+                    <span className="font-mono">instagram_content_publish</span> for Instagram), then
+                    paste the token. We upgrade it to a long-lived token automatically.
+                  </p>
+                  <PasswordInput
+                    required
+                    value={metaToken}
+                    onChange={(e) => setMetaToken(e.target.value)}
+                    placeholder="EAAB… (User or Page access token)"
+                  />
+                  <ErrorNote message={error} />
+                  <Button type="submit" loading={metaTokenMutation.isPending} className="w-full">
+                    Connect with token
+                  </Button>
+                </motion.form>
+              )}
             </div>
           </Card>
 

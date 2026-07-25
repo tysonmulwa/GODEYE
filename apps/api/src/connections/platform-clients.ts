@@ -204,6 +204,19 @@ export function metaAuthorizeUrl(state: string): string {
   return `https://www.facebook.com/${env.meta.graphVersion}/dialog/oauth?${params}`;
 }
 
+/** Upgrade a short-lived user token (e.g. from the Graph API Explorer) to a
+ *  ~60-day long-lived one, so the Page tokens derived from it don't expire in
+ *  ~1 hour. Returns the input unchanged if it's already long-lived. */
+export async function metaExchangeUserToken(userToken: string): Promise<string> {
+  const longLived = await getJson(
+    graph(
+      `/oauth/access_token?grant_type=fb_exchange_token&client_id=${env.meta.appId}` +
+        `&client_secret=${env.meta.appSecret}&fb_exchange_token=${encodeURIComponent(userToken)}`,
+    ),
+  );
+  return (longLived.access_token as string) ?? userToken;
+}
+
 export async function metaExchangeCode(code: string): Promise<string> {
   const shortLived = await getJson(
     graph(

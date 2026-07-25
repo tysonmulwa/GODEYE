@@ -133,6 +133,14 @@ export const xConnectSchema = z.object({
 });
 export type XConnectInput = z.infer<typeof xConnectSchema>;
 
+export const metaTokenConnectSchema = z.object({
+  accessToken: z
+    .string()
+    .min(20)
+    .describe("A Facebook User or Page access token (e.g. from the Graph API Explorer)"),
+});
+export type MetaTokenConnectInput = z.infer<typeof metaTokenConnectSchema>;
+
 // ---------- Content generation ----------
 
 export const generateContentSchema = z.object({
