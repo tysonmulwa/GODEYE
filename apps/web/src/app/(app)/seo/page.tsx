@@ -2,7 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { motion } from "framer-motion";
-import { Copy, Download, Gauge, Globe, Search } from "lucide-react";
+import { Copy, Download, Gauge, Globe, Search, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { api, API_URL } from "@/lib/api";
 import { useAuthStore } from "@/lib/auth-store";
@@ -127,6 +127,27 @@ export default function SeoPage() {
     onError: (e) => setError(e instanceof Error ? e.message : "Failed to start audit"),
   });
 
+  const clearAll = useMutation({
+    mutationFn: () => api<{ deleted: number }>("/seo/audits", { method: "DELETE" }),
+    onSuccess: () => {
+      setSelectedId(null);
+      setError(null);
+      queryClient.removeQueries({ queryKey: ["seo-audit"] });
+      queryClient.invalidateQueries({ queryKey: ["seo-audits"] });
+    },
+    onError: (e) => setError(e instanceof Error ? e.message : "Failed to clear audits"),
+  });
+
+  const handleClear = () => {
+    if (
+      window.confirm(
+        "Delete every SEO audit in this workspace? This can't be undone — you'll start fresh.",
+      )
+    ) {
+      clearAll.mutate();
+    }
+  };
+
   const copy = async (text: string, key: string) => {
     await navigator.clipboard.writeText(text);
     setCopied(key);
@@ -172,6 +193,16 @@ export default function SeoPage() {
           <Button loading={runAudit.isPending} onClick={() => runAudit.mutate()}>
             <Search className="h-4 w-4" /> Run audit
           </Button>
+          {audits.length > 0 && (
+            <Button
+              variant="secondary"
+              loading={clearAll.isPending}
+              onClick={handleClear}
+              title="Delete all audits and start fresh"
+            >
+              <Trash2 className="h-4 w-4" /> Clear all
+            </Button>
+          )}
         </div>
         <ErrorNote message={error} />
       </Card>

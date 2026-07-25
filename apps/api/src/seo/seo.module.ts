@@ -3,6 +3,7 @@ import {
   BadRequestException,
   Body,
   Controller,
+  Delete,
   Get,
   Header,
   Injectable,
@@ -113,6 +114,35 @@ export class SeoService {
     }));
   }
 
+  /** Wipe every audit (and its agent run) for the workspace, so the user can start clean. */
+  async clearAll(orgId: string, userId: string) {
+    const audits = await this.prisma.seoAudit.findMany({
+      where: { orgId },
+      select: { agentRunId: true },
+    });
+    const agentRunIds = audits
+      .map((a) => a.agentRunId)
+      .filter((id): id is string => !!id);
+
+    // Delete the audits first (children), then their agent runs (parents).
+    const { count } = await this.prisma.seoAudit.deleteMany({ where: { orgId } });
+    if (agentRunIds.length > 0) {
+      await this.prisma.agentRun.deleteMany({
+        where: { id: { in: agentRunIds }, orgId },
+      });
+    }
+
+    this.auditLog.log({
+      orgId,
+      userId,
+      action: "seo.cleared",
+      targetType: "SeoAudit",
+      targetId: "*",
+      metadata: { deleted: count },
+    });
+    return { deleted: count };
+  }
+
   async get(orgId: string, id: string) {
     const audit = await this.prisma.seoAudit.findFirst({ where: { id, orgId } });
     if (!audit) throw new NotFoundException("Audit not found");
@@ -166,6 +196,12 @@ export class SeoController {
   @Get("audits")
   list(@CurrentAuth() auth: AccessTokenPayload) {
     return this.seo.list(auth.orgId);
+  }
+
+  @Delete("audits")
+  @ApiOperation({ summary: "Delete all SEO audits for the workspace" })
+  clear(@CurrentAuth() auth: AccessTokenPayload) {
+    return this.seo.clearAll(auth.orgId, auth.sub);
   }
 
   @Get("audits/:id")
