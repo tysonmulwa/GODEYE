@@ -242,6 +242,30 @@ export interface MetaPage {
   igUsername: string | null;
 }
 
+/** Treat the token as a Page access token and read that one Page directly.
+ *  Returns null if it isn't a Page token (Page nodes carry a `category`; a User
+ *  token's /me does not), so a plain user token can't be mistaken for a Page. */
+export async function metaPageFromToken(pageToken: string): Promise<MetaPage | null> {
+  try {
+    const me = await getJson(
+      graph(
+        `/me?fields=id,name,category,instagram_business_account{id,username}` +
+          `&access_token=${encodeURIComponent(pageToken)}`,
+      ),
+    );
+    if (!me.id || !me.name || !me.category) return null;
+    return {
+      pageId: me.id,
+      pageName: me.name,
+      pageAccessToken: pageToken,
+      igUserId: me.instagram_business_account?.id ?? null,
+      igUsername: me.instagram_business_account?.username ?? null,
+    };
+  } catch {
+    return null;
+  }
+}
+
 export async function metaListPages(userToken: string): Promise<MetaPage[]> {
   const accounts = await getJson(
     graph(`/me/accounts?fields=id,name,access_token&access_token=${userToken}`),

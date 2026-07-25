@@ -20,6 +20,7 @@ import {
   metaExchangeCode,
   metaExchangeUserToken,
   metaListPages,
+  metaPageFromToken,
   type MetaPage,
   redditAuthorizeUrl,
   redditExchangeCode,
@@ -215,13 +216,17 @@ export class ConnectionsService {
       // Already long-lived, or a Page token that can't be exchanged — use as-is.
     }
 
-    let pages: MetaPage[];
+    // A User token lists all managed Pages via /me/accounts; a Page token
+    // instead describes a single Page. Accept either.
+    let pages: MetaPage[] = [];
     try {
       pages = await metaListPages(token);
-    } catch (e) {
-      throw new BadRequestException(
-        e instanceof Error ? e.message : "Could not read Pages from that token",
-      );
+    } catch {
+      // Not a user token (or no pages permission) — fall through to the Page path.
+    }
+    if (pages.length === 0) {
+      const single = await metaPageFromToken(token);
+      if (single) pages = [single];
     }
     if (pages.length === 0) {
       throw new BadRequestException(
