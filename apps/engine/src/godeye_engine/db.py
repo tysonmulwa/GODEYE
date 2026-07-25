@@ -22,8 +22,11 @@ from sqlalchemy import (
     String,
     Table,
     Text,
+    cast,
     create_engine,
+    types,
 )
+from sqlalchemy.dialects.postgresql import ENUM as PgNativeEnum
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session, sessionmaker
@@ -32,13 +35,36 @@ from .config import get_settings
 
 metadata = MetaData()
 
+
+class PgEnum(types.TypeDecorator):
+    """A Prisma-owned native Postgres enum column, addressed by type name.
+
+    Prisma declares enums as real Postgres *types* (e.g. ``"ScheduleStatus"``).
+    Mapping such a column as plain ``String`` makes comparisons emit
+    ``status = $1::VARCHAR``, which Postgres rejects with
+    ``operator does not exist: "ScheduleStatus" = character varying``.
+    Casting the bound value to the named enum (``$1::"ScheduleStatus"``) fixes
+    ``==``, ``.in_()`` and ``.values()`` alike, while values stay plain Python
+    strings on the way in and out. ``create_type=False`` — Prisma owns the type.
+    """
+
+    impl = String
+    cache_ok = True
+
+    def __init__(self, name: str) -> None:
+        self._pg_enum = PgNativeEnum(name=name, create_type=False)
+        super().__init__()
+
+    def bind_expression(self, bindvalue):  # type: ignore[override]
+        return cast(bindvalue, self._pg_enum)
+
 Organization = Table(
     "Organization",
     metadata,
     Column("id", String, primary_key=True),
     Column("name", String, nullable=False),
     Column("slug", String, nullable=False),
-    Column("type", String, nullable=False, default="BUSINESS"),  # BUSINESS | CREATOR
+    Column("type", PgEnum("OrgType"), nullable=False, default="BUSINESS"),  # BUSINESS | CREATOR
     Column("requireApproval", Boolean, nullable=False, default=False),
 )
 
@@ -47,8 +73,8 @@ AgentRun = Table(
     metadata,
     Column("id", String, primary_key=True),
     Column("orgId", String, nullable=False),
-    Column("agent", String, nullable=False),
-    Column("status", String, nullable=False),
+    Column("agent", PgEnum("AgentType"), nullable=False),
+    Column("status", PgEnum("RunStatus"), nullable=False),
     Column("taskId", String),
     Column("input", JSONB, nullable=False),
     Column("output", JSONB),
@@ -70,8 +96,8 @@ ContentItem = Table(
     Column("orgId", String, nullable=False),
     Column("campaignId", String),
     Column("createdById", String),
-    Column("type", String, nullable=False),
-    Column("status", String, nullable=False),
+    Column("type", PgEnum("ContentType"), nullable=False),
+    Column("status", PgEnum("ContentStatus"), nullable=False),
     Column("title", String),
     Column("body", Text, nullable=False),
     Column("hashtags", ARRAY(String), nullable=False),
@@ -99,7 +125,7 @@ ScheduledPost = Table(
     Column("connectionId", String, nullable=False),
     Column("scheduledAt", DateTime(timezone=False), nullable=False),
     Column("timezone", String, nullable=False),
-    Column("status", String, nullable=False),
+    Column("status", PgEnum("ScheduleStatus"), nullable=False),
     Column("variantKey", String),
     Column("planId", String),
     Column("attempts", Integer, nullable=False),
@@ -117,8 +143,8 @@ SocialConnection = Table(
     metadata,
     Column("id", String, primary_key=True),
     Column("orgId", String, nullable=False),
-    Column("platform", String, nullable=False),
-    Column("status", String, nullable=False),
+    Column("platform", PgEnum("Platform"), nullable=False),
+    Column("status", PgEnum("ConnectionStatus"), nullable=False),
     Column("displayName", String, nullable=False),
     Column("externalId", String),
     Column("encryptedCredentials", Text, nullable=False),
@@ -152,7 +178,7 @@ SeoAudit = Table(
     Column("orgId", String, nullable=False),
     Column("agentRunId", String),
     Column("url", String, nullable=False),
-    Column("status", String, nullable=False),
+    Column("status", PgEnum("RunStatus"), nullable=False),
     Column("score", Integer),
     Column("pagesCrawled", Integer, nullable=False),
     Column("findings", JSONB),
@@ -172,8 +198,8 @@ MediaAsset = Table(
     Column("id", String, primary_key=True),
     Column("orgId", String, nullable=False),
     Column("contentItemId", String),
-    Column("kind", String, nullable=False),
-    Column("source", String, nullable=False),
+    Column("kind", PgEnum("MediaKind"), nullable=False),
+    Column("source", PgEnum("MediaSource"), nullable=False),
     Column("storageKey", String, nullable=False),
     Column("url", String),
     Column("mimeType", String, nullable=False),
@@ -209,7 +235,7 @@ PostingPlan = Table(
     Column("id", String, primary_key=True),
     Column("orgId", String, nullable=False),
     Column("name", String, nullable=False),
-    Column("cadence", String, nullable=False),
+    Column("cadence", PgEnum("CadenceType"), nullable=False),
     Column("customCron", String),
     Column("timezone", String, nullable=False),
     Column("platforms", ARRAY(String), nullable=False),
