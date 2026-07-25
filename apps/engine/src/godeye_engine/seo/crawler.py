@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import re
 import time
 from dataclasses import dataclass, field
 from urllib.parse import urldefrag, urljoin, urlparse
@@ -116,6 +117,65 @@ def parse_page(url: str, html: str, status_code: int, response_time_ms: int) -> 
     return page
 
 
+_LOC_RE = re.compile(r"<loc>\s*([^<\s]+)\s*</loc>", re.IGNORECASE)
+
+
+def _fetch_locs(client: httpx.Client, url: str) -> list[str] | None:
+    """<loc> entries from an XML sitemap, or None if the URL isn't a real sitemap.
+
+    Guards against sites that answer /sitemap.xml with an HTML shell (a common
+    JS-storefront behaviour) — those have no ``<loc`` and are ignored.
+    """
+    try:
+        resp = client.get(url)
+    except httpx.HTTPError:
+        return None
+    if resp.status_code != 200 or "<loc" not in resp.text.lower():
+        return None
+    return _LOC_RE.findall(resp.text)
+
+
+def _discover_sitemaps(client: httpx.Client, base: str) -> list[str]:
+    """Candidate sitemap URLs: those declared in robots.txt, then common paths."""
+    candidates: list[str] = []
+    try:
+        robots = client.get(f"{base}/robots.txt")
+        if robots.status_code == 200:
+            candidates += re.findall(r"(?im)^\s*sitemap:\s*(\S+)", robots.text)
+    except httpx.HTTPError:
+        pass
+    candidates += [f"{base}/sitemap.xml", f"{base}/sitemap_index.xml"]
+    seen: set[str] = set()
+    return [u for u in candidates if not (u in seen or seen.add(u))]
+
+
+def _sitemap_urls(client: httpx.Client, base: str, limit: int = 80) -> list[str]:
+    """Page URLs from the site's sitemap(s) — follows one level of index nesting.
+
+    Modern sites (Shopify, headless/JS storefronts) render navigation with
+    JavaScript, so a static-HTML crawl finds almost no internal links. The XML
+    sitemap is the reliable way to discover their real pages for a deep audit.
+    """
+    urls: list[str] = []
+    for sitemap_url in _discover_sitemaps(client, base):
+        if len(urls) >= limit:
+            break
+        locs = _fetch_locs(client, sitemap_url)
+        if not locs:
+            continue
+        nested = [u for u in locs if u.lower().rstrip("/").endswith(".xml")]
+        urls.extend(u for u in locs if u not in nested)
+        for child in nested[:8]:
+            if len(urls) >= limit:
+                break
+            child_locs = _fetch_locs(client, child)
+            if child_locs:
+                urls.extend(child_locs)
+    # de-dupe while preserving order
+    seen: set[str] = set()
+    return [u for u in urls if not (u in seen or seen.add(u))][:limit]
+
+
 def crawl(start_url: str, max_pages: int = 20, progress=None) -> CrawlResult:
     """BFS crawl of same-domain pages with broken-link detection."""
     start = normalize_url(start_url)
@@ -131,6 +191,23 @@ def crawl(start_url: str, max_pages: int = 20, progress=None) -> CrawlResult:
         follow_redirects=True,
     )
     try:
+        root = urlparse(start)
+        base = f"{root.scheme}://{root.netloc}"
+
+        # Seed from sitemap.xml so sites whose navigation is JS-rendered still get a
+        # deep crawl (static HTML alone often surfaces almost no internal links).
+        sitemap_seed = _sitemap_urls(client, base)
+        has_sitemap = bool(sitemap_seed)
+        for raw in sitemap_seed:
+            candidate = normalize_url(raw)
+            if (
+                same_domain(candidate, start)
+                and candidate not in seen
+                and len(seen) < max_pages * 4
+            ):
+                seen.add(candidate)
+                queue.append(candidate)
+
         while queue and len(pages) < max_pages:
             url = queue.pop(0)
             if progress:
@@ -164,17 +241,10 @@ def crawl(start_url: str, max_pages: int = 20, progress=None) -> CrawlResult:
 
             time.sleep(REQUEST_DELAY_SEC)
 
-        # robots.txt / sitemap.xml checks
-        root = urlparse(start)
-        base = f"{root.scheme}://{root.netloc}"
+        # robots.txt presence (sitemap presence already determined during seeding)
         has_robots = False
-        has_sitemap = False
         try:
             has_robots = client.get(f"{base}/robots.txt").status_code == 200
-        except httpx.HTTPError:
-            pass
-        try:
-            has_sitemap = client.get(f"{base}/sitemap.xml").status_code == 200
         except httpx.HTTPError:
             pass
     finally:

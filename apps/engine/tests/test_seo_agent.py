@@ -45,14 +45,38 @@ class TestKeywordResearch:
                 ]
             },
         )
-        keywords, llm = seo_agent.keyword_research(PROFILE, "site summary")
+        keywords, llm = seo_agent.keyword_research("https://acme.coffee", "site summary", PROFILE)
         assert len(keywords["clusters"]) == 1
         assert llm.cost_usd > 0
 
     def test_raises_on_empty_clusters(self, monkeypatch):
         mock_llm(monkeypatch, {"clusters": []})
         with pytest.raises(ValueError, match="no keyword clusters"):
-            seo_agent.keyword_research(PROFILE, "summary")
+            seo_agent.keyword_research("https://acme.coffee", "summary")
+
+    def test_foreign_site_excludes_business_profile(self, monkeypatch):
+        """Auditing a site that isn't the user's own must not leak their business."""
+        captured: dict[str, str] = {}
+
+        def fake_complete(system, user, max_tokens=1500):
+            captured["user"] = user
+            return LlmResult(
+                text=json.dumps(
+                    {"clusters": [{"topic": "t", "intent": "commercial", "keywords": ["a", "b"]}]}
+                ),
+                provider="anthropic",
+                model="claude-sonnet-5",
+                input_tokens=1,
+                output_tokens=1,
+            )
+
+        monkeypatch.setattr(seo_agent.provider, "complete", fake_complete)
+        seo_agent.keyword_research(
+            "https://mjinicollection.com", "Handmade jewelry and fashion accessories", None
+        )
+        assert "mjinicollection.com" in captured["user"]
+        assert "jewelry" in captured["user"].lower()
+        assert "Acme Coffee" not in captured["user"]  # no profile leak
 
 
 class TestMetaSuggestions:
@@ -78,7 +102,7 @@ class TestMetaSuggestions:
                 "h1s": ["Shop"],
             }
         ]
-        suggestions, _ = seo_agent.meta_suggestions(PROFILE, pages)
+        suggestions, _ = seo_agent.meta_suggestions(pages, PROFILE)
         assert suggestions[0]["currentTitle"] == "shop"
         assert suggestions[0]["currentDescription"] is None
         assert suggestions[0]["suggestedTitle"].startswith("Buy Specialty")

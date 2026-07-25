@@ -15,38 +15,55 @@ You respond ONLY with valid JSON — no markdown fences, no commentary."""
 
 
 def keyword_research(
-    profile: dict[str, Any], site_summary: str
+    site_url: str, site_summary: str, profile: dict[str, Any] | None = None
 ) -> tuple[dict[str, Any], provider.LlmResult]:
-    """Keyword clusters grouped by topic + search intent."""
-    user = "\n".join(
-        [
-            "Do keyword research for this business:",
-            f"Business: {profile.get('businessName')} ({profile.get('industry')})",
-            f"What they do: {profile.get('description')}",
-            f"Audience: {profile.get('targetAudience')}",
-            f"Location: {profile.get('location') or 'not location-specific'}",
-            f"Products/services: {', '.join((profile.get('products') or []) + (profile.get('services') or [])) or 'n/a'}",
+    """Keyword clusters grouped by topic + search intent, grounded in the crawled site.
+
+    The site's own crawled content is the source of truth. ``profile`` is passed
+    ONLY when the audited URL is the user's own registered website; for any other
+    site it stays ``None`` so the keywords reflect what the site actually sells /
+    is about — not the user's unrelated business.
+    """
+    lines = [
+        "You are auditing the website below. First infer, purely from its real",
+        "crawled content, what this site is actually about — its niche, products,",
+        "services and audience. Then do keyword research for THAT. Do not import a",
+        "topic the content doesn't support.",
+        "",
+        f"Website: {site_url}",
+        f"Crawled content ({len(site_summary)} chars):",
+        site_summary[:6000],
+        "",
+    ]
+    if profile and profile.get("businessName"):
+        lines += [
+            "The site owner describes their business as follows (supporting context",
+            "only — the crawled content above is the source of truth):",
+            f"- {profile.get('businessName')} ({profile.get('industry')}): {profile.get('description')}",
+            f"- Audience: {profile.get('targetAudience')}",
+            f"- Location: {profile.get('location') or 'not location-specific'}",
             "",
-            f"Site content summary: {site_summary[:1500]}",
-            "",
-            "Return 4-6 keyword clusters. Respond with EXACTLY this JSON shape:",
-            json.dumps(
-                {
-                    "clusters": [
-                        {
-                            "topic": "cluster theme",
-                            "intent": "informational | commercial | transactional | navigational",
-                            "keywords": ["keyword 1", "keyword 2", "long-tail keyword phrase"],
-                        }
-                    ]
-                },
-                indent=2,
-            ),
-            "",
-            "Rules: 4-8 keywords per cluster; prioritize achievable long-tail terms;",
-            "include local variants when the business has a location.",
         ]
-    )
+    lines += [
+        "Return 4-6 keyword clusters that match the site's real subject matter.",
+        "Respond with EXACTLY this JSON shape:",
+        json.dumps(
+            {
+                "clusters": [
+                    {
+                        "topic": "cluster theme",
+                        "intent": "informational | commercial | transactional | navigational",
+                        "keywords": ["keyword 1", "keyword 2", "long-tail keyword phrase"],
+                    }
+                ]
+            },
+            indent=2,
+        ),
+        "",
+        "Rules: 4-8 keywords per cluster; prioritize achievable long-tail terms;",
+        "include local variants only if the site is clearly location-specific.",
+    ]
+    user = "\n".join(lines)
     llm = provider.complete(SYSTEM_PROMPT, user, max_tokens=1500)
     data = parse_response(llm.text)
     clusters = data.get("clusters")
@@ -56,9 +73,14 @@ def keyword_research(
 
 
 def meta_suggestions(
-    profile: dict[str, Any], pages: list[dict[str, Any]]
+    pages: list[dict[str, Any]], profile: dict[str, Any] | None = None
 ) -> tuple[list[dict[str, Any]], provider.LlmResult]:
-    """Rewrite weak titles/descriptions for up to 10 problem pages."""
+    """Rewrite weak titles/descriptions for up to 10 problem pages.
+
+    Suggestions are driven by each page's own content (title, heading, URL);
+    ``profile`` is added as context only when the audited URL is the user's own
+    website, so tags describe what each page really is.
+    """
     page_lines = [
         {
             "page": p["url"],
@@ -68,30 +90,36 @@ def meta_suggestions(
         }
         for p in pages[:10]
     ]
-    user = "\n".join(
-        [
-            f"Business: {profile.get('businessName')} ({profile.get('industry')}) — "
-            f"{profile.get('description')}",
+    lines = [
+        "These pages have weak or missing meta tags. Base each rewrite on that",
+        "page's own title / heading / URL — describe what the page is actually about.",
+        "",
+        json.dumps(page_lines, indent=2),
+    ]
+    if profile and profile.get("businessName"):
+        lines += [
             "",
-            "These pages have weak or missing meta tags:",
-            json.dumps(page_lines, indent=2),
-            "",
-            "Write an optimized title (<60 chars) and meta description (50-160 chars) for each.",
-            "Respond with EXACTLY this JSON shape:",
-            json.dumps(
-                {
-                    "suggestions": [
-                        {
-                            "page": "url",
-                            "suggestedTitle": "…",
-                            "suggestedDescription": "…",
-                        }
-                    ]
-                },
-                indent=2,
-            ),
+            f"Site owner (context): {profile.get('businessName')} "
+            f"({profile.get('industry')}) — {profile.get('description')}",
         ]
-    )
+    lines += [
+        "",
+        "Write an optimized title (<60 chars) and meta description (50-160 chars) for each.",
+        "Respond with EXACTLY this JSON shape:",
+        json.dumps(
+            {
+                "suggestions": [
+                    {
+                        "page": "url",
+                        "suggestedTitle": "…",
+                        "suggestedDescription": "…",
+                    }
+                ]
+            },
+            indent=2,
+        ),
+    ]
+    user = "\n".join(lines)
     llm = provider.complete(SYSTEM_PROMPT, user, max_tokens=2000)
     data = parse_response(llm.text)
     raw = data.get("suggestions") or []

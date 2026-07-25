@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import time
+from urllib.parse import urlparse
 
 from sqlalchemy import select, update
 
@@ -54,6 +55,12 @@ def run_site_audit(
         session.commit()
 
     profile_dict = dict(profile) if profile else {}
+    # The business profile only describes the user's OWN site. When they audit a
+    # different site, drop it so the AI analyses the crawled site on its own merits
+    # instead of parroting their business.
+    owned_website = profile_dict.get("website")
+    is_own_site = bool(owned_website) and crawler.same_domain(url, owned_website)
+    profile_for_ai = profile_dict if is_own_site else None
 
     try:
         # 1. Crawl
@@ -78,7 +85,17 @@ def run_site_audit(
         # 3. Generators (always produced, deterministic)
         sitemap_xml = generators.generate_sitemap(result)
         robots_txt = generators.generate_robots(result.start_url)
-        schema_markup = seo_agent.build_schema_markup(profile_dict, result.start_url)
+        if is_own_site:
+            schema_markup = seo_agent.build_schema_markup(profile_dict, result.start_url)
+        else:
+            home = result.pages[0]
+            schema_markup = seo_agent.build_schema_markup(
+                {
+                    "businessName": home.title or urlparse(result.start_url).netloc,
+                    "description": home.meta_description or "",
+                },
+                result.start_url,
+            )
 
         # 4. AI recommendations — optional; audit still succeeds without an LLM key
         keywords = None
@@ -87,10 +104,14 @@ def run_site_audit(
         llm_meta: dict = {}
         try:
             _progress(agent_run_id, org_id, "keywords", "Researching keywords")
-            site_summary = " | ".join(
-                f"{p.title or p.url}: {' '.join(p.h1s)}" for p in result.pages[:10]
+            site_summary = "\n".join(
+                f"- {p.url}\n  title: {p.title or '(none)'} | desc: {p.meta_description or '(none)'}"
+                f"\n  headings: {'; '.join(p.h1s[:6]) or '(none)'}"
+                for p in result.pages[:15]
             )
-            keywords, llm1 = seo_agent.keyword_research(profile_dict, site_summary)
+            keywords, llm1 = seo_agent.keyword_research(
+                result.start_url, site_summary, profile_for_ai
+            )
             llm_cost += llm1.cost_usd
             llm_meta = {"provider": llm1.provider, "model": llm1.model}
 
@@ -108,7 +129,7 @@ def run_site_audit(
             ]
             if weak_pages:
                 _progress(agent_run_id, org_id, "meta", f"Rewriting {len(weak_pages[:10])} meta tag(s)")
-                meta_suggestions, llm2 = seo_agent.meta_suggestions(profile_dict, weak_pages)
+                meta_suggestions, llm2 = seo_agent.meta_suggestions(weak_pages, profile_for_ai)
                 llm_cost += llm2.cost_usd
         except Exception as e:  # noqa: BLE001 — AI extras are best-effort
             logger.info("AI SEO recommendations skipped: %s", e)
