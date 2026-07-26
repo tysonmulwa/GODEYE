@@ -18,6 +18,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # tsconfig.base.json is required: apps/api and packages/shared both extend it,
 # and without it tsc silently falls back to an ES3 target and fails to compile.
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml turbo.json tsconfig.base.json ./
+# Fail loudly here if tsconfig.base.json is missing, instead of letting tsc fall
+# back to an ES3 target and emit a confusing wall of zod type errors. The marker
+# also proves which revision of this Dockerfile a build actually used.
+RUN echo "=== GODEYE api image: build marker v2 ===" && ls -l tsconfig.base.json
 COPY packages/db/package.json packages/db/
 COPY packages/shared/package.json packages/shared/
 COPY apps/api/package.json apps/api/
