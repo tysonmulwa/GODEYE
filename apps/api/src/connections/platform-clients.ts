@@ -244,12 +244,18 @@ export async function metaExchangeUserToken(userToken: string): Promise<string> 
 }
 
 export async function metaExchangeCode(code: string): Promise<string> {
-  const shortLived = await getJson(
-    graph(
-      `/oauth/access_token?client_id=${env.meta.appId}&client_secret=${env.meta.appSecret}` +
-        `&redirect_uri=${encodeURIComponent(env.meta.redirectUri)}&code=${encodeURIComponent(code)}`,
-    ),
-  );
+  // Build with URLSearchParams, exactly as metaAuthorizeUrl does. Meta compares
+  // redirect_uri between the dialog and this exchange as raw strings, and the
+  // two encoders disagree on some characters (a space becomes "+" here and
+  // "%20" with encodeURIComponent) — enough to fail with "Error validating
+  // verification code".
+  const params = new URLSearchParams({
+    client_id: env.meta.appId,
+    client_secret: env.meta.appSecret,
+    redirect_uri: env.meta.redirectUri,
+    code,
+  });
+  const shortLived = await getJson(graph(`/oauth/access_token?${params}`));
   // Exchange for a ~60-day long-lived token
   const longLived = await getJson(
     graph(
