@@ -69,6 +69,10 @@
 html,
 body {
   height: 100%;
+  /* A single wide element must never make the whole page slide sideways on a
+     phone; wide content (tables, the calendar grid) scrolls in its own box. */
+  overflow-x: hidden;
+  overscroll-behavior-x: none;
 }
 
 body {

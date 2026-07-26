@@ -9,15 +9,17 @@ import {
   Link2,
   Loader2,
   LogOut,
+  Menu,
   PenSquare,
   Rocket,
   Search,
   Settings,
   Users,
+  X,
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { CommandPalette } from "@/components/command-palette";
 import { GodeyeLockup } from "@/components/logo";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -98,6 +100,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
   const { status, user, organization, clear } = useAuthStore();
+  const [navOpen, setNavOpen] = useState(false);
   useRealtime();
 
   useEffect(() => {
@@ -106,6 +109,11 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       router.replace("/onboarding");
     }
   }, [status, organization, router]);
+
+  // Navigating on a phone should dismiss the drawer, not leave it covering the page.
+  useEffect(() => {
+    setNavOpen(false);
+  }, [pathname]);
 
   if (status !== "authed") {
     return (
@@ -122,10 +130,34 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <div className="flex h-screen overflow-hidden">
-      <aside className="flex w-[236px] shrink-0 flex-col border-r border-line-soft bg-sidebar">
-        <div className="border-b border-line-soft px-4 py-4">
+    <div className="flex h-dvh overflow-hidden">
+      {/* Dim + dismiss layer behind the mobile drawer */}
+      {navOpen && (
+        <button
+          type="button"
+          aria-label="Close menu"
+          onClick={() => setNavOpen(false)}
+          className="fixed inset-0 z-40 bg-black/40 lg:hidden"
+        />
+      )}
+
+      {/* Off-canvas below lg, static column from lg up */}
+      <aside
+        className={cx(
+          "fixed inset-y-0 left-0 z-50 flex w-[236px] shrink-0 flex-col border-r border-line-soft bg-sidebar transition-transform duration-200 lg:static lg:translate-x-0",
+          navOpen ? "translate-x-0" : "-translate-x-full",
+        )}
+      >
+        <div className="flex items-center justify-between border-b border-line-soft px-4 py-4">
           <GodeyeLockup />
+          <button
+            type="button"
+            onClick={() => setNavOpen(false)}
+            aria-label="Close menu"
+            className="rounded-lg p-1.5 text-ink-3 hover:bg-surface-3 hover:text-ink lg:hidden"
+          >
+            <X className="h-4 w-4" />
+          </button>
         </div>
 
         <div className="px-3 pt-3">
@@ -188,14 +220,37 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         </div>
       </aside>
 
-      <main className="flex-1 overflow-y-auto">
+      {/* min-w-0 lets flex children shrink; without it wide content forces the
+          whole page to scroll sideways on a phone. */}
+      <main className="flex min-w-0 flex-1 flex-col overflow-y-auto">
+        {/* Phone-only top bar — the only way to reach the nav below lg */}
+        <header className="sticky top-0 z-30 flex items-center gap-2 border-b border-line-soft bg-surface/95 px-4 py-3 backdrop-blur lg:hidden">
+          <button
+            type="button"
+            onClick={() => setNavOpen(true)}
+            aria-label="Open menu"
+            className="rounded-lg p-1.5 text-ink-2 hover:bg-surface-3 hover:text-ink"
+          >
+            <Menu className="h-5 w-5" />
+          </button>
+          <GodeyeLockup />
+          <button
+            type="button"
+            onClick={() => window.dispatchEvent(new Event("godeye:open-search"))}
+            aria-label="Search"
+            className="ml-auto rounded-lg p-1.5 text-ink-2 hover:bg-surface-3 hover:text-ink"
+          >
+            <Search className="h-4 w-4" />
+          </button>
+        </header>
+
         <motion.div
           key={pathname}
           initial={{ opacity: 0, y: 6 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.2, ease: "easeOut" }}
           className={cx(
-            "px-7 pb-8 pt-6",
+            "w-full min-w-0 px-4 pb-8 pt-5 sm:px-6 lg:px-7 lg:pt-6",
             pathname.startsWith("/calendar") ? "" : "mx-auto max-w-[1024px]",
           )}
         >
