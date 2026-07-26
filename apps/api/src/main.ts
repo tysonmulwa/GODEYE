@@ -26,7 +26,10 @@ async function bootstrap() {
   const corsLogger = new Logger("Cors");
   corsLogger.log(`Allowed origins: ${allowedOrigins.join(", ")}`);
   app.enableCors({
-    origin: (origin, callback) => {
+    origin: (
+      origin: string | undefined,
+      callback: (err: Error | null, allow?: boolean) => void,
+    ) => {
       // Same-origin and server-to-server calls send no Origin header.
       if (!origin) return callback(null, true);
       if (allowedOrigins.includes(origin.replace(/\/$/, ""))) {
