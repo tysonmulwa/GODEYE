@@ -2,9 +2,10 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { motion } from "framer-motion";
-import { Copy, Download, Gauge, Globe, Search, Trash2 } from "lucide-react";
+import { Copy, Download, Gauge, Search, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { api, API_URL, ApiError } from "@/lib/api";
+import { GodeyeSpinner } from "@/components/logo";
 import { useAuthStore } from "@/lib/auth-store";
 import {
   Badge,
@@ -257,12 +258,7 @@ export default function SeoPage() {
           <div className="space-y-4 lg:col-span-3">
             {running && (
               <Card className="flex items-center gap-3">
-                <motion.div
-                  animate={{ rotate: 360 }}
-                  transition={{ repeat: Infinity, duration: 2.5, ease: "linear" }}
-                >
-                  <Globe className="h-5 w-5 text-accent" />
-                </motion.div>
+                <GodeyeSpinner size={34} className="shrink-0 text-accent" />
                 <div>
                   <p className="text-sm font-medium">Auditing {detail?.url}…</p>
                   <p className="text-xs text-ink-3">

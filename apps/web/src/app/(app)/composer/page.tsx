@@ -7,6 +7,7 @@ import { useEffect, useRef, useState } from "react";
 import { PLATFORM_DEFAULT_PRESET } from "@godeye/shared";
 import { api } from "@/lib/api";
 import { useAuthStore } from "@/lib/auth-store";
+import { GodeyeSpinner } from "@/components/logo";
 import { ImageStudio } from "@/components/image-studio";
 import { VideoStudio } from "@/components/video-studio";
 import {
@@ -326,12 +327,7 @@ export default function ComposerPage() {
 
           {generating && (
             <Card className="flex h-full min-h-64 flex-col items-center justify-center text-center">
-              <motion.div
-                animate={{ rotate: 360 }}
-                transition={{ repeat: Infinity, duration: 2.4, ease: "linear" }}
-              >
-                <Sparkles className="mb-3 h-8 w-8 text-accent" />
-              </motion.div>
+              <GodeyeSpinner size={52} className="mb-3 text-accent" />
               <p className="text-sm font-medium">Writing on-brand content…</p>
               <p className="mt-1 text-xs text-ink-3">Usually takes 5–15 seconds</p>
             </Card>

@@ -177,6 +177,27 @@ export function GodeyeLockup({
   );
 }
 
+/**
+ * Slowly rotating crest, for "the agent is working" states. Uses a CSS
+ * animation rather than framer-motion so it costs nothing while idle, and
+ * respects prefers-reduced-motion via the `motion-safe:` prefix.
+ */
+export function GodeyeSpinner({
+  size = 32,
+  className,
+}: {
+  size?: number;
+  className?: string;
+}) {
+  return (
+    <GodeyeEmblem
+      variant="compact"
+      className={`motion-safe:animate-[spin_3.2s_linear_infinite] ${className ?? ""}`}
+      style={{ width: size, height: size }}
+    />
+  );
+}
+
 /** Stacked crest + wordmark for hero placements (auth pages). */
 export function GodeyeCrest({
   size = 112,

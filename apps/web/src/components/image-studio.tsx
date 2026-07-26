@@ -2,10 +2,11 @@
 
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { motion } from "framer-motion";
-import { ImageIcon, Sparkles, Upload } from "lucide-react";
+import { Sparkles, Upload } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { IMAGE_PRESETS, IMAGE_PRESET_IDS } from "@godeye/shared";
 import { api } from "@/lib/api";
+import { GodeyeSpinner } from "@/components/logo";
 import { Button, ErrorNote, Input, Label, cx } from "@/components/ui";
 
 interface AgentRun {
@@ -208,15 +209,9 @@ export function ImageStudio({
       <ErrorNote message={error} />
 
       {generating && (
-        <div className="flex aspect-square w-full items-center justify-center rounded-lg border border-dashed border-line">
-          <motion.div
-            animate={{ opacity: [0.4, 1, 0.4] }}
-            transition={{ repeat: Infinity, duration: 1.6 }}
-            className="flex flex-col items-center gap-2 text-ink-3"
-          >
-            <ImageIcon className="h-8 w-8" />
-            <span className="text-xs">Painting your image…</span>
-          </motion.div>
+        <div className="flex aspect-square w-full flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-line">
+          <GodeyeSpinner size={46} className="text-accent" />
+          <span className="text-xs text-ink-3">Painting your image…</span>
         </div>
       )}
 
