@@ -121,16 +121,28 @@ def publish_post(scheduled_post_id: str) -> dict:
     )
 
     try:
-        credentials = decrypt_credentials(connection["encryptedCredentials"])
+        try:
+            credentials = decrypt_credentials(connection["encryptedCredentials"])
+        except Exception as e:  # noqa: BLE001
+            # AES-GCM raises InvalidTag, whose str() is empty — a failure with no
+            # message at all. Almost always TOKEN_ENCRYPTION_KEY differing from
+            # the one the API encrypted with, so say that instead of nothing.
+            raise PublishError(
+                "Could not decrypt the stored credentials for this connection. "
+                "TOKEN_ENCRYPTION_KEY on the engine must match the API's; if it "
+                "changed, reconnect the account."
+            ) from e
         result = get_publisher(platform).publish(credentials, payload)
     except Exception as e:  # noqa: BLE001
         attempts = post["attempts"] + 1
         permanent = isinstance(e, PublishError) or attempts >= MAX_ATTEMPTS
+        # Never store a blank error: some exceptions (InvalidTag) stringify to "".
+        detail = str(e).strip() or f"{type(e).__name__} (no message)"
         logger.warning(
             "Publish %s failed (attempt %d, permanent=%s): %s",
-            scheduled_post_id, attempts, permanent, e,
+            scheduled_post_id, attempts, permanent, detail,
         )
-        _record_failure(scheduled_post_id, post["orgId"], connection["id"], str(e), attempts, permanent)
+        _record_failure(scheduled_post_id, post["orgId"], connection["id"], detail, attempts, permanent)
         return {"status": "FAILED" if permanent else "RETRYING"}
 
     _finish(
