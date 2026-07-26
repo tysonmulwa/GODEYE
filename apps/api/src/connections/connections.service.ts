@@ -29,6 +29,14 @@ import {
   validateTelegram,
 } from "./platform-clients";
 
+/**
+ * Lifetime of the signed OAuth `state` token. It has to outlast the whole
+ * detour through the provider — signing in, 2FA, choosing a page, granting
+ * permissions — which routinely exceeds 10 minutes on a first connection and
+ * then fails at the callback with an opaque "invalid state".
+ */
+const OAUTH_STATE_TTL = "30m";
+
 @Injectable()
 export class ConnectionsService {
   constructor(
@@ -113,7 +121,7 @@ export class ConnectionsService {
   async redditAuthorize(orgId: string, userId: string): Promise<{ url: string }> {
     const state = await this.jwt.signAsync(
       { orgId, sub: userId, purpose: "reddit_oauth" },
-      { secret: env.jwtAccessSecret(), expiresIn: "10m" },
+      { secret: env.jwtAccessSecret(), expiresIn: OAUTH_STATE_TTL },
     );
     return { url: redditAuthorizeUrl(state) };
   }
@@ -153,7 +161,7 @@ export class ConnectionsService {
     }
     const state = await this.jwt.signAsync(
       { orgId, sub: userId, purpose: "linkedin_oauth" },
-      { secret: env.jwtAccessSecret(), expiresIn: "10m" },
+      { secret: env.jwtAccessSecret(), expiresIn: OAUTH_STATE_TTL },
     );
     return { url: linkedinAuthorizeUrl(state) };
   }
@@ -181,7 +189,7 @@ export class ConnectionsService {
   async metaAuthorize(orgId: string, userId: string): Promise<{ url: string }> {
     const state = await this.jwt.signAsync(
       { orgId, sub: userId, purpose: "meta_oauth" },
-      { secret: env.jwtAccessSecret(), expiresIn: "10m" },
+      { secret: env.jwtAccessSecret(), expiresIn: OAUTH_STATE_TTL },
     );
     return { url: metaAuthorizeUrl(state) };
   }

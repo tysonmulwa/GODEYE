@@ -3,6 +3,7 @@ import {
   Controller,
   Delete,
   Get,
+  Logger,
   Param,
   Post,
   Query,
@@ -31,6 +32,8 @@ import { ConnectionsService } from "./connections.service";
 @ApiTags("connections")
 @Controller("connections")
 export class ConnectionsController {
+  private readonly logger = new Logger(ConnectionsController.name);
+
   constructor(private readonly connections: ConnectionsService) {}
 
   @Get()
@@ -181,7 +184,10 @@ export class ConnectionsController {
       const result = await this.connections.metaCallback(code, state);
       return res.redirect(`${base}?connected=meta&count=${result.connected}`);
     } catch (e) {
+      // Log it: the message otherwise only exists in the redirect URL, which the
+      // user never reads if the browser bounces them to /login on the way.
       const message = e instanceof Error ? e.message : "Meta connection failed";
+      this.logger.error(`Meta callback failed: ${message}`, e instanceof Error ? e.stack : undefined);
       return res.redirect(`${base}?error=${encodeURIComponent(message)}`);
     }
   }
