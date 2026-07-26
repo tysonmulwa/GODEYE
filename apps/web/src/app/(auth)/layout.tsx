@@ -1,7 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { GodeyeLockup } from "@/components/logo";
+import { GodeyeCrest } from "@/components/logo";
 
 export default function AuthLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -13,7 +13,7 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
         className="w-full max-w-md"
       >
         <div className="mb-8 flex justify-center">
-          <GodeyeLockup size={40} wordClass="text-[17px]" />
+          <GodeyeCrest size={104} />
         </div>
         {children}
       </motion.div>
