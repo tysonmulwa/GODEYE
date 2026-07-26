@@ -15,8 +15,27 @@ async function bootstrap() {
 
   app.use(helmet());
   app.use(cookieParser());
+  // WEB_URL accepts a comma-separated list so a rename or a preview deployment
+  // can be allowed without a code change. Kept to an explicit allow-list on
+  // purpose: with credentials:true a wildcard would let any site on that domain
+  // make authenticated requests with a user's cookies.
+  const allowedOrigins = env.webUrl
+    .split(",")
+    .map((o) => o.trim().replace(/\/$/, ""))
+    .filter(Boolean);
+  const corsLogger = new Logger("Cors");
+  corsLogger.log(`Allowed origins: ${allowedOrigins.join(", ")}`);
   app.enableCors({
-    origin: [env.webUrl],
+    origin: (origin, callback) => {
+      // Same-origin and server-to-server calls send no Origin header.
+      if (!origin) return callback(null, true);
+      if (allowedOrigins.includes(origin.replace(/\/$/, ""))) {
+        return callback(null, true);
+      }
+      // Name the rejected origin — a CORS failure in the browser never says why.
+      corsLogger.warn(`Blocked origin: ${origin} (set WEB_URL to include it)`);
+      return callback(new Error(`Origin not allowed by CORS: ${origin}`), false);
+    },
     credentials: true,
   });
   app.enableShutdownHooks();
