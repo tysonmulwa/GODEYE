@@ -37,22 +37,32 @@ export function GodeyeMark({
 export function GodeyeEmblem({
   className,
   style,
-  rays = 40,
+  variant = "full",
+  rays,
 }: {
   className?: string;
   style?: React.CSSProperties;
-  /** Number of radiating rays; fewer reads better at smaller sizes. */
+  /**
+   * "full" for hero sizes; "compact" thins the detail (fewer rays, no web,
+   * heavier strokes) so the crest still reads in chrome around 24–32px, where
+   * fine lines would otherwise collapse into a smudge.
+   */
+  variant?: "full" | "compact";
+  /** Override the ray count. */
   rays?: number;
 }) {
+  const compact = variant === "compact";
+  const rayCount = rays ?? (compact ? 16 : 40);
+
   // Rays sit between the outer ring and the crest so the triangle stays readable.
-  const spokes = Array.from({ length: rays }, (_, i) => {
-    const angle = (i / rays) * Math.PI * 2 - Math.PI / 2;
-    const [inner, outer] = i % 2 === 0 ? [80, 94] : [84, 94];
+  const spokes = Array.from({ length: rayCount }, (_, i) => {
+    const angle = (i / rayCount) * Math.PI * 2 - Math.PI / 2;
+    const inner = compact ? 82 : i % 2 === 0 ? 80 : 84;
     return {
       x1: 100 + Math.cos(angle) * inner,
       y1: 100 + Math.sin(angle) * inner,
-      x2: 100 + Math.cos(angle) * outer,
-      y2: 100 + Math.sin(angle) * outer,
+      x2: 100 + Math.cos(angle) * 94,
+      y2: 100 + Math.sin(angle) * 94,
       key: i,
     };
   });
@@ -61,25 +71,59 @@ export function GodeyeEmblem({
     <svg viewBox="0 0 200 200" fill="none" className={className} style={style} aria-hidden>
       <g stroke="currentColor" strokeLinejoin="round" strokeLinecap="round">
         {spokes.map((s) => (
-          <line key={s.key} x1={s.x1} y1={s.y1} x2={s.x2} y2={s.y2} strokeWidth="1.6" />
+          <line
+            key={s.key}
+            x1={s.x1}
+            y1={s.y1}
+            x2={s.x2}
+            y2={s.y2}
+            strokeWidth={compact ? 4 : 1.6}
+          />
         ))}
-        <circle cx="100" cy="100" r="76" strokeWidth="1.8" opacity="0.65" />
+        <circle
+          cx="100"
+          cy="100"
+          r="76"
+          strokeWidth={compact ? 3.5 : 1.8}
+          opacity={compact ? 0.9 : 0.65}
+        />
 
         {/* Double triangle — the outer keeps weight, the inner adds the etched line */}
-        <path d="M100 30 L166 148 L34 148 Z" strokeWidth="3.4" />
-        <path d="M100 48 L150 140 L50 140 Z" strokeWidth="1.4" opacity="0.55" />
+        <path d="M100 30 L166 148 L34 148 Z" strokeWidth={compact ? 6 : 3.4} />
+        <path
+          d="M100 48 L150 140 L50 140 Z"
+          strokeWidth={compact ? 3 : 1.4}
+          opacity={compact ? 0.8 : 0.55}
+        />
 
-        {/* Geometric web, echoing the reference crest */}
-        <g strokeWidth="1" opacity="0.4">
-          <path d="M100 30 L100 140 M34 148 L150 140 M166 148 L50 140" />
-          <path d="M50 140 L100 48 L150 140" />
-        </g>
+        {/* Circuit web — the geometry that makes this read as tech rather than
+            occult. Compact keeps only the trusses that survive ~26px. */}
+        {compact ? (
+          <g strokeWidth="2.6" opacity="0.7">
+            <path d="M100 30 L100 48" />
+            <path d="M50 140 L34 148 M150 140 L166 148" />
+          </g>
+        ) : (
+          <g strokeWidth="1" opacity="0.4">
+            <path d="M100 30 L100 140 M34 148 L150 140 M166 148 L50 140" />
+            <path d="M50 140 L100 48 L150 140" />
+            {/* Corner trusses. Nothing between y 84-132 across the centre —
+                the eye lives there and lines would cut through it. */}
+            <path d="M34 148 L62 126 M166 148 L138 126" />
+          </g>
+        )}
 
         {/* Eye, scaled from the 100-unit mark into this 200-unit canvas */}
         <g transform="translate(100 108) scale(1.35) translate(-50 -57)">
-          <path d={EYE_PATH} strokeWidth="4.4" />
-          <circle cx="50" cy="57" r="9" strokeWidth="3.4" />
-          <circle cx="50" cy="57" r="3.6" fill="currentColor" stroke="none" />
+          <path d={EYE_PATH} strokeWidth={compact ? 5.5 : 4.4} />
+          {compact ? (
+            <circle cx="50" cy="57" r="6" fill="currentColor" stroke="none" />
+          ) : (
+            <>
+              <circle cx="50" cy="57" r="9" strokeWidth="3.4" />
+              <circle cx="50" cy="57" r="3.6" fill="currentColor" stroke="none" />
+            </>
+          )}
         </g>
       </g>
     </svg>
@@ -105,9 +149,10 @@ export function GodeyeBadge({ size = 30 }: { size?: number }) {
             "linear-gradient(180deg, rgba(255,255,255,0.22) 0%, rgba(255,255,255,0) 45%)",
         }}
       />
-      <GodeyeMark
+      <GodeyeEmblem
+        variant="compact"
         className="relative"
-        style={{ width: Math.round(size * 0.68), height: Math.round(size * 0.68) }}
+        style={{ width: Math.round(size * 0.86), height: Math.round(size * 0.86) }}
       />
     </span>
   );
