@@ -24,7 +24,7 @@ import { CommandPalette } from "@/components/command-palette";
 import { GodeyeLockup } from "@/components/logo";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { cx } from "@/components/ui";
-import { api, API_URL } from "@/lib/api";
+import { api, AUTH_URL } from "@/lib/api";
 import { useAuthStore, type SessionOrg, type SessionUser } from "@/lib/auth-store";
 import { useRealtime } from "@/lib/socket";
 
@@ -124,7 +124,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   }
 
   const logout = async () => {
-    await fetch(`${API_URL}/auth/logout`, { method: "POST", credentials: "include" });
+    await fetch(`${AUTH_URL}/auth/logout`, { method: "POST", credentials: "include" });
     clear();
     router.replace("/login");
   };

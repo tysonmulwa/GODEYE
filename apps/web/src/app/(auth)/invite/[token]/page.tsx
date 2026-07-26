@@ -3,7 +3,7 @@
 import { Loader2 } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { API_URL, ApiError } from "@/lib/api";
+import { AUTH_URL, ApiError } from "@/lib/api";
 import { useAuthStore } from "@/lib/auth-store";
 import { Badge, Button, Card, ErrorNote, Input, Label, PasswordInput } from "@/components/ui";
 
@@ -33,7 +33,7 @@ export default function InvitePage() {
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch(`${API_URL}/auth/invitations/${token}`);
+        const res = await fetch(`${AUTH_URL}/auth/invitations/${token}`);
         const data = await res.json();
         if (!res.ok) throw new Error(data?.message ?? "Invitation not found");
         if (!cancelled) setPreview(data);
@@ -51,7 +51,7 @@ export default function InvitePage() {
     setError(null);
     setLoading(true);
     try {
-      const res = await fetch(`${API_URL}/auth/accept-invitation`, {
+      const res = await fetch(`${AUTH_URL}/auth/accept-invitation`, {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },

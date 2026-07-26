@@ -4,6 +4,13 @@ import { useAuthStore } from "./auth-store";
 
 export const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
+/**
+ * Base for auth calls — empty, i.e. this origin. next.config rewrites /auth/*
+ * to the API so the refresh cookie is first-party; hitting the API host
+ * directly would make it third-party and browsers would drop it.
+ */
+export const AUTH_URL = "";
+
 export class ApiError extends Error {
   constructor(
     public status: number,
@@ -55,7 +62,7 @@ let refreshPromise: Promise<boolean> | null = null;
 export function tryRefresh(): Promise<boolean> {
   refreshPromise ??= (async () => {
     try {
-      const res = await fetch(`${API_URL}/auth/refresh`, {
+      const res = await fetch(`${AUTH_URL}/auth/refresh`, {
         method: "POST",
         credentials: "include",
       });

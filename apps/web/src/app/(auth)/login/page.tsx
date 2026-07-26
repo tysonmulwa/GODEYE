@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { API_URL, ApiError } from "@/lib/api";
+import { AUTH_URL, ApiError } from "@/lib/api";
 import { useAuthStore } from "@/lib/auth-store";
 import { Button, Card, ErrorNote, Input, Label, PasswordInput } from "@/components/ui";
 
@@ -22,7 +22,7 @@ export default function LoginPage() {
     setError(null);
     setLoading(true);
     try {
-      const res = await fetch(`${API_URL}/auth/login`, {
+      const res = await fetch(`${AUTH_URL}/auth/login`, {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },

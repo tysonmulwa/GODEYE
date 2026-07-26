@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { registerSchema, type AccountType } from "@godeye/shared";
-import { API_URL } from "@/lib/api";
+import { AUTH_URL } from "@/lib/api";
 import { useAuthStore } from "@/lib/auth-store";
 import { Button, Card, ErrorNote, Input, Label, PasswordInput, cx } from "@/components/ui";
 
@@ -55,7 +55,7 @@ export default function RegisterPage() {
     }
     setLoading(true);
     try {
-      const res = await fetch(`${API_URL}/auth/register`, {
+      const res = await fetch(`${AUTH_URL}/auth/register`, {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
