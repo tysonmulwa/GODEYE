@@ -2,6 +2,7 @@ import "./common/env"; // must be first — loads the repo-root .env
 
 import { Logger } from "@nestjs/common";
 import { NestFactory } from "@nestjs/core";
+import type { NestExpressApplication } from "@nestjs/platform-express";
 import { DocumentBuilder, SwaggerModule } from "@nestjs/swagger";
 import cookieParser from "cookie-parser";
 import helmet from "helmet";
@@ -9,9 +10,15 @@ import { AppModule } from "./app.module";
 import { env } from "./common/env";
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule, {
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, {
     rawBody: true, // needed for webhook HMAC validation
   });
+
+  // Photo uploads are posted as base64 JSON, which the default ~100kb body limit
+  // rejects with "request entity too large". Base64 inflates bytes by ~33%, so
+  // 30mb covers the 25 MB file cap enforced in the upload schema and the engine.
+  app.useBodyParser("json", { limit: "30mb" });
+  app.useBodyParser("urlencoded", { limit: "30mb", extended: true });
 
   app.use(helmet());
   app.use(cookieParser());
