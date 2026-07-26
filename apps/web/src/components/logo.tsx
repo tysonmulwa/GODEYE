@@ -158,17 +158,20 @@ export function GodeyeBadge({ size = 30 }: { size?: number }) {
   );
 }
 
-/** Horizontal lockup: gradient badge + wordmark. */
+/**
+ * Horizontal lockup: bare crest + wordmark, drawn in currentColor so it matches
+ * the auth pages rather than sitting in a coloured tile.
+ */
 export function GodeyeLockup({
-  size = 30,
+  size = 32,
   wordClass = "text-[13px]",
 }: {
   size?: number;
   wordClass?: string;
 }) {
   return (
-    <span className="inline-flex items-center gap-2.5 text-ink">
-      <GodeyeBadge size={size} />
+    <span className="inline-flex items-center gap-2 text-ink">
+      <GodeyeEmblem variant="compact" style={{ width: size, height: size }} />
       <span className={`font-display tracking-wider ${wordClass}`}>GODEYE</span>
     </span>
   );
