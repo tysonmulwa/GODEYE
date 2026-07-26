@@ -128,9 +128,14 @@ export class EngineService {
     try {
       res = await fetch(`${env.engineUrl}${path}`, init);
     } catch (e) {
-      this.logger.error(`Engine unreachable at ${env.engineUrl}${path}`);
+      // Log the underlying cause — "unreachable" alone can't distinguish a
+      // wrong ENGINE_URL from an engine that just died mid-request.
+      const cause = e instanceof Error ? e.message : String(e);
+      this.logger.error(`Engine unreachable at ${env.engineUrl}${path}: ${cause}`);
       throw new ServiceUnavailableException(
-        "The automation engine is not running. Start it with: cd apps/engine && python -m godeye_engine.run",
+        env.nodeEnv === "production"
+          ? "The automation engine is unreachable. It may be restarting — try again in a moment."
+          : "The automation engine is not running. Start it with: cd apps/engine && python -m godeye_engine.run",
       );
     }
     if (!res.ok) {
