@@ -119,3 +119,61 @@ body {
 .tnum {
   font-variant-numeric: tabular-nums;
 }
+
+/* Long-form legal/marketing copy. Scoped so it can't leak into the app UI. */
+.prose-godeye {
+  color: var(--ink-2);
+  font-size: 15px;
+  line-height: 1.7;
+}
+.prose-godeye h1 {
+  color: var(--ink);
+  font-size: 30px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  margin-bottom: 8px;
+}
+.prose-godeye h2 {
+  color: var(--ink);
+  font-size: 19px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  margin: 32px 0 8px;
+}
+.prose-godeye h3 {
+  color: var(--ink);
+  font-size: 15px;
+  font-weight: 650;
+  margin: 20px 0 4px;
+}
+.prose-godeye p {
+  margin: 0 0 14px;
+}
+.prose-godeye .lead {
+  color: var(--ink-3);
+  font-size: 13px;
+  margin-bottom: 24px;
+}
+.prose-godeye ul {
+  list-style: disc;
+  padding-left: 22px;
+  margin: 0 0 14px;
+}
+.prose-godeye li {
+  margin-bottom: 6px;
+}
+.prose-godeye a {
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.prose-godeye code {
+  background: var(--surface-3);
+  border-radius: 4px;
+  padding: 1px 5px;
+  font-size: 13px;
+}
+.prose-godeye strong {
+  color: var(--ink);
+  font-weight: 650;
+}
