@@ -15,7 +15,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
  && rm -rf /var/lib/apt/lists/*
 
 # Manifests first so dependency installs cache independently of source changes.
-COPY package.json pnpm-lock.yaml pnpm-workspace.yaml turbo.json ./
+# tsconfig.base.json is required: apps/api and packages/shared both extend it,
+# and without it tsc silently falls back to an ES3 target and fails to compile.
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml turbo.json tsconfig.base.json ./
 COPY packages/db/package.json packages/db/
 COPY packages/shared/package.json packages/shared/
 COPY apps/api/package.json apps/api/
