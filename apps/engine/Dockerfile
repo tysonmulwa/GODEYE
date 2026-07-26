@@ -20,7 +20,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
  && rm -rf /var/lib/apt/lists/*
 
 # Manifest first so the dependency layer caches independently of source changes.
-COPY apps/engine/pyproject.toml apps/engine/README.md* ./
+COPY apps/engine/pyproject.toml ./
 COPY apps/engine/src ./src
 RUN pip install --upgrade pip && pip install ".[openai,google]"
 
