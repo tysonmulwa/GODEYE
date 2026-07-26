@@ -20,7 +20,10 @@ node_modules
 # Local-only state
 .media
 dump.rdb
-*.tsbuildinfo
+# Must be **/ — Docker's * does not cross directory separators, so a bare
+# *.tsbuildinfo would leave packages/*/tsconfig.tsbuildinfo in the context and
+# make tsc skip emitting files it thinks are already built.
+**/*.tsbuildinfo
 
 # Not needed at runtime
 .git

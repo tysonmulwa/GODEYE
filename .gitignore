@@ -7,6 +7,9 @@ dist/
 .next/
 out/
 .turbo/
+# TypeScript incremental cache — never commit it: a stale one makes tsc skip
+# emitting files that are already "up to date", producing a partial dist.
+*.tsbuildinfo
 
 # local media storage (STORAGE_BACKEND=local)
 .media/
