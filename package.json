@@ -5,7 +5,7 @@
   "description": "GODEYE — AI Marketing Operating System",
   "packageManager": "pnpm@11.13.0",
   "engines": {
-    "node": ">=20"
+    "node": ">=22.13"
   },
   "scripts": {
     "dev": "node scripts/dev.mjs",

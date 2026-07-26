@@ -3,7 +3,9 @@
 # On Railway/Render set the Dockerfile path to apps/api/Dockerfile and leave the
 # root directory as the repo root, so the pnpm workspace is available.
 
-FROM node:20-slim AS build
+# Node 22+ is required: the pinned pnpm 11 uses node:sqlite, which doesn't
+# exist on Node 20 (corepack fails with ERR_UNKNOWN_BUILTIN_MODULE).
+FROM node:22-slim AS build
 WORKDIR /app
 ENV PNPM_HOME=/pnpm PATH=/pnpm:$PATH
 RUN corepack enable
@@ -27,7 +29,7 @@ RUN pnpm --filter @godeye/db generate \
  && pnpm --filter @godeye/shared build \
  && pnpm --filter @godeye/api build
 
-FROM node:20-slim AS runtime
+FROM node:22-slim AS runtime
 WORKDIR /app
 ENV NODE_ENV=production
 RUN apt-get update && apt-get install -y --no-install-recommends openssl ca-certificates \
