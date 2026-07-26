@@ -29,9 +29,11 @@ async function bootstrap() {
     .build();
   SwaggerModule.setup("api/docs", app, SwaggerModule.createDocument(app, swagger));
 
-  await app.listen(env.apiPort);
+  // Bind 0.0.0.0, not localhost — a container host can't reach a loopback-only
+  // listener, and the deploy gets killed as unhealthy.
+  await app.listen(env.apiPort, "0.0.0.0");
   new Logger("Bootstrap").log(
-    `GODEYE API on http://localhost:${env.apiPort} (docs: /api/docs)`,
+    `GODEYE API listening on 0.0.0.0:${env.apiPort} (docs: /api/docs)`,
   );
 }
 

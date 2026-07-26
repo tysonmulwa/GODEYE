@@ -34,7 +34,10 @@ function required(name: string): string {
 
 export const env = {
   nodeEnv: process.env.NODE_ENV ?? "development",
-  apiPort: parseInt(process.env.API_PORT ?? "4000", 10),
+  // Container hosts (Railway, Render, Fly) inject PORT and route to it; API_PORT
+  // is the local-dev override. Ignoring PORT makes the platform mark the deploy
+  // unhealthy because nothing is listening where it forwards traffic.
+  apiPort: parseInt(process.env.PORT ?? process.env.API_PORT ?? "4000", 10),
   webUrl: process.env.WEB_URL ?? "http://localhost:3000",
   apiUrl: process.env.API_URL ?? "http://localhost:4000",
   engineUrl: process.env.ENGINE_URL ?? "http://localhost:8000",
