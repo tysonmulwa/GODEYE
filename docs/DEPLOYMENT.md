@@ -61,15 +61,25 @@ for both the API and the engine.
 
 ### 4. Object storage — Supabase Storage or Cloudflare R2
 
-Create a bucket and set `S3_ENDPOINT`, `S3_ACCESS_KEY`, `S3_SECRET_KEY`,
-`S3_BUCKET`, `S3_REGION`. Without this, image/video generation has nowhere to
-upload to.
+Create a bucket and set `STORAGE_BACKEND=s3` plus `S3_ENDPOINT`, `S3_ACCESS_KEY`,
+`S3_SECRET_KEY`, `S3_BUCKET`, `S3_REGION`, and `S3_PUBLIC_URL` (the public base
+for reading objects).
+
+**`STORAGE_BACKEND` must be `s3` in production.** The `local` backend stores media
+on the container's own filesystem — it disappears on every redeploy, isn't shared
+between the API and the worker, and its URLs aren't reachable by the platforms.
+Uploaded photos still publish to Facebook/Telegram (the engine uploads the bytes),
+but **Instagram only accepts a public `image_url`**, so IG images require real
+object storage with public read.
 
 ### 5. API — Railway (or Render/Fly)
 
-- New service from the GitHub repo, **root `apps/api`**.
-- Build: `pnpm install --frozen-lockfile && pnpm --filter @godeye/db generate && pnpm --filter @godeye/api build`
-- Start: `node dist/main.js`
+The repo ships `apps/api/Dockerfile`. **The build context is the repo root** (the
+pnpm workspace must be visible), so keep the service's root directory at the repo
+root and point it at the Dockerfile — do **not** set root to `apps/api`.
+
+- New service from the GitHub repo → set **Dockerfile path** `apps/api/Dockerfile`.
+- Start command: none needed (the image runs `node dist/main.js`).
 - **Env vars:** `NODE_ENV=production`, `DATABASE_URL`, `REDIS_URL`, all `JWT_*`,
   `TOKEN_ENCRYPTION_KEY`, `ENGINE_INTERNAL_SECRET`, `ENGINE_URL` (the engine's
   private URL), `WEB_URL` (**your Vercel domain** — drives CORS + the session
@@ -78,23 +88,27 @@ upload to.
 - `NODE_ENV=production` is required — it switches the refresh cookie to
   `SameSite=None; Secure` so login works across the Vercel↔API domain split.
 
-### 6. Engine — three processes (Railway/Render/Fly)
+### 6. Engine — one image, three services
 
-Same repo, root `apps/engine`, `pip install -e .`. Run **three** processes
-(three Railway services sharing the image, or a process manager):
+`apps/engine/Dockerfile` (context = repo root, includes ffmpeg). Deploy it as
+**three services sharing the same image**, overriding the start command on each:
 
 ```bash
-# API (receives enqueue calls from NestJS)
-uvicorn godeye_engine.api:app --host 0.0.0.0 --port $PORT
-# Worker — prefork in production (the dev runner uses --pool=solo for Windows)
+# 1. api — receives enqueue calls from NestJS (this is the only one with a port)
+uvicorn godeye_engine.api:app --host 0.0.0.0 --port $PORT   # image default
+# 2. worker — runs the AI/publish jobs
 celery -A godeye_engine.celery_app worker --loglevel=info
-# Beat — the scheduler that fires due posts / autopilot every 30s
+# 3. beat — fires due posts / autopilot every 30s
 celery -A godeye_engine.celery_app beat --loglevel=info
 ```
 
-Env vars: `DATABASE_URL`, `REDIS_URL`, `ENGINE_INTERNAL_SECRET` (must match the
-API), an LLM key (`ANTHROPIC_API_KEY` or `OPENAI_API_KEY`), `GOOGLE_API_KEY` /
-image keys, the `S3_*` set, and `FFMPEG_PATH` (or ensure ffmpeg is on the image).
+All three need the same env: `DATABASE_URL`, `REDIS_URL`, `ENGINE_INTERNAL_SECRET`
+(must match the API), an LLM key (`ANTHROPIC_API_KEY` or `OPENAI_API_KEY`),
+`GOOGLE_API_KEY` / image keys, and the `S3_*` set. Leave `FFMPEG_PATH` blank —
+ffmpeg is on the image and found via PATH.
+
+**Without the worker and beat services nothing publishes** — the API accepts the
+schedule but no process ever dispatches it.
 
 ### 7. Web — Vercel
 

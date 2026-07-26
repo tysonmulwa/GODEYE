@@ -1,0 +1,33 @@
+# Never ship secrets into an image
+.env
+.env.*
+!.env.example
+
+# Installed/generated artifacts — rebuilt inside the image
+node_modules
+**/node_modules
+**/dist
+**/.next
+**/.turbo
+**/generated
+.venv
+**/.venv
+**/__pycache__
+**/*.pyc
+**/.pytest_cache
+**/.ruff_cache
+
+# Local-only state
+.media
+dump.rdb
+*.tsbuildinfo
+
+# Not needed at runtime
+.git
+.github
+.claude
+docs
+**/*.md
+!apps/engine/README.md
+**/*.spec.ts
+**/tests
