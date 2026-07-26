@@ -15,6 +15,23 @@ from tenacity import (
 )
 
 
+def download_media(url: str) -> tuple[bytes, str] | None:
+    """Fetch media bytes + content-type so a publisher can upload them directly.
+
+    Platforms fetch a passed-in media URL from their own servers, which fails for
+    media hosted somewhere they can't reach (e.g. local dev storage on localhost).
+    Uploading the bytes avoids that. Returns None if the fetch fails so callers can
+    fall back to passing the URL.
+    """
+    try:
+        response = httpx.get(url, timeout=30, follow_redirects=True)
+    except httpx.HTTPError:
+        return None
+    if response.status_code != 200:
+        return None
+    return response.content, response.headers.get("content-type", "application/octet-stream")
+
+
 class PublishError(Exception):
     """Permanent failure — do not retry (bad credentials, invalid content...)."""
 

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from .base import BasePublisher, PostPayload, PublishResult
+from .base import BasePublisher, PostPayload, PublishResult, download_media
 
 
 class TelegramPublisher(BasePublisher):
@@ -22,14 +22,25 @@ class TelegramPublisher(BasePublisher):
                 },
             )
         elif payload.media_urls:
-            response = self._post(
-                f"https://api.telegram.org/bot{token}/sendPhoto",
-                json={
-                    "chat_id": chat_id,
-                    "photo": payload.media_urls[0],
-                    "caption": payload.text[:1024],
-                },
-            )
+            # Upload the image bytes when we can fetch them, so it works even when
+            # the media is on a host Telegram can't reach (e.g. local dev storage).
+            fetched = download_media(payload.media_urls[0])
+            if fetched is not None:
+                image_bytes, content_type = fetched
+                response = self._post(
+                    f"https://api.telegram.org/bot{token}/sendPhoto",
+                    data={"chat_id": chat_id, "caption": payload.text[:1024]},
+                    files={"photo": ("photo", image_bytes, content_type)},
+                )
+            else:
+                response = self._post(
+                    f"https://api.telegram.org/bot{token}/sendPhoto",
+                    json={
+                        "chat_id": chat_id,
+                        "photo": payload.media_urls[0],
+                        "caption": payload.text[:1024],
+                    },
+                )
         else:
             response = self._post(
                 f"https://api.telegram.org/bot{token}/sendMessage",

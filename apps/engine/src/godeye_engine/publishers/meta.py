@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from .base import BasePublisher, PostPayload, PublishError, PublishResult
+from .base import BasePublisher, PostPayload, PublishError, PublishResult, download_media
 
 GRAPH = "https://graph.facebook.com/v21.0"
 
@@ -24,14 +24,25 @@ class FacebookPublisher(BasePublisher):
                 },
             )
         elif payload.media_urls:
-            response = self._post(
-                f"{GRAPH}/{page_id}/photos",
-                data={
-                    "url": payload.media_urls[0],
-                    "caption": payload.text,
-                    "access_token": token,
-                },
-            )
+            # Upload the image bytes when we can fetch them, so it works even when
+            # the media is on a host Facebook can't reach (e.g. local dev storage).
+            fetched = download_media(payload.media_urls[0])
+            if fetched is not None:
+                image_bytes, content_type = fetched
+                response = self._post(
+                    f"{GRAPH}/{page_id}/photos",
+                    data={"caption": payload.text, "access_token": token},
+                    files={"source": ("image", image_bytes, content_type)},
+                )
+            else:
+                response = self._post(
+                    f"{GRAPH}/{page_id}/photos",
+                    data={
+                        "url": payload.media_urls[0],
+                        "caption": payload.text,
+                        "access_token": token,
+                    },
+                )
         else:
             response = self._post(
                 f"{GRAPH}/{page_id}/feed",
