@@ -4,7 +4,14 @@ from __future__ import annotations
 
 from typing import Any
 
-from .base import BasePublisher, PostPayload, PublishError, PublishResult, download_media
+from .base import (
+    BasePublisher,
+    PostPayload,
+    PublishError,
+    PublishResult,
+    TransientPublishError,
+    download_media,
+)
 
 GRAPH = "https://graph.facebook.com/v21.0"
 
@@ -81,6 +88,11 @@ class FacebookPublisher(BasePublisher):
 
 IG_GRAPH = "https://graph.instagram.com/v21.0"
 
+# How long to wait for Instagram to ingest the media before giving up, and how
+# often to ask. Images usually finish in a few seconds; video takes longer.
+CONTAINER_TIMEOUT_SEC = 60
+CONTAINER_POLL_SEC = 3
+
 
 class InstagramPublisher(BasePublisher):
     """IG content publishing is a 2-step flow and REQUIRES media.
@@ -115,9 +127,12 @@ class InstagramPublisher(BasePublisher):
         if container.status_code >= 400 or "error" in container_body:
             raise self._fail(container, "Instagram (container)")
 
+        creation_id = container_body["id"]
+        self._await_container(base, creation_id, token)
+
         publish = self._post(
             f"{base}/{ig_user_id}/media_publish",
-            data={"creation_id": container_body["id"], "access_token": token},
+            data={"creation_id": creation_id, "access_token": token},
         )
         publish_body = publish.json()
         if publish.status_code >= 400 or "error" in publish_body:
@@ -125,3 +140,45 @@ class InstagramPublisher(BasePublisher):
 
         media_id = str(publish_body.get("id") or "")
         return PublishResult(external_post_id=media_id, external_post_url=None)
+
+    def _await_container(self, base: str, creation_id: str, token: str) -> None:
+        """Block until Instagram has finished ingesting the media.
+
+        Container creation is asynchronous: Instagram downloads and processes the
+        image before it can be published. Publishing too early fails with
+        "Media ID is not available" (code 9007) — flagged is_transient: false
+        even though it resolves on its own, so it must be waited out rather than
+        retried as a whole post.
+        """
+        import time
+
+        import httpx
+
+        deadline = time.monotonic() + CONTAINER_TIMEOUT_SEC
+        last_status = "UNKNOWN"
+        while time.monotonic() < deadline:
+            try:
+                response = httpx.get(
+                    f"{base}/{creation_id}",
+                    params={"fields": "status_code,status", "access_token": token},
+                    timeout=self.timeout,
+                )
+            except httpx.TransportError as e:
+                raise TransientPublishError(f"Network error polling container: {e}") from e
+
+            body = response.json()
+            last_status = body.get("status_code") or "UNKNOWN"
+            if last_status == "FINISHED":
+                return
+            if last_status in ("ERROR", "EXPIRED"):
+                raise PublishError(
+                    f"Instagram could not process the media ({last_status}): "
+                    f"{body.get('status') or 'no detail'}. Check the image URL is "
+                    "publicly reachable and is JPEG under 8 MB."
+                )
+            time.sleep(CONTAINER_POLL_SEC)
+
+        # Still processing — worth another attempt rather than failing the post.
+        raise TransientPublishError(
+            f"Instagram media still {last_status} after {CONTAINER_TIMEOUT_SEC}s"
+        )

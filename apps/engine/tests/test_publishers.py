@@ -75,22 +75,56 @@ class TestInstagram:
             )
 
     @staticmethod
-    def _capture(monkeypatch):
-        """Record the URLs the publisher calls, returning plausible responses."""
+    def _capture(monkeypatch, status="FINISHED"):
+        """Record the URLs the publisher calls, returning plausible responses.
+
+        Also stubs the container status poll, which sits between creating the
+        container and publishing it.
+        """
         calls: list[str] = []
 
         class Resp:
             status_code = 200
 
+            def __init__(self, body):
+                self._body = body
+
             def json(self):
-                return {"id": "media-1"}
+                return self._body
 
         def fake_post(self, url, **kwargs):
             calls.append(url)
-            return Resp()
+            return Resp({"id": "media-1"})
+
+        def fake_get(url, **kwargs):
+            calls.append(url)
+            return Resp({"status_code": status})
+
+        import httpx
 
         monkeypatch.setattr(InstagramPublisher, "_post", fake_post)
+        # The publisher imports httpx inside the method, so patch the module.
+        monkeypatch.setattr(httpx, "get", fake_get)
         return calls
+
+    def test_waits_for_the_container_before_publishing(self, monkeypatch):
+        """Publishing before Instagram finishes ingesting fails with code 9007."""
+        calls = self._capture(monkeypatch)
+        InstagramPublisher().publish(
+            {"igUserId": "1", "accessToken": "t", "authMethod": "instagram_login"},
+            PostPayload(text="hi", media_urls=["https://cdn/x.jpg"]),
+        )
+        poll_index = next(i for i, u in enumerate(calls) if u.endswith("/media-1"))
+        publish_index = next(i for i, u in enumerate(calls) if "/media_publish" in u)
+        assert poll_index < publish_index, f"must poll before publishing: {calls}"
+
+    def test_container_error_is_permanent(self, monkeypatch):
+        self._capture(monkeypatch, status="ERROR")
+        with pytest.raises(PublishError, match="could not process the media"):
+            InstagramPublisher().publish(
+                {"igUserId": "1", "accessToken": "t", "authMethod": "instagram_login"},
+                PostPayload(text="hi", media_urls=["https://cdn/x.jpg"]),
+            )
 
     def test_facebook_login_uses_facebook_graph(self, monkeypatch):
         calls = self._capture(monkeypatch)
