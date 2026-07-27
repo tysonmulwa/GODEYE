@@ -1,5 +1,7 @@
-import { BadRequestException } from "@nestjs/common";
+import { BadRequestException, Logger } from "@nestjs/common";
 import { env } from "../common/env";
+
+const metaLogger = new Logger("MetaClient");
 
 /**
  * Thin HTTP clients used to VALIDATE credentials when a user connects a
@@ -336,8 +338,20 @@ export async function metaListPages(userToken: string): Promise<MetaPage[]> {
       );
       igUserId = ig.instagram_business_account?.id ?? null;
       igUsername = ig.instagram_business_account?.username ?? null;
-    } catch {
-      // page without a linked IG business account — fine
+      if (!igUserId) {
+        // Meta omits the field entirely when nothing is linked, so silence here
+        // looks identical to a failed lookup. Say which it was — otherwise
+        // Instagram just never appears and there's no way to tell why.
+        metaLogger.log(
+          `Page "${page.name}" has no linked Instagram Business account — ` +
+            "Instagram not connected. Link one in Page settings, then reconnect.",
+        );
+      }
+    } catch (e) {
+      metaLogger.warn(
+        `Instagram lookup failed for page "${page.name}": ${e instanceof Error ? e.message : e}. ` +
+          "Usually the token is missing instagram_basic.",
+      );
     }
     pages.push({
       pageId: page.id,
