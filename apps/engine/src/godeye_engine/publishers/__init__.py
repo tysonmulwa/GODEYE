@@ -8,6 +8,7 @@ from .linkedin import LinkedInPublisher
 from .meta import FacebookPublisher, InstagramPublisher
 from .reddit import RedditPublisher
 from .telegram import TelegramPublisher
+from .tiktok import TikTokPublisher
 from .x import XPublisher
 
 _PUBLISHERS: dict[str, type[BasePublisher]] = {
@@ -18,6 +19,7 @@ _PUBLISHERS: dict[str, type[BasePublisher]] = {
     "INSTAGRAM": InstagramPublisher,
     "X": XPublisher,
     "LINKEDIN": LinkedInPublisher,
+    "TIKTOK": TikTokPublisher,
 }
 
 

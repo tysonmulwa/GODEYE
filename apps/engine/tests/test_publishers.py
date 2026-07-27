@@ -25,8 +25,9 @@ class TestRegistry:
         assert isinstance(get_publisher("TELEGRAM"), TelegramPublisher)
 
     def test_raises_for_unimplemented_platform(self):
-        with pytest.raises(PublishError, match="TIKTOK"):
-            get_publisher("TIKTOK")
+        # TIKTOK used to stand in here; it ships now, so assert on one that doesn't.
+        with pytest.raises(PublishError, match="PINTEREST"):
+            get_publisher("PINTEREST")
 
 
 class TestTelegram:
@@ -220,4 +221,76 @@ class TestLinkedIn:
             LinkedInPublisher().publish(
                 {"accessToken": "t", "memberUrn": "urn:li:person:abc"},
                 PostPayload(text="hi"),
+            )
+
+
+class TestTikTok:
+    def test_registered(self):
+        from godeye_engine.publishers import get_publisher
+        from godeye_engine.publishers.tiktok import TikTokPublisher
+
+        assert isinstance(get_publisher("TIKTOK"), TikTokPublisher)
+
+    def test_requires_video(self):
+        """TikTok has no image or text-only post — fail before calling the API."""
+        from godeye_engine.publishers.tiktok import TikTokPublisher
+
+        with pytest.raises(PublishError, match="must be video"):
+            TikTokPublisher().publish(
+                {"accessToken": "t"},
+                PostPayload(text="hi", media_urls=["https://cdn/x.jpg"]),
+            )
+
+    def test_polls_until_complete(self, monkeypatch):
+        import httpx
+
+        from godeye_engine.publishers.tiktok import TikTokPublisher
+
+        class Resp:
+            status_code = 200
+
+            def __init__(self, body):
+                self._body = body
+
+            def json(self):
+                return self._body
+
+        monkeypatch.setattr(
+            TikTokPublisher, "_post",
+            lambda self, url, **kw: Resp({"data": {"publish_id": "pub-1"}, "error": {"code": "ok"}}),
+        )
+        statuses = iter(["PROCESSING_UPLOAD", "PUBLISH_COMPLETE"])
+        monkeypatch.setattr(httpx, "post", lambda *a, **kw: Resp({"data": {"status": next(statuses)}}))
+        monkeypatch.setattr("godeye_engine.publishers.tiktok.PUBLISH_POLL_SEC", 0)
+
+        result = TikTokPublisher().publish(
+            {"accessToken": "t"}, PostPayload(text="hi", video_urls=["https://cdn/v.mp4"])
+        )
+        assert result.external_post_id == "pub-1"
+
+    def test_failed_status_is_permanent(self, monkeypatch):
+        import httpx
+
+        from godeye_engine.publishers.tiktok import TikTokPublisher
+
+        class Resp:
+            status_code = 200
+
+            def __init__(self, body):
+                self._body = body
+
+            def json(self):
+                return self._body
+
+        monkeypatch.setattr(
+            TikTokPublisher, "_post",
+            lambda self, url, **kw: Resp({"data": {"publish_id": "pub-1"}, "error": {"code": "ok"}}),
+        )
+        monkeypatch.setattr(
+            httpx, "post",
+            lambda *a, **kw: Resp({"data": {"status": "FAILED", "fail_reason": "url_ownership_unverified"}}),
+        )
+        with pytest.raises(PublishError, match="url_ownership_unverified"):
+            TikTokPublisher().publish(
+                {"accessToken": "t"}, PostPayload(text="hi", video_urls=["https://cdn/v.mp4"])
             )

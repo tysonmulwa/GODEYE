@@ -146,6 +146,41 @@ export class ConnectionsController {
     }
   }
 
+  @Get("tiktok/authorize")
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: "Get the TikTok OAuth dialog URL" })
+  tiktokAuthorize(@CurrentAuth() auth: AccessTokenPayload) {
+    return this.connections.tiktokAuthorize(auth.orgId, auth.sub);
+  }
+
+  @Get("tiktok/callback")
+  @ApiOperation({ summary: "OAuth redirect target for TikTok — do not call directly" })
+  async tiktokCallback(
+    @Query("code") code: string,
+    @Query("state") state: string,
+    @Query("error_description") errorDescription: string | undefined,
+    @Res() res: Response,
+  ) {
+    const base = `${env.webUrl}/connections`;
+    if (errorDescription || !code || !state) {
+      return res.redirect(
+        `${base}?error=${encodeURIComponent(errorDescription ?? "TikTok authorization failed")}`,
+      );
+    }
+    try {
+      const result = await this.connections.tiktokCallback(code, state);
+      return res.redirect(`${base}?connected=tiktok&count=${result.connected}`);
+    } catch (e) {
+      const message = e instanceof Error ? e.message : "TikTok connection failed";
+      this.logger.error(
+        `TikTok callback failed: ${message}`,
+        e instanceof Error ? e.stack : undefined,
+      );
+      return res.redirect(`${base}?error=${encodeURIComponent(message)}`);
+    }
+  }
+
   @Get("instagram/authorize")
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()

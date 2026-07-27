@@ -263,6 +263,70 @@ export interface MetaPage {
   igUsername: string | null;
 }
 
+// ---------- TikTok (Content Posting API) ----------
+// TikTok names the app identifier `client_key`, and the authorize host
+// (www.tiktok.com) differs from the API host (open.tiktokapis.com).
+
+const TIKTOK_API = "https://open.tiktokapis.com/v2";
+
+export interface TikTokAccount {
+  openId: string;
+  displayName: string;
+  accessToken: string;
+  refreshToken: string;
+  expiresInSeconds: number;
+}
+
+export function tiktokAuthorizeUrl(state: string): string {
+  if (!env.tiktok.clientKey) {
+    throw new BadRequestException(
+      "TikTok is not configured on this server (TIKTOK_CLIENT_KEY missing)",
+    );
+  }
+  const params = new URLSearchParams({
+    client_key: env.tiktok.clientKey,
+    // video.publish is what allows posting straight to the account; without it
+    // TikTok only permits drafts the user must finish in the app.
+    scope: "user.info.basic,video.publish",
+    response_type: "code",
+    redirect_uri: env.tiktok.redirectUri,
+    state,
+  });
+  return `https://www.tiktok.com/v2/auth/authorize/?${params}`;
+}
+
+export async function tiktokExchangeCode(code: string): Promise<TikTokAccount> {
+  const tokenRes = await fetch(`${TIKTOK_API}/oauth/token/`, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      client_key: env.tiktok.clientKey,
+      client_secret: env.tiktok.clientSecret,
+      code,
+      grant_type: "authorization_code",
+      redirect_uri: env.tiktok.redirectUri,
+    }),
+  });
+  const token: any = await tokenRes.json().catch(() => ({}));
+  if (!tokenRes.ok || !token.access_token) {
+    throw new BadRequestException(
+      `TikTok token exchange failed: ${token.error_description ?? token.error ?? tokenRes.statusText}`,
+    );
+  }
+
+  const info = await getJson(`${TIKTOK_API}/user/info/?fields=open_id,display_name`, {
+    headers: { Authorization: `Bearer ${token.access_token}` },
+  });
+  const user = info?.data?.user ?? {};
+  return {
+    openId: String(user.open_id ?? token.open_id ?? ""),
+    displayName: (user.display_name as string) ?? "TikTok",
+    accessToken: token.access_token,
+    refreshToken: token.refresh_token ?? "",
+    expiresInSeconds: token.expires_in ?? 86400,
+  };
+}
+
 // ---------- Instagram API with Instagram Login ----------
 // Publishes to an Instagram Business/Creator account with no Facebook Page.
 // Note the hosts differ from the Facebook-Login flow: authorization is on

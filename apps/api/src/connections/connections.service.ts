@@ -23,6 +23,8 @@ import {
   type MetaPage,
   redditAuthorizeUrl,
   redditExchangeCode,
+  tiktokAuthorizeUrl,
+  tiktokExchangeCode,
   validateDiscord,
   validateTelegram,
 } from "./platform-clients";
@@ -177,6 +179,38 @@ export class ConnectionsService {
       externalId: account.memberUrn,
       displayName: account.name,
       credentials: { accessToken: account.accessToken, memberUrn: account.memberUrn },
+      expiresAt: new Date(Date.now() + account.expiresInSeconds * 1000),
+    });
+    return { connected: 1 };
+  }
+
+  // ---------- TikTok OAuth ----------
+
+  async tiktokAuthorize(orgId: string, userId: string): Promise<{ url: string }> {
+    const state = await this.jwt.signAsync(
+      { orgId, sub: userId, purpose: "tiktok_oauth" },
+      { secret: env.jwtAccessSecret(), expiresIn: OAUTH_STATE_TTL },
+    );
+    return { url: tiktokAuthorizeUrl(state) };
+  }
+
+  async tiktokCallback(code: string, state: string): Promise<{ connected: number }> {
+    const payload = await this.jwt.verifyAsync<{ orgId: string; sub: string; purpose: string }>(
+      state,
+      { secret: env.jwtAccessSecret() },
+    );
+    if (payload.purpose !== "tiktok_oauth") throw new NotFoundException("Invalid state");
+
+    const account = await tiktokExchangeCode(code);
+    await this.upsertConnection(payload.orgId, payload.sub, {
+      platform: "TIKTOK",
+      externalId: account.openId,
+      displayName: `@${account.displayName}`,
+      credentials: {
+        accessToken: account.accessToken,
+        refreshToken: account.refreshToken,
+        openId: account.openId,
+      },
       expiresAt: new Date(Date.now() + account.expiresInSeconds * 1000),
     });
     return { connected: 1 };

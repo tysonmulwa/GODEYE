@@ -85,6 +85,18 @@ export const env = {
     } as Record<string, string>,
   },
   /**
+   * TikTok Content Posting API. Note it calls the app identifier `client_key`,
+   * not `client_id`, and the authorize host differs from the API host.
+   */
+  tiktok: {
+    clientKey: (process.env.TIKTOK_CLIENT_KEY ?? "").trim(),
+    clientSecret: (process.env.TIKTOK_CLIENT_SECRET ?? "").trim(),
+    redirectUri: url(
+      process.env.TIKTOK_REDIRECT_URI,
+      "http://localhost:4000/connections/tiktok/callback",
+    ),
+  },
+  /**
    * Instagram API with Instagram Login — a separate Meta app product that
    * publishes to an Instagram Business/Creator account with NO linked Facebook
    * Page, which the Facebook-Login path requires. Kept apart from `meta`

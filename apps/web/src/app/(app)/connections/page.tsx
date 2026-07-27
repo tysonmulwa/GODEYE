@@ -77,6 +77,15 @@ function ConnectionsInner() {
     }
   };
 
+  const connectTiktok = async () => {
+    try {
+      const { url } = await api<{ url: string }>("/connections/tiktok/authorize");
+      window.location.href = url;
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "TikTok authorization failed");
+    }
+  };
+
   const connectInstagram = async () => {
     try {
       const { url } = await api<{ url: string }>("/connections/instagram/authorize");
@@ -152,7 +161,7 @@ function ConnectionsInner() {
 
       {params.get("connected") && (
         <p className="mb-4 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-600 dark:text-emerald-400">
-          {{ meta: "Meta", linkedin: "LinkedIn", reddit: "Reddit", instagram: "Instagram" }[
+          {{ meta: "Meta", linkedin: "LinkedIn", reddit: "Reddit", instagram: "Instagram", tiktok: "TikTok" }[
             params.get("connected") as string
           ] ?? "Account"}{" "}
           connected — {params.get("count")} account(s) added.
@@ -325,6 +334,21 @@ function ConnectionsInner() {
           <Card className="!p-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
+                <PlatformGlyph platform="TIKTOK" size={36} className="!rounded-[9px]" />
+                <div>
+                  <p className="text-sm font-medium">TikTok</p>
+                  <p className="text-xs text-ink-3">Video posts — attach a video</p>
+                </div>
+              </div>
+              <Button variant="secondary" onClick={connectTiktok}>
+                Connect
+              </Button>
+            </div>
+          </Card>
+
+          <Card className="!p-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
                 <PlatformGlyph platform="LINKEDIN" size={36} className="!rounded-[9px]" />
                 <div>
                   <p className="text-sm font-medium">LinkedIn</p>
@@ -339,7 +363,7 @@ function ConnectionsInner() {
 
           <div className="flex items-center justify-center rounded-[11px] border border-dashed border-line p-4">
             <p className="font-mono text-[14px] text-ink-3">
-              soon · TikTok · YouTube · Pinterest · Threads
+              soon · YouTube · Pinterest · Threads
             </p>
           </div>
         </div>
