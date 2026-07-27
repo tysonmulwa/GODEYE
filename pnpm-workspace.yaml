@@ -10,6 +10,9 @@ fetchRetryMaxtimeout: 60000
 networkConcurrency: 1
 allowBuilds:
   '@prisma/client': true
+  # Cloudflare's runtime — its install script fetches the workerd binary, without
+  # which the OpenNext build can't run.
+  workerd: true
   '@prisma/engines': true
   '@scarf/scarf': false
   argon2: true
