@@ -7,22 +7,12 @@ const nextConfig: NextConfig = {
   env: {
     NEXT_PUBLIC_API_URL: API_URL,
   },
-  /**
-   * Proxy only the auth endpoints through this origin.
-   *
-   * The session refresh token is an httpOnly cookie. With the web app on
-   * vercel.app and the API on railway.app it is a third-party cookie, and
-   * browsers now block those by default — so every page reload lost the session
-   * and bounced the user to /login. Serving /auth/* from this origin makes the
-   * cookie first-party and the session survives.
-   *
-   * Deliberately limited to /auth: everything else authenticates with a bearer
-   * token and needs no cookie, and routing large media uploads through the
-   * proxy would run into the platform's request body limits.
-   */
-  async rewrites() {
-    return [{ source: "/auth/:path*", destination: `${API_URL}/auth/:path*` }];
-  },
+  // No /auth rewrite: the web app and API share one registrable domain
+  // (godeyeautomation.com + api.godeyeautomation.com), so the session cookie is
+  // already first-party and the browser talks to the API directly. Proxying
+  // through this origin was only a workaround for hosting them on unrelated
+  // domains, and on Workers a failing proxy target surfaces as a Cloudflare
+  // HTML error page rather than a usable API error.
 };
 
 export default nextConfig;

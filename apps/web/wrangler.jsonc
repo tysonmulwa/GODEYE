@@ -10,7 +10,22 @@
     "directory": ".open-next/assets",
     "binding": "ASSETS"
   },
+  // Matches the dashboard so a deploy doesn't silently change it. Logs stay on
+  // and persisted — they're how a runtime failure gets diagnosed; traces are off
+  // as they bill separately and add nothing for a mostly-static frontend.
   "observability": {
-    "enabled": true
+    "enabled": true,
+    "head_sampling_rate": 1,
+    "logs": {
+      "enabled": true,
+      "head_sampling_rate": 1,
+      "persist": true,
+      "invocation_logs": true
+    },
+    "traces": {
+      "enabled": false,
+      "persist": true,
+      "head_sampling_rate": 1
+    }
   }
 }

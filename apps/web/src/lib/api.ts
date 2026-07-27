@@ -5,11 +5,14 @@ import { useAuthStore } from "./auth-store";
 export const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
 /**
- * Base for auth calls — empty, i.e. this origin. next.config rewrites /auth/*
- * to the API so the refresh cookie is first-party; hitting the API host
- * directly would make it third-party and browsers would drop it.
+ * Base for auth calls. Same as the API: with the web app and API on one
+ * registrable domain (godeyeautomation.com + api.godeyeautomation.com) the
+ * refresh cookie is already first-party, so there is nothing to proxy around.
+ *
+ * It used to point at this origin and be rewritten to the API, which was needed
+ * only while the two lived on unrelated hosts.
  */
-export const AUTH_URL = "";
+export const AUTH_URL = API_URL;
 
 export class ApiError extends Error {
   constructor(
