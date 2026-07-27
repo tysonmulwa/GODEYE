@@ -14,11 +14,9 @@ import { ApiBearerAuth, ApiOperation, ApiTags } from "@nestjs/swagger";
 import { Throttle } from "@nestjs/throttler";
 import {
   discordConnectSchema,
-  metaTokenConnectSchema,
   telegramConnectSchema,
   xConnectSchema,
   type DiscordConnectInput,
-  type MetaTokenConnectInput,
   type TelegramConnectInput,
   type XConnectInput,
 } from "@godeye/shared";
@@ -191,18 +189,6 @@ export class ConnectionsController {
   @ApiOperation({ summary: "Get the Facebook OAuth dialog URL (Facebook Pages + Instagram)" })
   metaAuthorize(@CurrentAuth() auth: AccessTokenPayload) {
     return this.connections.metaAuthorize(auth.orgId, auth.sub);
-  }
-
-  @Post("meta/token")
-  @UseGuards(JwtAuthGuard)
-  @ApiBearerAuth()
-  @Throttle({ default: { limit: 10, ttl: 60_000 } })
-  @ApiOperation({ summary: "Connect Facebook/Instagram by pasting a Graph API access token" })
-  connectMetaToken(
-    @CurrentAuth() auth: AccessTokenPayload,
-    @Body(new ZodPipe(metaTokenConnectSchema)) body: MetaTokenConnectInput,
-  ) {
-    return this.connections.connectMetaWithToken(auth.orgId, auth.sub, body);
   }
 
   @Get("meta/callback")

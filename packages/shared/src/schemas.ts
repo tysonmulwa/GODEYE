@@ -143,13 +143,6 @@ export const uploadMediaSchema = z.object({
 });
 export type UploadMediaInput = z.infer<typeof uploadMediaSchema>;
 
-export const metaTokenConnectSchema = z.object({
-  accessToken: z
-    .string()
-    .min(20)
-    .describe("A Facebook User or Page access token (e.g. from the Graph API Explorer)"),
-});
-export type MetaTokenConnectInput = z.infer<typeof metaTokenConnectSchema>;
 
 // ---------- Content generation ----------
 

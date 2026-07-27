@@ -2,7 +2,6 @@ import { BadRequestException, Injectable, NotFoundException } from "@nestjs/comm
 import { JwtService } from "@nestjs/jwt";
 import type {
   DiscordConnectInput,
-  MetaTokenConnectInput,
   TelegramConnectInput,
   XConnectInput,
 } from "@godeye/shared";
@@ -20,10 +19,7 @@ import {
   linkedinExchangeCode,
   metaAuthorizeUrl,
   metaExchangeCode,
-  metaExchangeUserToken,
   metaListPages,
-  metaPageFromToken,
-  metaTokenScopes,
   type MetaPage,
   redditAuthorizeUrl,
   redditExchangeCode,
@@ -246,57 +242,6 @@ export class ConnectionsService {
     const userToken = await metaExchangeCode(code);
     const pages = await metaListPages(userToken);
     return { connected: await this.storeMetaPages(payload.orgId, payload.sub, pages) };
-  }
-
-  /**
-   * Connect Meta by pasting an access token (e.g. from the Graph API Explorer)
-   * instead of the OAuth redirect. Works for the app's own admins/testers even
-   * before App Review, and skips redirect-URI whitelisting entirely.
-   */
-  async connectMetaWithToken(
-    orgId: string,
-    userId: string,
-    input: MetaTokenConnectInput,
-  ): Promise<{ connected: number }> {
-    // Best-effort upgrade to a long-lived token so derived Page tokens persist.
-    let token = input.accessToken.trim();
-    try {
-      token = await metaExchangeUserToken(token);
-    } catch {
-      // Already long-lived, or a Page token that can't be exchanged — use as-is.
-    }
-
-    // Catch the common "connects but can't post" case up front: publishing needs
-    // pages_manage_posts. (Scopes unknown → skip, don't block.)
-    const scopes = await metaTokenScopes(token);
-    if (scopes && !scopes.includes("pages_manage_posts")) {
-      throw new BadRequestException(
-        "This token can read your Pages but can't publish — it's missing the " +
-          "pages_manage_posts permission. In the Graph API Explorer, grant " +
-          "pages_manage_posts (and pages_read_engagement), generate a new token, and retry.",
-      );
-    }
-
-    // A User token lists all managed Pages via /me/accounts; a Page token
-    // instead describes a single Page. Accept either.
-    let pages: MetaPage[] = [];
-    try {
-      pages = await metaListPages(token);
-    } catch {
-      // Not a user token (or no pages permission) — fall through to the Page path.
-    }
-    if (pages.length === 0) {
-      const single = await metaPageFromToken(token);
-      if (single) pages = [single];
-    }
-    if (pages.length === 0) {
-      throw new BadRequestException(
-        "That token has no manageable Pages. In the Graph API Explorer, grant " +
-          "pages_show_list, pages_manage_posts and pages_read_engagement (plus " +
-          "instagram_basic + instagram_content_publish for Instagram), then copy the token.",
-      );
-    }
-    return { connected: await this.storeMetaPages(orgId, userId, pages) };
   }
 
   /** Upsert Facebook Pages (and any linked Instagram accounts) as connections. */

@@ -232,19 +232,6 @@ export function metaAuthorizeUrl(state: string): string {
   return `https://www.facebook.com/${env.meta.graphVersion}/dialog/oauth?${params}`;
 }
 
-/** Upgrade a short-lived user token (e.g. from the Graph API Explorer) to a
- *  ~60-day long-lived one, so the Page tokens derived from it don't expire in
- *  ~1 hour. Returns the input unchanged if it's already long-lived. */
-export async function metaExchangeUserToken(userToken: string): Promise<string> {
-  const longLived = await getJson(
-    graph(
-      `/oauth/access_token?grant_type=fb_exchange_token&client_id=${env.meta.appId}` +
-        `&client_secret=${env.meta.appSecret}&fb_exchange_token=${encodeURIComponent(userToken)}`,
-    ),
-  );
-  return (longLived.access_token as string) ?? userToken;
-}
-
 export async function metaExchangeCode(code: string): Promise<string> {
   // Build with URLSearchParams, exactly as metaAuthorizeUrl does. Meta compares
   // redirect_uri between the dialog and this exchange as raw strings, and the
@@ -274,52 +261,6 @@ export interface MetaPage {
   pageAccessToken: string;
   igUserId: string | null;
   igUsername: string | null;
-}
-
-/** Granted permission scopes on a token (via debug_token), or null if unknown.
- *  Lets us warn at connect time when a token can't publish. */
-export async function metaTokenScopes(token: string): Promise<string[] | null> {
-  try {
-    const appToken = `${env.meta.appId}|${env.meta.appSecret}`;
-    const res = await getJson(
-      graph(
-        `/debug_token?input_token=${encodeURIComponent(token)}` +
-          `&access_token=${encodeURIComponent(appToken)}`,
-      ),
-    );
-    const data = res.data;
-    // Only trust scopes from a valid token; an invalid token reports scopes: []
-    // (empty is truthy in JS) which must not be read as "missing permission".
-    if (!data || data.is_valid === false) return null;
-    const scopes = data.scopes;
-    return Array.isArray(scopes) && scopes.length > 0 ? (scopes as string[]) : null;
-  } catch {
-    return null;
-  }
-}
-
-/** Treat the token as a Page access token and read that one Page directly.
- *  Returns null if it isn't a Page token (Page nodes carry a `category`; a User
- *  token's /me does not), so a plain user token can't be mistaken for a Page. */
-export async function metaPageFromToken(pageToken: string): Promise<MetaPage | null> {
-  try {
-    const me = await getJson(
-      graph(
-        `/me?fields=id,name,category,instagram_business_account{id,username}` +
-          `&access_token=${encodeURIComponent(pageToken)}`,
-      ),
-    );
-    if (!me.id || !me.name || !me.category) return null;
-    return {
-      pageId: me.id,
-      pageName: me.name,
-      pageAccessToken: pageToken,
-      igUserId: me.instagram_business_account?.id ?? null,
-      igUsername: me.instagram_business_account?.username ?? null,
-    };
-  } catch {
-    return null;
-  }
 }
 
 // ---------- Instagram API with Instagram Login ----------
