@@ -74,6 +74,43 @@ class TestInstagram:
                 PostPayload(text="text only"),
             )
 
+    @staticmethod
+    def _capture(monkeypatch):
+        """Record the URLs the publisher calls, returning plausible responses."""
+        calls: list[str] = []
+
+        class Resp:
+            status_code = 200
+
+            def json(self):
+                return {"id": "media-1"}
+
+        def fake_post(self, url, **kwargs):
+            calls.append(url)
+            return Resp()
+
+        monkeypatch.setattr(InstagramPublisher, "_post", fake_post)
+        return calls
+
+    def test_facebook_login_uses_facebook_graph(self, monkeypatch):
+        calls = self._capture(monkeypatch)
+        InstagramPublisher().publish(
+            {"igUserId": "1", "pageAccessToken": "t"},
+            PostPayload(text="hi", media_urls=["https://cdn/x.jpg"]),
+        )
+        assert all("graph.facebook.com" in url for url in calls), calls
+
+    def test_instagram_login_uses_instagram_graph(self, monkeypatch):
+        """A Page-less connection must not be sent to the Facebook host."""
+        calls = self._capture(monkeypatch)
+        InstagramPublisher().publish(
+            {"igUserId": "1", "accessToken": "t", "authMethod": "instagram_login"},
+            PostPayload(text="hi", media_urls=["https://cdn/x.jpg"]),
+        )
+        assert calls, "expected container + publish calls"
+        assert all("graph.instagram.com" in url for url in calls), calls
+        assert any("/media_publish" in url for url in calls), calls
+
 
 X_CREDS = {
     "apiKey": "k",

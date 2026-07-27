@@ -84,6 +84,20 @@ export const env = {
       SCALE: process.env.STRIPE_PRICE_SCALE ?? "",
     } as Record<string, string>,
   },
+  /**
+   * Instagram API with Instagram Login — a separate Meta app product that
+   * publishes to an Instagram Business/Creator account with NO linked Facebook
+   * Page, which the Facebook-Login path requires. Kept apart from `meta`
+   * because it has its own app credentials, OAuth host and API host.
+   */
+  instagram: {
+    appId: (process.env.INSTAGRAM_APP_ID ?? "").trim(),
+    appSecret: (process.env.INSTAGRAM_APP_SECRET ?? "").trim(),
+    redirectUri: url(
+      process.env.INSTAGRAM_REDIRECT_URI,
+      "http://localhost:4000/connections/instagram/callback",
+    ),
+  },
   meta: {
     appId: (process.env.META_APP_ID ?? "").trim(),
     appSecret: (process.env.META_APP_SECRET ?? "").trim(),

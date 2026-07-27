@@ -148,6 +148,43 @@ export class ConnectionsController {
     }
   }
 
+  @Get("instagram/authorize")
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: "Get the Instagram OAuth dialog URL (no Facebook Page required)",
+  })
+  instagramAuthorize(@CurrentAuth() auth: AccessTokenPayload) {
+    return this.connections.instagramAuthorize(auth.orgId, auth.sub);
+  }
+
+  @Get("instagram/callback")
+  @ApiOperation({ summary: "OAuth redirect target for Instagram — do not call directly" })
+  async instagramCallback(
+    @Query("code") code: string,
+    @Query("state") state: string,
+    @Query("error_description") errorDescription: string | undefined,
+    @Res() res: Response,
+  ) {
+    const base = `${env.webUrl}/connections`;
+    if (errorDescription || !code || !state) {
+      return res.redirect(
+        `${base}?error=${encodeURIComponent(errorDescription ?? "Instagram authorization failed")}`,
+      );
+    }
+    try {
+      const result = await this.connections.instagramCallback(code, state);
+      return res.redirect(`${base}?connected=instagram&count=${result.connected}`);
+    } catch (e) {
+      const message = e instanceof Error ? e.message : "Instagram connection failed";
+      this.logger.error(
+        `Instagram callback failed: ${message}`,
+        e instanceof Error ? e.stack : undefined,
+      );
+      return res.redirect(`${base}?error=${encodeURIComponent(message)}`);
+    }
+  }
+
   @Get("meta/authorize")
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()

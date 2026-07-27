@@ -322,6 +322,78 @@ export async function metaPageFromToken(pageToken: string): Promise<MetaPage | n
   }
 }
 
+// ---------- Instagram API with Instagram Login ----------
+// Publishes to an Instagram Business/Creator account with no Facebook Page.
+// Note the hosts differ from the Facebook-Login flow: authorization is on
+// www.instagram.com, the code exchange on api.instagram.com, and everything
+// after that on graph.instagram.com.
+
+const IG_GRAPH = "https://graph.instagram.com";
+
+export interface InstagramAccount {
+  igUserId: string;
+  username: string;
+  accessToken: string;
+  expiresInSeconds: number;
+}
+
+export function instagramAuthorizeUrl(state: string): string {
+  const params = new URLSearchParams({
+    client_id: env.instagram.appId,
+    redirect_uri: env.instagram.redirectUri,
+    scope: "instagram_business_basic,instagram_business_content_publish",
+    response_type: "code",
+    state,
+  });
+  return `https://www.instagram.com/oauth/authorize?${params}`;
+}
+
+export async function instagramExchangeCode(code: string): Promise<InstagramAccount> {
+  // The code exchange is form-encoded POST, unlike Meta's query-string GET.
+  const form = new URLSearchParams({
+    client_id: env.instagram.appId,
+    client_secret: env.instagram.appSecret,
+    grant_type: "authorization_code",
+    redirect_uri: env.instagram.redirectUri,
+    code,
+  });
+  const shortRes = await fetch("https://api.instagram.com/oauth/access_token", {
+    method: "POST",
+    headers: { "content-type": "application/x-www-form-urlencoded" },
+    body: form.toString(),
+  });
+  const short = (await shortRes.json()) as {
+    access_token?: string;
+    user_id?: string | number;
+    error_message?: string;
+  };
+  if (!shortRes.ok || !short.access_token) {
+    throw new BadRequestException(
+      `Instagram rejected the authorization: ${short.error_message ?? shortRes.status}`,
+    );
+  }
+
+  // Short-lived tokens last ~1 hour; trade up for the 60-day one.
+  const longParams = new URLSearchParams({
+    grant_type: "ig_exchange_token",
+    client_secret: env.instagram.appSecret,
+    access_token: short.access_token,
+  });
+  const long = await getJson(`${IG_GRAPH}/access_token?${longParams}`);
+  const accessToken = (long.access_token as string) ?? short.access_token;
+  const expiresInSeconds = (long.expires_in as number) ?? 3600;
+
+  const me = await getJson(
+    `${IG_GRAPH}/me?fields=id,username&access_token=${encodeURIComponent(accessToken)}`,
+  );
+  return {
+    igUserId: String(me.id ?? short.user_id ?? ""),
+    username: (me.username as string) ?? "instagram",
+    accessToken,
+    expiresInSeconds,
+  };
+}
+
 export async function metaListPages(userToken: string): Promise<MetaPage[]> {
   const accounts = await getJson(
     graph(`/me/accounts?fields=id,name,access_token&access_token=${userToken}`),

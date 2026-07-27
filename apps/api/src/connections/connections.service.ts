@@ -14,6 +14,8 @@ import { env } from "../common/env";
 import { PrismaService } from "../common/prisma.service";
 import { EngineService } from "../engine/engine.service";
 import {
+  instagramAuthorizeUrl,
+  instagramExchangeCode,
   linkedinAuthorizeUrl,
   linkedinExchangeCode,
   metaAuthorizeUrl,
@@ -179,6 +181,45 @@ export class ConnectionsService {
       externalId: account.memberUrn,
       displayName: account.name,
       credentials: { accessToken: account.accessToken, memberUrn: account.memberUrn },
+      expiresAt: new Date(Date.now() + account.expiresInSeconds * 1000),
+    });
+    return { connected: 1 };
+  }
+
+  // ---------- Instagram OAuth (Instagram Login — no Facebook Page needed) ----------
+
+  async instagramAuthorize(orgId: string, userId: string): Promise<{ url: string }> {
+    if (!env.instagram.appId) {
+      throw new NotFoundException(
+        "Instagram direct login is not configured on this server (INSTAGRAM_APP_ID missing)",
+      );
+    }
+    const state = await this.jwt.signAsync(
+      { orgId, sub: userId, purpose: "instagram_oauth" },
+      { secret: env.jwtAccessSecret(), expiresIn: OAUTH_STATE_TTL },
+    );
+    return { url: instagramAuthorizeUrl(state) };
+  }
+
+  async instagramCallback(code: string, state: string): Promise<{ connected: number }> {
+    const payload = await this.jwt.verifyAsync<{ orgId: string; sub: string; purpose: string }>(
+      state,
+      { secret: env.jwtAccessSecret() },
+    );
+    if (payload.purpose !== "instagram_oauth") throw new NotFoundException("Invalid state");
+
+    const account = await instagramExchangeCode(code);
+    await this.upsertConnection(payload.orgId, payload.sub, {
+      platform: "INSTAGRAM",
+      externalId: account.igUserId,
+      displayName: `@${account.username}`,
+      // authMethod tells the publisher to use graph.instagram.com with this
+      // token, rather than the Facebook Graph host with a page token.
+      credentials: {
+        accessToken: account.accessToken,
+        igUserId: account.igUserId,
+        authMethod: "instagram_login",
+      },
       expiresAt: new Date(Date.now() + account.expiresInSeconds * 1000),
     });
     return { connected: 1 };

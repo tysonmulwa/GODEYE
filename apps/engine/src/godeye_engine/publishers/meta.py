@@ -79,20 +79,32 @@ class FacebookPublisher(BasePublisher):
         return float(likes + comments * 2 + shares * 3)
 
 
+IG_GRAPH = "https://graph.instagram.com/v21.0"
+
+
 class InstagramPublisher(BasePublisher):
-    """IG content publishing is a 2-step flow and REQUIRES media."""
+    """IG content publishing is a 2-step flow and REQUIRES media.
+
+    Two connection shapes exist:
+      * Facebook Login  — a page token, called against the Facebook Graph host.
+      * Instagram Login — the account's own token and graph.instagram.com, used
+        when there is no linked Facebook Page.
+    `authMethod` on the stored credentials picks between them.
+    """
 
     def _publish(self, credentials: dict[str, Any], payload: PostPayload) -> PublishResult:
         if not payload.media_urls:
             raise PublishError(
-                "Instagram requires an image or video — attach media "
-                "(AI image generation arrives in Phase 3)"
+                "Instagram requires an image or video — attach media to this post"
             )
         ig_user_id = credentials["igUserId"]
-        token = credentials["pageAccessToken"]
+        if credentials.get("authMethod") == "instagram_login":
+            base, token = IG_GRAPH, credentials["accessToken"]
+        else:
+            base, token = GRAPH, credentials["pageAccessToken"]
 
         container = self._post(
-            f"{GRAPH}/{ig_user_id}/media",
+            f"{base}/{ig_user_id}/media",
             data={
                 "image_url": payload.media_urls[0],
                 "caption": payload.text[:2200],
@@ -104,7 +116,7 @@ class InstagramPublisher(BasePublisher):
             raise self._fail(container, "Instagram (container)")
 
         publish = self._post(
-            f"{GRAPH}/{ig_user_id}/media_publish",
+            f"{base}/{ig_user_id}/media_publish",
             data={"creation_id": container_body["id"], "access_token": token},
         )
         publish_body = publish.json()

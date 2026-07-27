@@ -94,6 +94,15 @@ function ConnectionsInner() {
     }
   };
 
+  const connectInstagram = async () => {
+    try {
+      const { url } = await api<{ url: string }>("/connections/instagram/authorize");
+      window.location.href = url;
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Instagram authorization failed");
+    }
+  };
+
   const connectReddit = async () => {
     try {
       const { url } = await api<{ url: string }>("/connections/reddit/authorize");
@@ -160,7 +169,7 @@ function ConnectionsInner() {
 
       {params.get("connected") && (
         <p className="mb-4 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-600 dark:text-emerald-400">
-          {{ meta: "Meta", linkedin: "LinkedIn", reddit: "Reddit" }[
+          {{ meta: "Meta", linkedin: "LinkedIn", reddit: "Reddit", instagram: "Instagram" }[
             params.get("connected") as string
           ] ?? "Account"}{" "}
           connected — {params.get("count")} account(s) added.
@@ -350,6 +359,21 @@ function ConnectionsInner() {
                   </Button>
                 </motion.form>
               )}
+            </div>
+          </Card>
+
+          <Card className="!p-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <PlatformGlyph platform="INSTAGRAM" size={36} className="!rounded-[9px]" />
+                <div>
+                  <p className="text-sm font-medium">Instagram</p>
+                  <p className="text-xs text-ink-3">Business/Creator — no Facebook Page needed</p>
+                </div>
+              </div>
+              <Button variant="secondary" onClick={connectInstagram}>
+                Connect
+              </Button>
             </div>
           </Card>
 
