@@ -120,7 +120,25 @@ schedule but no process ever dispatches it.
   `https://godeye-api.up.railway.app`). It's read at build time, so redeploy
   after changing it.
 
-### 8. Point the domains at each other
+### 8. Use one domain for both (strongly recommended)
+
+Put the web app and the API on the **same registrable domain**:
+
+| | Host | DNS record (Cloudflare) |
+|---|---|---|
+| web | `godeyeautomation.com` | CNAME -> `cname.vercel-dns.com` (proxy **off**) |
+| api | `api.godeyeautomation.com` | CNAME -> the Railway-provided target (proxy **off**) |
+
+Set **DNS only** (grey cloud), not Cloudflare's orange-cloud proxy — Vercel and
+Railway terminate TLS themselves, and proxying causes redirect loops.
+
+This is not cosmetic. On split domains (`*.vercel.app` + `*.up.railway.app`)
+the session cookie is **third-party**, and browsers that block those drop it —
+the session is lost on every page reload. One domain makes it first-party. The
+API detects this automatically by comparing `WEB_URL` and `API_URL`, and uses
+the stricter `SameSite=Lax` when they match, so **set `API_URL` too**.
+
+### 9. Point the domains at each other
 
 - API `WEB_URL` → the Vercel URL. Web `NEXT_PUBLIC_API_URL` → the API URL.
 - Update every OAuth redirect URI to production and register it in each

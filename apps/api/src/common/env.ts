@@ -44,6 +44,21 @@ function url(value: string | undefined, fallback: string): string {
   return (value ?? fallback).trim().replace(/\/+$/, "");
 }
 
+/**
+ * Registrable domain, used to decide whether two URLs are "same site".
+ * Compares the last two labels, which is right for domains like
+ * godeyeautomation.com but not for multi-part TLDs (foo.co.uk) — those would be
+ * treated as cross-site, which is the safe direction to be wrong in.
+ */
+function site(rawUrl: string): string {
+  try {
+    const host = new URL(rawUrl).hostname.toLowerCase();
+    return host.split(".").slice(-2).join(".");
+  } catch {
+    return rawUrl;
+  }
+}
+
 export const env = {
   nodeEnv: process.env.NODE_ENV ?? "development",
   // Container hosts (Railway, Render, Fly) inject PORT and route to it; API_PORT
@@ -59,6 +74,16 @@ export const env = {
   jwtRefreshSecret: () => required("JWT_REFRESH_SECRET"),
   tokenEncryptionKey: () => required("TOKEN_ENCRYPTION_KEY"),
   engineInternalSecret: process.env.ENGINE_INTERNAL_SECRET ?? "dev-engine-secret",
+  /**
+   * True when the browser would treat an API call from the web app as
+   * cross-site — which forces the session cookie to SameSite=None, and means
+   * browsers blocking third-party cookies will drop it. Serving both from one
+   * registrable domain (app + api on godeyeautomation.com) makes this false and
+   * allows the stricter, CSRF-protective Lax.
+   */
+  get isCrossSite(): boolean {
+    return site(this.webUrl) !== site(this.apiUrl);
+  },
   reddit: {
     clientId: process.env.REDDIT_CLIENT_ID ?? "",
     clientSecret: process.env.REDDIT_CLIENT_SECRET ?? "",

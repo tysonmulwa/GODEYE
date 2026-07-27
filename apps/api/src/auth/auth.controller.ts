@@ -30,16 +30,22 @@ const loginWithMfaSchema = loginSchema.extend({ mfaCode: z.string().optional() }
 const mfaCodeSchema = z.object({ code: z.string().min(6).max(8) });
 
 /**
- * In production the web app and API live on different domains (e.g. Vercel +
- * a container host), so the refresh cookie must be SameSite=None + Secure or
- * the browser won't send it on cross-site fetches. Locally they share
- * localhost, where Lax works and Secure would drop the cookie over http.
+ * SameSite is decided by whether WEB_URL and API_URL share a registrable
+ * domain, not by NODE_ENV.
+ *
+ * Split across sites (vercel.app + railway.app) the cookie must be
+ * SameSite=None, and browsers that block third-party cookies then drop it,
+ * losing the session on every reload. Served from one domain
+ * (godeyeautomation.com + api.godeyeautomation.com) it is same-site, so Lax
+ * works and additionally protects against CSRF.
+ *
+ * Secure still follows NODE_ENV: required over https, and it would drop the
+ * cookie on plain-http localhost.
  */
-const crossSite = env.nodeEnv === "production";
 const REFRESH_COOKIE_OPTS = {
   httpOnly: true,
-  secure: crossSite,
-  sameSite: crossSite ? ("none" as const) : ("lax" as const),
+  secure: env.nodeEnv === "production",
+  sameSite: env.isCrossSite ? ("none" as const) : ("lax" as const),
   path: "/auth",
 };
 
