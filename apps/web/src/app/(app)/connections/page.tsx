@@ -329,6 +329,15 @@ function ConnectionsInner() {
                 Connect
               </Button>
             </div>
+            {/* Instagram's own OAuth is unreliable inside mobile in-app
+                browsers — the redirect gets mishandled and it fails with a
+                generic "something went wrong". Say so up front rather than
+                leave people retrying. */}
+            <p className="mt-2 border-t border-line pt-2 text-xs text-ink-3 lg:hidden">
+              On a phone Instagram often fails with “something went wrong”. Connect from a
+              desktop browser, or open this page in Chrome/Safari rather than an app’s
+              built-in browser.
+            </p>
           </Card>
 
           <Card className="!p-4">
