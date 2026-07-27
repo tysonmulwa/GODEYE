@@ -176,6 +176,10 @@ function ConnectionsInner() {
         </p>
       )}
       {params.get("error") && <ErrorNote message={params.get("error")} />}
+      {/* The OAuth buttons set `error` but the only other ErrorNotes live inside
+          the collapsible credential forms, so a failure there showed nothing at
+          all and the button looked dead. */}
+      {!openForm && !showMetaToken && <ErrorNote message={error} />}
 
       {/* Connected accounts */}
       <section className="mb-8">
