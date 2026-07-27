@@ -256,7 +256,111 @@ export function LiveDot({
   );
 }
 
-// ---------- Platform glyph chips (square, brand color, short glyph) ----------
+// ---------- Platform glyph chips (square, brand colour, brand mark) ----------
+
+/**
+ * Each platform's mark, drawn white-on-brand-colour in a 24x24 box. Marks are
+ * geometric renditions rather than the exact trademarked artwork — enough to be
+ * unmistakable at 16-36px, with no asset files to load. A platform with no mark
+ * falls back to its initials.
+ */
+const PLATFORM_MARKS: Record<string, React.ReactNode> = {
+  // Rounded square + lens + flash — the Instagram glyph is already primitives.
+  INSTAGRAM: (
+    <>
+      <rect x="3" y="3" width="18" height="18" rx="5.5" fill="none" stroke="currentColor" strokeWidth="2" />
+      <circle cx="12" cy="12" r="4.2" fill="none" stroke="currentColor" strokeWidth="2" />
+      <circle cx="17.4" cy="6.6" r="1.3" fill="currentColor" />
+    </>
+  ),
+  // Two crossed strokes, the X wordmark reduced to its form.
+  X: (
+    <>
+      <path d="M4 4 L20 20 M20 4 L4 20" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" />
+    </>
+  ),
+  // The lowercase f: stem with a crossbar and a shoulder.
+  FACEBOOK: (
+    <path
+      d="M15.6 4.2h-2.3c-2.3 0-3.8 1.5-3.8 3.9v2.2H7.2v3.1h2.3V21h3.3v-7.6h2.4l.5-3.1h-2.9V8.5c0-.8.4-1.2 1.2-1.2h1.6z"
+      fill="currentColor"
+    />
+  ),
+  // "in" — dot-stem plus the n.
+  LINKEDIN: (
+    <>
+      <circle cx="6.2" cy="5.6" r="1.9" fill="currentColor" />
+      <rect x="4.5" y="9.2" width="3.4" height="10.3" fill="currentColor" />
+      <path
+        d="M11 9.2h3.2v1.5c.6-1 1.7-1.8 3.3-1.8 2.4 0 3.9 1.5 3.9 4.4v6.2h-3.4v-5.6c0-1.4-.6-2.2-1.8-2.2s-1.9.8-1.9 2.2v5.6H11z"
+        fill="currentColor"
+      />
+    </>
+  ),
+  // Paper plane.
+  TELEGRAM: (
+    <path
+      d="M21 4.5 2.9 11.4c-.8.3-.8 1.1 0 1.4l4.5 1.4 1.7 5.1c.2.6.6.7 1.1.3l2.5-2.1 4.6 3.4c.7.5 1.2.2 1.4-.6L21.9 5.6c.2-.9-.3-1.4-.9-1.1M8.6 13.6l9.1-5.6-7.5 6.7z"
+      fill="currentColor"
+    />
+  ),
+  // Rounded rect with a play triangle.
+  YOUTUBE: (
+    <>
+      <rect x="2.5" y="5.5" width="19" height="13" rx="4" fill="currentColor" />
+      <path d="M10.2 9.3v5.4l4.8-2.7z" fill="#FF0000" />
+    </>
+  ),
+  // Round face with antenna and eyes.
+  REDDIT: (
+    <>
+      <circle cx="12" cy="14" r="7.4" fill="currentColor" />
+      <circle cx="9.6" cy="13.4" r="1.35" fill="#FF4500" />
+      <circle cx="14.4" cy="13.4" r="1.35" fill="#FF4500" />
+      <path d="M9.4 16.9c1.5 1.1 3.7 1.1 5.2 0" stroke="#FF4500" strokeWidth="1.2" strokeLinecap="round" fill="none" />
+      <path d="M12 6.6 13 3l3.2.8" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" fill="none" />
+      <circle cx="16.8" cy="3.9" r="1.5" fill="currentColor" />
+    </>
+  ),
+  // Rounded face with two eyes and flared skirt.
+  DISCORD: (
+    <>
+      <path
+        d="M18.9 6.6A15 15 0 0 0 15.3 5.5l-.3.6a12 12 0 0 0-6 0l-.3-.6a15 15 0 0 0-3.6 1.1C2.4 10.5 1.7 14.3 2 18a15 15 0 0 0 4.6 2.3l.9-1.4a9.5 9.5 0 0 1-1.5-.8l.4-.3a10.8 10.8 0 0 0 9.2 0l.4.3a9.5 9.5 0 0 1-1.5.8l.9 1.4A15 15 0 0 0 22 18c.4-4.3-.7-8-3.1-11.4"
+        fill="currentColor"
+      />
+      <circle cx="9.1" cy="13.6" r="1.6" fill="#5865F2" />
+      <circle cx="14.9" cy="13.6" r="1.6" fill="#5865F2" />
+    </>
+  ),
+  // Stylised @ — the Threads mark.
+  THREADS: (
+    <>
+      <path
+        d="M12 21c-5 0-8-3.4-8-9s3.1-9 8-9c3.6 0 6 1.6 7.1 4.2l-2.6.9C15.8 6.4 14.3 5.5 12 5.5c-3.4 0-5.4 2.4-5.4 6.5S8.6 18.5 12 18.5c2.6 0 4.2-1.1 4.2-2.7 0-1.4-1.1-2.3-3.2-2.5"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+      />
+      <ellipse cx="12.4" cy="13" rx="3.6" ry="2.8" fill="none" stroke="currentColor" strokeWidth="2" />
+    </>
+  ),
+  // Musical note.
+  TIKTOK: (
+    <path
+      d="M15.3 3h2.9c.2 1.9 1.4 3.4 3.3 3.7v2.9a6.8 6.8 0 0 1-3.4-1v5.8a5.9 5.9 0 1 1-5.9-5.9c.3 0 .6 0 .9.1v3a2.9 2.9 0 1 0 2.2 2.8z"
+      fill="currentColor"
+    />
+  ),
+  // Script P.
+  PINTEREST: (
+    <path
+      d="M12 3a9 9 0 0 0-3.3 17.4c-.1-.7-.1-1.8.1-2.6l1.1-4.6s-.3-.6-.3-1.4c0-1.3.8-2.3 1.7-2.3.8 0 1.2.6 1.2 1.4 0 .8-.5 2.1-.8 3.3-.2 1 .5 1.8 1.5 1.8 1.8 0 3.1-1.9 3.1-4.6 0-2.4-1.7-4.1-4.2-4.1a4.3 4.3 0 0 0-4.5 4.3c0 .9.3 1.8.8 2.3l-.3 1.3c0 .2-.2.3-.4.2-1.2-.6-1.9-2.3-1.9-3.8 0-3.1 2.2-5.9 6.4-5.9 3.4 0 6 2.4 6 5.6 0 3.4-2.1 6.1-5 6.1-1 0-1.9-.5-2.2-1.1l-.6 2.3c-.2.9-.8 1.9-1.2 2.6A9 9 0 1 0 12 3"
+      fill="currentColor"
+    />
+  ),
+};
 
 const PLATFORM_GLYPHS: Record<string, { glyph: string; bg: string }> = {
   INSTAGRAM: { glyph: "IG", bg: "#E1306C" },
@@ -286,9 +390,11 @@ export function PlatformGlyph({
   className?: string;
 }) {
   const p = PLATFORM_GLYPHS[platform] ?? { glyph: platform.slice(0, 2), bg: "#565d6b" };
+  const mark = PLATFORM_MARKS[platform];
   return (
     <span
       aria-label={platform}
+      title={platform.charAt(0) + platform.slice(1).toLowerCase()}
       className={cx(
         "inline-flex shrink-0 items-center justify-center rounded-[6px] font-mono font-semibold text-white",
         className,
@@ -300,7 +406,17 @@ export function PlatformGlyph({
         fontSize: Math.max(10, Math.round(size * 0.4)),
       }}
     >
-      {p.glyph}
+      {mark ? (
+        <svg
+          viewBox="0 0 24 24"
+          aria-hidden
+          style={{ width: Math.round(size * 0.64), height: Math.round(size * 0.64) }}
+        >
+          {mark}
+        </svg>
+      ) : (
+        p.glyph
+      )}
     </span>
   );
 }
