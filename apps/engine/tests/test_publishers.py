@@ -401,3 +401,45 @@ class TestMultiImage:
         parent = [c for c in calls if c[1].get("data", {}).get("media_type") == "CAROUSEL"]
         assert len(children) == 2, calls
         assert len(parent) == 1 and parent[0][1]["data"]["children"] == "c1,c2"
+
+
+class TestTikTokPrivacy:
+    """An unaudited TikTok app may only post SELF_ONLY; a hardcoded public
+    level fails before approval and stays private after it."""
+
+    class Resp:
+        status_code = 200
+
+        def __init__(self, body):
+            self._body = body
+
+        def json(self):
+            return self._body
+
+    def _levels(self, monkeypatch, options):
+        import httpx
+
+        from godeye_engine.publishers.tiktok import TikTokPublisher
+
+        monkeypatch.setattr(
+            httpx, "post",
+            lambda *a, **kw: TestTikTokPrivacy.Resp({"data": {"privacy_level_options": options}}),
+        )
+        return TikTokPublisher()._privacy_level({"Authorization": "Bearer t"})
+
+    def test_prefers_public_when_audited(self, monkeypatch):
+        assert self._levels(monkeypatch, ["SELF_ONLY", "PUBLIC_TO_EVERYONE"]) == "PUBLIC_TO_EVERYONE"
+
+    def test_falls_back_to_self_only_when_unaudited(self, monkeypatch):
+        assert self._levels(monkeypatch, ["SELF_ONLY"]) == "SELF_ONLY"
+
+    def test_self_only_when_the_query_fails(self, monkeypatch):
+        import httpx
+
+        from godeye_engine.publishers.tiktok import TikTokPublisher
+
+        def boom(*a, **kw):
+            raise httpx.ConnectError("down")
+
+        monkeypatch.setattr(httpx, "post", boom)
+        assert TikTokPublisher()._privacy_level({"Authorization": "Bearer t"}) == "SELF_ONLY"

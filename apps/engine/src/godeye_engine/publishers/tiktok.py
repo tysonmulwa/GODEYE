@@ -76,7 +76,7 @@ class TikTokPublisher(BasePublisher):
             json={
                 "post_info": {
                     "title": payload.text[:CAPTION_LIMIT],
-                    "privacy_level": "PUBLIC_TO_EVERYONE",
+                    "privacy_level": self._privacy_level(headers),
                 },
                 # A whole-file upload is one chunk covering the entire video.
                 "source_info": {
@@ -99,6 +99,33 @@ class TikTokPublisher(BasePublisher):
         self._upload(upload_url, video_bytes, content_type)
         self._await_publish(publish_id, headers)
         return PublishResult(external_post_id=publish_id, external_post_url=None)
+
+    def _privacy_level(self, headers: dict[str, str]) -> str:
+        """The most public visibility TikTok will accept for this account.
+
+        An unaudited app may only post SELF_ONLY (private); once it passes
+        TikTok's audit, public becomes available. Rather than hardcode either —
+        which fails before approval or silently stays private after it — ask
+        creator_info what this creator/app pair is allowed and take the best.
+        """
+        import httpx
+
+        try:
+            response = httpx.post(
+                f"{API}/post/publish/creator_info/query/",
+                headers=headers,
+                timeout=self.timeout,
+            )
+            options = ((response.json().get("data") or {}).get("privacy_level_options")) or []
+        except (httpx.HTTPError, ValueError):
+            options = []
+
+        for preferred in ("PUBLIC_TO_EVERYONE", "MUTUAL_FOLLOW_FRIENDS", "FOLLOWER_OF_CREATOR"):
+            if preferred in options:
+                return preferred
+        # SELF_ONLY is always permitted, so it's the safe fallback when the
+        # query fails or the app is still unaudited.
+        return "SELF_ONLY"
 
     def _upload(self, upload_url: str, video_bytes: bytes, content_type: str) -> None:
         """PUT the video to the one-time upload URL from /init."""
