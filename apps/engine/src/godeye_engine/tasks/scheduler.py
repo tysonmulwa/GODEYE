@@ -127,10 +127,14 @@ def publish_post(scheduled_post_id: str) -> dict:
             # AES-GCM raises InvalidTag, whose str() is empty — a failure with no
             # message at all. Almost always TOKEN_ENCRYPTION_KEY differing from
             # the one the API encrypted with, so say that instead of nothing.
+            #
+            # Undecryptable credentials never recover on their own, so flag the
+            # connection rather than leaving it ACTIVE and failing every post.
+            _mark_connection_error(connection["id"])
             raise PublishError(
                 "Could not decrypt the stored credentials for this connection. "
-                "TOKEN_ENCRYPTION_KEY on the engine must match the API's; if it "
-                "changed, reconnect the account."
+                "Reconnect the account — it was connected with a different "
+                "TOKEN_ENCRYPTION_KEY than this server uses."
             ) from e
         result = get_publisher(platform).publish(credentials, payload)
     except Exception as e:  # noqa: BLE001
@@ -182,6 +186,22 @@ def _build_payload(
         media_urls=media_urls or None,
         video_urls=video_urls or None,
     )
+
+
+def _mark_connection_error(connection_id: str) -> None:
+    """Flag a connection as unusable so the UI shows it needs reconnecting.
+
+    Used for failures that can't resolve by retrying — undecryptable
+    credentials, for example — where leaving the row ACTIVE would just fail
+    every future post silently.
+    """
+    with get_session() as session:
+        session.execute(
+            update(SocialConnection)
+            .where(SocialConnection.c.id == connection_id)
+            .values(status="ERROR")
+        )
+        session.commit()
 
 
 def _record_failure(
