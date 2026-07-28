@@ -257,8 +257,17 @@ class TestTikTok:
 
         monkeypatch.setattr(
             TikTokPublisher, "_post",
-            lambda self, url, **kw: Resp({"data": {"publish_id": "pub-1"}, "error": {"code": "ok"}}),
+            lambda self, url, **kw: Resp(
+                {"data": {"publish_id": "pub-1", "upload_url": "https://up/1"},
+                 "error": {"code": "ok"}}
+            ),
         )
+        monkeypatch.setattr(
+            "godeye_engine.publishers.tiktok.download_media",
+            lambda u: (b"video-bytes", "video/mp4"),
+        )
+        put_calls = []
+        monkeypatch.setattr(httpx, "put", lambda url, **kw: put_calls.append((url, kw)) or Resp({}))
         statuses = iter(["PROCESSING_UPLOAD", "PUBLISH_COMPLETE"])
         monkeypatch.setattr(httpx, "post", lambda *a, **kw: Resp({"data": {"status": next(statuses)}}))
         monkeypatch.setattr("godeye_engine.publishers.tiktok.PUBLISH_POLL_SEC", 0)
@@ -267,6 +276,9 @@ class TestTikTok:
             {"accessToken": "t"}, PostPayload(text="hi", video_urls=["https://cdn/v.mp4"])
         )
         assert result.external_post_id == "pub-1"
+        # The bytes must be PUT to the upload URL — FILE_UPLOAD, not a pull.
+        assert len(put_calls) == 1 and put_calls[0][0] == "https://up/1"
+        assert put_calls[0][1]["content"] == b"video-bytes"
 
     def test_failed_status_is_permanent(self, monkeypatch):
         import httpx
@@ -284,13 +296,21 @@ class TestTikTok:
 
         monkeypatch.setattr(
             TikTokPublisher, "_post",
-            lambda self, url, **kw: Resp({"data": {"publish_id": "pub-1"}, "error": {"code": "ok"}}),
+            lambda self, url, **kw: Resp(
+                {"data": {"publish_id": "pub-1", "upload_url": "https://up/1"},
+                 "error": {"code": "ok"}}
+            ),
         )
         monkeypatch.setattr(
-            httpx, "post",
-            lambda *a, **kw: Resp({"data": {"status": "FAILED", "fail_reason": "url_ownership_unverified"}}),
+            "godeye_engine.publishers.tiktok.download_media",
+            lambda u: (b"video-bytes", "video/mp4"),
         )
-        with pytest.raises(PublishError, match="url_ownership_unverified"):
+        monkeypatch.setattr(httpx, "put", lambda url, **kw: Resp({}))
+        monkeypatch.setattr(
+            httpx, "post",
+            lambda *a, **kw: Resp({"data": {"status": "FAILED", "fail_reason": "video_too_long"}}),
+        )
+        with pytest.raises(PublishError, match="video_too_long"):
             TikTokPublisher().publish(
                 {"accessToken": "t"}, PostPayload(text="hi", video_urls=["https://cdn/v.mp4"])
             )
