@@ -294,3 +294,90 @@ class TestTikTok:
             TikTokPublisher().publish(
                 {"accessToken": "t"}, PostPayload(text="hi", video_urls=["https://cdn/v.mp4"])
             )
+
+
+class TestMultiImage:
+    """Two or more images must become one grouped post, not several posts."""
+
+    class Resp:
+        status_code = 200
+
+        def __init__(self, body):
+            self._body = body
+
+        def json(self):
+            return self._body
+
+    def test_telegram_uses_send_media_group(self, monkeypatch):
+        calls = []
+
+        def fake_post(self, url, **kw):
+            calls.append((url, kw))
+            return TestMultiImage.Resp({"ok": True, "result": [{"message_id": 7, "chat": {}}]})
+
+        monkeypatch.setattr(TelegramPublisher, "_post", fake_post)
+        monkeypatch.setattr(
+            "godeye_engine.publishers.telegram.download_media", lambda u: None
+        )
+        result = TelegramPublisher().publish(
+            {"botToken": "t", "chatId": "-100"},
+            PostPayload(text="hi", media_urls=["https://a/1.jpg", "https://a/2.jpg"]),
+        )
+        assert len(calls) == 1, "an album is one call, not one per photo"
+        assert "sendMediaGroup" in calls[0][0]
+        import json as _json
+
+        media = _json.loads(calls[0][1]["data"]["media"])
+        assert len(media) == 2
+        # Caption on the first item only, else it repeats under every photo.
+        assert media[0].get("caption") == "hi"
+        assert "caption" not in media[1]
+        # result is a list for media groups — must still yield an id
+        assert result.external_post_id == "7"
+
+    def test_facebook_attaches_unpublished_photos_to_one_post(self, monkeypatch):
+        from godeye_engine.publishers.meta import FacebookPublisher
+
+        calls = []
+
+        def fake_post(self, url, **kw):
+            calls.append((url, kw))
+            return TestMultiImage.Resp({"id": f"m{len(calls)}"})
+
+        monkeypatch.setattr(FacebookPublisher, "_post", fake_post)
+        monkeypatch.setattr("godeye_engine.publishers.meta.download_media", lambda u: None)
+        FacebookPublisher().publish(
+            {"pageId": "p1", "pageAccessToken": "t"},
+            PostPayload(text="hi", media_urls=["https://a/1.jpg", "https://a/2.jpg"]),
+        )
+        uploads = [c for c in calls if c[0].endswith("/photos")]
+        feed = [c for c in calls if c[0].endswith("/feed")]
+        assert len(uploads) == 2 and len(feed) == 1, calls
+        # Unpublished, or each photo becomes its own post.
+        assert all(c[1]["data"].get("published") == "false" for c in uploads)
+        assert "attached_media[0]" in feed[0][1]["data"]
+        assert "attached_media[1]" in feed[0][1]["data"]
+
+    def test_instagram_builds_a_carousel(self, monkeypatch):
+        import httpx
+
+        calls = []
+        # Children, then the carousel parent, then media_publish — don't run dry.
+        ids = iter(["c1", "c2", "parent", "published"])
+
+        def fake_post(self, url, **kw):
+            calls.append((url, kw))
+            return TestMultiImage.Resp({"id": next(ids)})
+
+        monkeypatch.setattr(InstagramPublisher, "_post", fake_post)
+        monkeypatch.setattr(
+            httpx, "get", lambda *a, **kw: TestMultiImage.Resp({"status_code": "FINISHED"})
+        )
+        InstagramPublisher().publish(
+            {"igUserId": "1", "accessToken": "t", "authMethod": "instagram_login"},
+            PostPayload(text="hi", media_urls=["https://a/1.jpg", "https://a/2.jpg"]),
+        )
+        children = [c for c in calls if c[1].get("data", {}).get("is_carousel_item") == "true"]
+        parent = [c for c in calls if c[1].get("data", {}).get("media_type") == "CAROUSEL"]
+        assert len(children) == 2, calls
+        assert len(parent) == 1 and parent[0][1]["data"]["children"] == "c1,c2"

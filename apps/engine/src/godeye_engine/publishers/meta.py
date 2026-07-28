@@ -30,6 +30,8 @@ class FacebookPublisher(BasePublisher):
                     "access_token": token,
                 },
             )
+        elif payload.media_urls and len(payload.media_urls) > 1:
+            response = self._post_photo_album(page_id, token, payload)
         elif payload.media_urls:
             # Upload the image bytes when we can fetch them, so it works even when
             # the media is on a host Facebook can't reach (e.g. local dev storage).
@@ -66,6 +68,39 @@ class FacebookPublisher(BasePublisher):
             external_post_url=f"https://www.facebook.com/{post_id}" if post_id else None,
         )
 
+    def _post_photo_album(self, page_id: str, token: str, payload: PostPayload):
+        """Publish several photos as one feed post.
+
+        Facebook has no multi-photo endpoint: each image is uploaded to /photos
+        with published=false, then their ids are attached to a single /feed post.
+        Uploading published photos instead would produce a separate post per
+        image.
+        """
+        media_ids: list[str] = []
+        for url in payload.media_urls:
+            fetched = download_media(url)
+            if fetched is not None:
+                image_bytes, content_type = fetched
+                upload = self._post(
+                    f"{GRAPH}/{page_id}/photos",
+                    data={"published": "false", "access_token": token},
+                    files={"source": ("image", image_bytes, content_type)},
+                )
+            else:
+                upload = self._post(
+                    f"{GRAPH}/{page_id}/photos",
+                    data={"url": url, "published": "false", "access_token": token},
+                )
+            body = upload.json()
+            if upload.status_code >= 400 or "error" in body:
+                raise self._fail(upload, "Facebook (photo upload)")
+            media_ids.append(body["id"])
+
+        data: dict[str, Any] = {"message": payload.text, "access_token": token}
+        for index, media_id in enumerate(media_ids):
+            data[f"attached_media[{index}]"] = f'{{"media_fbid":"{media_id}"}}'
+        return self._post(f"{GRAPH}/{page_id}/feed", data=data)
+
     def get_metrics(self, credentials: dict[str, Any], external_post_id: str) -> float | None:
         import httpx
 
@@ -93,6 +128,9 @@ IG_GRAPH = "https://graph.instagram.com/v21.0"
 CONTAINER_TIMEOUT_SEC = 60
 CONTAINER_POLL_SEC = 3
 
+# Instagram allows 2-10 images in a carousel; GODEYE caps posts at 4.
+CAROUSEL_LIMIT = 10
+
 
 class InstagramPublisher(BasePublisher):
     """IG content publishing is a 2-step flow and REQUIRES media.
@@ -115,14 +153,17 @@ class InstagramPublisher(BasePublisher):
         else:
             base, token = GRAPH, credentials["pageAccessToken"]
 
-        container = self._post(
-            f"{base}/{ig_user_id}/media",
-            data={
-                "image_url": payload.media_urls[0],
-                "caption": payload.text[:2200],
-                "access_token": token,
-            },
-        )
+        if len(payload.media_urls) > 1:
+            container = self._create_carousel(base, ig_user_id, token, payload)
+        else:
+            container = self._post(
+                f"{base}/{ig_user_id}/media",
+                data={
+                    "image_url": payload.media_urls[0],
+                    "caption": payload.text[:2200],
+                    "access_token": token,
+                },
+            )
         container_body = container.json()
         if container.status_code >= 400 or "error" in container_body:
             raise self._fail(container, "Instagram (container)")
@@ -140,6 +181,37 @@ class InstagramPublisher(BasePublisher):
 
         media_id = str(publish_body.get("id") or "")
         return PublishResult(external_post_id=media_id, external_post_url=None)
+
+    def _create_carousel(self, base: str, ig_user_id: str, token: str, payload: PostPayload):
+        """Build a multi-image carousel container.
+
+        Instagram needs each image uploaded as its own container flagged
+        is_carousel_item, and then a CAROUSEL container referencing them. Each
+        child must finish ingesting before the parent is created, hence the wait
+        per child — the same "Media ID is not available" trap as a single post.
+        """
+        child_ids: list[str] = []
+        for url in payload.media_urls[:CAROUSEL_LIMIT]:
+            child = self._post(
+                f"{base}/{ig_user_id}/media",
+                data={"image_url": url, "is_carousel_item": "true", "access_token": token},
+            )
+            body = child.json()
+            if child.status_code >= 400 or "error" in body:
+                raise self._fail(child, "Instagram (carousel item)")
+            child_id = body["id"]
+            self._await_container(base, child_id, token)
+            child_ids.append(child_id)
+
+        return self._post(
+            f"{base}/{ig_user_id}/media",
+            data={
+                "media_type": "CAROUSEL",
+                "children": ",".join(child_ids),
+                "caption": payload.text[:2200],
+                "access_token": token,
+            },
+        )
 
     def _await_container(self, base: str, creation_id: str, token: str) -> None:
         """Block until Instagram has finished ingesting the media.

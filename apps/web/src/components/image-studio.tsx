@@ -1,8 +1,8 @@
 "use client";
 
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { motion } from "framer-motion";
-import { Sparkles, Upload } from "lucide-react";
+import { Sparkles, Upload, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { IMAGE_PRESETS, IMAGE_PRESET_IDS } from "@godeye/shared";
 import { api } from "@/lib/api";
@@ -16,6 +16,19 @@ interface AgentRun {
   error: string | null;
   costUsd: string | null;
 }
+
+interface MediaAsset {
+  id: string;
+  kind: string;
+  url: string | null;
+  source: string;
+}
+
+/**
+ * X caps a post at 4 images and is the tightest of the platforms we publish to,
+ * so it sets the ceiling — a post that fits everywhere.
+ */
+const MAX_IMAGES = 4;
 
 /**
  * Image generation for a content item. Generates via the Image Agent, polls the
@@ -38,8 +51,20 @@ export function ImageStudio({
   const [style, setStyle] = useState("");
   const [applyBrand, setApplyBrand] = useState(true);
   const [agentRunId, setAgentRunId] = useState<string | null>(null);
-  const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const queryClient = useQueryClient();
+
+  // Everything attached to this post — uploads and generated images alike, so
+  // the count and the grid reflect what will actually publish.
+  const { data: attached = [] } = useQuery<MediaAsset[]>({
+    queryKey: ["media", contentItemId],
+    queryFn: () => api(`/media?contentItemId=${contentItemId}`),
+    enabled: !!contentItemId,
+  });
+  const images = attached.filter((m) => m.kind === "IMAGE" && m.url);
+  const remaining = MAX_IMAGES - images.length;
+  const refreshMedia = () =>
+    queryClient.invalidateQueries({ queryKey: ["media", contentItemId] });
 
   useEffect(() => {
     if (defaultBrief && !brief) setBrief(defaultBrief);
@@ -59,7 +84,9 @@ export function ImageStudio({
   useEffect(() => {
     if (!run) return;
     if (run.status === "SUCCEEDED" && run.output?.url) {
-      setImageUrl(run.output.url);
+      // The engine attaches the generated image to the content item, so it
+      // arrives through the media query alongside uploads.
+      void refreshMedia();
       onGenerated?.(run.output.url);
       setAgentRunId(null);
     }
@@ -82,10 +109,7 @@ export function ImageStudio({
           applyBrand,
         },
       }),
-    onMutate: () => {
-      setError(null);
-      setImageUrl(null);
-    },
+    onMutate: () => setError(null),
     onSuccess: (data) => setAgentRunId(data.agentRunId),
     onError: (e) => setError(e instanceof Error ? e.message : "Failed to start image generation"),
   });
@@ -93,38 +117,62 @@ export function ImageStudio({
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const upload = useMutation({
-    mutationFn: async (file: File) => {
-      const dataBase64 = await new Promise<string>((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve((reader.result as string).split(",")[1] ?? "");
-        reader.onerror = () => reject(new Error("Could not read file"));
-        reader.readAsDataURL(file);
-      });
-      return api<{ url: string }>("/media/upload", {
-        method: "POST",
-        body: { contentItemId, contentType: file.type, dataBase64, filename: file.name },
-      });
+    mutationFn: async (files: File[]) => {
+      const toBase64 = (file: File) =>
+        new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve((reader.result as string).split(",")[1] ?? "");
+          reader.onerror = () => reject(new Error(`Could not read ${file.name}`));
+          reader.readAsDataURL(file);
+        });
+      // Sequential, not parallel: each upload carries the whole image as base64
+      // JSON, and firing four at once risks the API's body/rate limits.
+      const uploaded: string[] = [];
+      for (const file of files) {
+        const res = await api<{ url: string }>("/media/upload", {
+          method: "POST",
+          body: {
+            contentItemId,
+            contentType: file.type,
+            dataBase64: await toBase64(file),
+            filename: file.name,
+          },
+        });
+        uploaded.push(res.url);
+      }
+      return uploaded;
     },
-    onMutate: () => {
-      setError(null);
-      setImageUrl(null);
-    },
-    onSuccess: (data) => {
-      setImageUrl(data.url);
-      onGenerated?.(data.url);
+    onMutate: () => setError(null),
+    onSuccess: (urls) => {
+      if (urls.length) onGenerated?.(urls[urls.length - 1]);
+      void refreshMedia();
     },
     onError: (e) => setError(e instanceof Error ? e.message : "Upload failed"),
   });
 
-  const onPickFile = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    e.target.value = ""; // allow re-picking the same file
-    if (!file) return;
-    if (file.size > 25_000_000) {
-      setError("Image is larger than 25 MB");
+  const removeMedia = useMutation({
+    mutationFn: (id: string) => api(`/media/${id}`, { method: "DELETE" }),
+    onSuccess: () => void refreshMedia(),
+    onError: (e) => setError(e instanceof Error ? e.message : "Could not remove that image"),
+  });
+
+  const onPickFiles = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const picked = Array.from(e.target.files ?? []);
+    e.target.value = ""; // let the same file be chosen again
+    if (!picked.length) return;
+
+    if (picked.length > remaining) {
+      setError(
+        `You can attach ${MAX_IMAGES} images per post — ${remaining} slot${remaining === 1 ? "" : "s"} left.`,
+      );
       return;
     }
-    upload.mutate(file);
+    const tooBig = picked.find((f) => f.size > 25_000_000);
+    if (tooBig) {
+      setError(`${tooBig.name} is larger than 25 MB`);
+      return;
+    }
+    upload.mutate(picked);
   };
 
   const generating = generate.isPending || (!!agentRunId && run?.status !== "SUCCEEDED");
@@ -193,18 +241,24 @@ export function ImageStudio({
       <input
         ref={fileInputRef}
         type="file"
+        multiple
         accept="image/png,image/jpeg,image/webp,image/gif"
         className="hidden"
-        onChange={onPickFile}
+        onChange={onPickFiles}
       />
       <Button
         variant="secondary"
         className="w-full"
         loading={upload.isPending}
+        disabled={remaining <= 0}
         onClick={() => fileInputRef.current?.click()}
       >
         <Upload className="h-4 w-4" />
-        {upload.isPending ? "Uploading…" : "Upload your own photo"}
+        {upload.isPending
+          ? "Uploading…"
+          : remaining <= 0
+            ? `Maximum ${MAX_IMAGES} images attached`
+            : `Upload photos (${remaining} of ${MAX_IMAGES} left)`}
       </Button>
       <ErrorNote message={error} />
 
@@ -215,22 +269,42 @@ export function ImageStudio({
         </div>
       )}
 
-      {imageUrl && !generating && (
-        <motion.div initial={{ opacity: 0, scale: 0.98 }} animate={{ opacity: 1, scale: 1 }}>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={imageUrl}
-            alt="Generated"
-            className={cx("w-full rounded-lg border border-line")}
-          />
-          {contentItemId && (
-            <p className="mt-1.5 text-xs text-emerald-500">
-              ✓ Attached to this post — it will publish with the image.
-            </p>
-          )}
-          {run?.costUsd && <p className="mt-0.5 text-[14px] text-ink-3">Cost: ${run.costUsd}</p>}
+      {images.length > 0 && (
+        <motion.div initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }}>
+          <div className="mb-1.5 flex items-center justify-between">
+            <Label>
+              Attached ({images.length}/{MAX_IMAGES})
+            </Label>
+            {run?.costUsd && <span className="text-[12px] text-ink-3">Cost: ${run.costUsd}</span>}
+          </div>
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+            {images.map((m) => (
+              <div key={m.id} className="group relative">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={m.url as string}
+                  alt=""
+                  className="aspect-square w-full rounded-lg border border-line object-cover"
+                />
+                <button
+                  type="button"
+                  onClick={() => removeMedia.mutate(m.id)}
+                  aria-label="Remove image"
+                  title="Remove"
+                  className="absolute right-1 top-1 rounded-md bg-black/60 p-1 text-white opacity-0 transition-opacity hover:bg-red-600 group-hover:opacity-100 focus:opacity-100"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </div>
+            ))}
+          </div>
+          <p className="mt-1.5 text-xs text-emerald-500">
+            ✓ {images.length === 1 ? "Attached" : `${images.length} images attached`} — they
+            publish with this post.
+          </p>
         </motion.div>
       )}
+
     </div>
   );
 }
