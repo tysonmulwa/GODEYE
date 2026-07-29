@@ -4,10 +4,12 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronLeft, ChevronRight, ExternalLink, Pencil, RotateCcw, XCircle } from "lucide-react";
 import { useState } from "react";
 import { api } from "@/lib/api";
-import { PlatformGlyph, cx, platformColor } from "@/components/ui";
+import { ErrorNote, PlatformGlyph, cx, platformColor } from "@/components/ui";
+import { ImageStudio } from "@/components/image-studio";
 
 interface ScheduledPost {
   id: string;
+  contentItemId: string;
   platform: string;
   connectionName: string;
   scheduledAt: string;
@@ -56,7 +58,14 @@ export default function CalendarPage() {
   });
 
   // The post being edited, with its working copy of text and time.
-  const [editing, setEditing] = useState<{ id: string; body: string; at: string } | null>(null);
+  const [editing, setEditing] = useState<{
+    id: string;
+    contentItemId: string;
+    body: string;
+    at: string;
+  } | null>(null);
+
+  const [editError, setEditError] = useState<string | null>(null);
 
   const editMutation = useMutation({
     mutationFn: ({ id, body, at }: { id: string; body: string; at: string }) =>
@@ -64,10 +73,13 @@ export default function CalendarPage() {
         method: "PATCH",
         body: { body, scheduledAt: new Date(at).toISOString() },
       }),
+    onMutate: () => setEditError(null),
     onSuccess: () => {
       setEditing(null);
       queryClient.invalidateQueries({ queryKey: ["schedule"] });
     },
+    // Without this a failed save looked like a dead button.
+    onError: (e) => setEditError(e instanceof Error ? e.message : "Could not save this post"),
   });
 
   const retryMutation = useMutation({
@@ -132,7 +144,7 @@ export default function CalendarPage() {
 
       {editing && (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-4 sm:items-center">
-          <div className="w-full max-w-lg rounded-[11px] border border-line bg-surface-2 p-4 shadow-lg">
+          <div className="max-h-[90dvh] w-full max-w-lg overflow-y-auto rounded-[11px] border border-line bg-surface-2 p-4 shadow-lg">
             <h2 className="mb-3 text-sm font-semibold">Edit post</h2>
             <label className="mb-1.5 block font-mono text-[12px] font-semibold uppercase tracking-[0.09em] text-ink-3">
               Post text
@@ -152,10 +164,15 @@ export default function CalendarPage() {
               onChange={(e) => setEditing({ ...editing, at: e.target.value })}
               className="w-full rounded-lg border border-line bg-surface-3 px-3 py-2 text-[14px] text-ink focus:border-accent focus:outline-none"
             />
-            <p className="mt-2 text-xs text-ink-3">
-              Saving re-queues the post. The text belongs to the content item, so other
-              destinations sharing it change too.
+            <div className="mt-4 border-t border-line pt-3">
+              <ImageStudio contentItemId={editing.contentItemId} defaultBrief={editing.body} />
+            </div>
+
+            <p className="mt-3 text-xs text-ink-3">
+              Saving re-queues the post. The text and media belong to the content item, so
+              other destinations sharing it change too.
             </p>
+            <ErrorNote message={editError} />
             <div className="mt-4 flex justify-end gap-2">
               <button
                 onClick={() => setEditing(null)}
@@ -265,6 +282,7 @@ export default function CalendarPage() {
                               const pad = (n: number) => String(n).padStart(2, "0");
                               setEditing({
                                 id: post.id,
+                                contentItemId: post.contentItemId,
                                 body: post.contentPreview,
                                 at: `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`,
                               });
