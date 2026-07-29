@@ -15,15 +15,25 @@ import { ApiExcludeController } from "@nestjs/swagger";
 @ApiExcludeController()
 @Controller()
 export class SiteVerificationController {
-  @Get("tiktok:token.txt")
+  /**
+   * Served at the host root and under the OAuth callback path, because TikTok
+   * checks the file directly beneath whichever URL prefix was registered — and
+   * registering the callback URL as the prefix is the natural thing to do.
+   */
+  @Get(["tiktok:token.txt", "connections/tiktok/callback/tiktok:token.txt"])
   @Header("Content-Type", "text/plain; charset=utf-8")
   tiktok(@Param("token") token: string): string {
-    const expected = (process.env.TIKTOK_VERIFICATION ?? "").trim();
-    // Compare the token from the filename so only the issued file resolves,
-    // rather than serving the secret from any tiktok*.txt path.
-    if (!expected || token !== expected) {
+    // Accept any of the tokens listed, so re-issuing one (TikTok mints a new
+    // token per URL property) doesn't invalidate a property already verified.
+    const allowed = (process.env.TIKTOK_VERIFICATION ?? "")
+      .split(",")
+      .map((t) => t.trim())
+      .filter(Boolean);
+    // Match against the filename so the route can't be used to fish for the
+    // token — you have to already know it.
+    if (!allowed.includes(token)) {
       throw new NotFoundException("Not found");
     }
-    return `tiktok-developers-site-verification=${expected}`;
+    return `tiktok-developers-site-verification=${token}`;
   }
 }
