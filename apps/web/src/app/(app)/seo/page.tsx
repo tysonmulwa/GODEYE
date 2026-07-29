@@ -6,6 +6,7 @@ import { Copy, Download, Gauge, Search, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { api, API_URL, ApiError } from "@/lib/api";
 import { GodeyeSpinner } from "@/components/logo";
+import { SeoFixes } from "@/components/seo-fixes";
 import { useAuthStore } from "@/lib/auth-store";
 import {
   Badge,
@@ -50,9 +51,36 @@ interface AuditDetail extends AuditSummary {
       }[]
     | null;
   schemaMarkup: Record<string, unknown> | null;
+  platform: string | null;
   hasSitemap: boolean;
   hasRobots: boolean;
 }
+
+/** Detected stack -> how we name it to the user. */
+const PLATFORM_LABEL: Record<string, string> = {
+  wordpress: "WordPress",
+  woocommerce: "WooCommerce",
+  shopify: "Shopify",
+  wix: "Wix",
+  squarespace: "Squarespace",
+  webflow: "Webflow",
+  ghost: "Ghost",
+  framer: "Framer",
+  drupal: "Drupal",
+  joomla: "Joomla",
+  typo3: "TYPO3",
+  magento: "Magento / Adobe Commerce",
+  prestashop: "PrestaShop",
+  shopware: "Shopware",
+  bigcommerce: "BigCommerce",
+  nextjs: "Next.js",
+  nuxt: "Nuxt",
+  gatsby: "Gatsby",
+  astro: "Astro",
+  hugo: "Hugo",
+  jekyll: "Jekyll",
+  html: "hand-written HTML",
+};
 
 const SEVERITY_ORDER = { critical: 0, warning: 1, info: 2 } as const;
 
@@ -279,6 +307,9 @@ export default function SeoPage() {
                     <p className="text-sm font-semibold">{detail.url}</p>
                     <p className="mt-0.5 text-xs text-ink-3">
                       {detail.pagesCrawled} pages crawled · {detail.findings?.length ?? 0} findings
+                      {detail.platform
+                        ? ` · ${PLATFORM_LABEL[detail.platform] ?? detail.platform}`
+                        : ""}
                     </p>
                     <div className="mt-3 flex flex-wrap gap-2">
                       {detail.hasSitemap && (
@@ -305,6 +336,16 @@ export default function SeoPage() {
                     </div>
                   </div>
                 </Card>
+
+                {/* Fixes — the actionable half: what to change, and where. */}
+                <SeoFixes
+                  auditId={detail.id}
+                  platform={
+                    detail.platform
+                      ? (PLATFORM_LABEL[detail.platform] ?? detail.platform)
+                      : null
+                  }
+                />
 
                 {/* Keywords */}
                 {detail.keywords?.clusters && (

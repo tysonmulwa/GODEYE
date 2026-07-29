@@ -195,6 +195,11 @@ const badgeStyles: Record<string, string> = {
   QUEUED: "bg-amber-500/13 text-amber-600",
   RUNNING: "bg-blue-500/14 text-blue-600",
   PAUSED: "bg-zinc-500/13 text-zinc-500",
+  // SEO fix lifecycle
+  PROPOSED: "bg-zinc-500/13 text-zinc-500",
+  APPLIED: "bg-blue-500/14 text-blue-600",
+  VERIFIED: "bg-emerald-500/13 text-emerald-600",
+  DISMISSED: "bg-zinc-500/13 text-zinc-500",
 };
 
 export function Badge({ status, className }: { status: string; className?: string }) {

@@ -146,6 +146,48 @@ def enqueue_seo_audit(request: RunSeoAuditRequest) -> dict:
     return {"taskId": task.id}
 
 
+class VerifyFixesRequest(BaseModel):
+    orgId: str
+    auditId: str
+
+
+@app.post("/tasks/verify-seo-fixes", dependencies=[Depends(verify_internal_secret)])
+def enqueue_verify_fixes(request: VerifyFixesRequest) -> dict:
+    from .tasks.seo import verify_fixes
+
+    task = verify_fixes.delay(org_id=request.orgId, audit_id=request.auditId)
+    return {"taskId": task.id}
+
+
+class IndexNowRequest(BaseModel):
+    orgId: str
+    siteUrl: str
+    urls: list[str] = Field(default_factory=list, max_length=1000)
+
+
+@app.post("/seo/indexnow", dependencies=[Depends(verify_internal_secret)])
+def submit_indexnow(request: IndexNowRequest) -> dict:
+    """Submit changed URLs to IndexNow. Synchronous — it is two HTTP calls, and
+    the user deserves to hear 'accepted' or 'publish the key file first' now
+    rather than in a notification later."""
+    from .seo import indexnow
+
+    return indexnow.submit(request.orgId, request.siteUrl, request.urls)
+
+
+@app.get("/seo/indexnow/status", dependencies=[Depends(verify_internal_secret)])
+def indexnow_status(orgId: str, siteUrl: str) -> dict:
+    """Whether the site is ready to receive IndexNow submissions."""
+    from .seo import indexnow
+
+    key = indexnow.derive_key(orgId, siteUrl)
+    return {
+        "key": key,
+        "keyFileUrl": indexnow.key_file_url(siteUrl, key),
+        "published": indexnow.key_is_published(siteUrl, key),
+    }
+
+
 @app.post("/tasks/generate-video", dependencies=[Depends(verify_internal_secret)])
 def enqueue_generate_video(request: GenerateVideoRequest) -> dict:
     from .tasks.video import generate_video

@@ -67,6 +67,7 @@ model Organization {
   usageRecords       UsageRecord[]
   brandKit           BrandKit?
   seoAudits          SeoAudit[]
+  seoFixes           SeoFix[]
 }
 
 enum Role {
@@ -523,13 +524,86 @@ model SeoAudit {
   schemaMarkup    Json?
   sitemapXml      String? @db.Text
   robotsTxt       String? @db.Text
+  // Detected site stack — "wordpress" | "shopify" | "wix" | "nextjs" | "html"…
+  // Drives which set of apply-instructions each fix carries.
+  platform        String?
   error           String? @db.Text
   createdAt       DateTime @default(now())
   completedAt     DateTime?
 
-  org Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  org   Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  fixes SeoFix[]
 
   @@index([orgId, createdAt])
+}
+
+/// How a fix reaches the live site. FIX_PACK is the universal fallback — we hand
+/// the user the exact patch and they paste it. The others write for them and are
+/// added one at a time; the SeoFix contract is identical for all of them.
+enum FixChannel {
+  FIX_PACK
+  CLOUDFLARE
+  WORDPRESS
+  SHOPIFY
+  GITHUB
+}
+
+/// PROPOSED → APPLIED → VERIFIED is the happy path. APPLIED means "written to the
+/// site" (by us, or by the user telling us they did it); only a re-crawl that no
+/// longer reports the finding earns VERIFIED. A fix nobody re-checked is a claim.
+enum FixStatus {
+  PROPOSED
+  APPLIED
+  VERIFIED
+  FAILED
+  DISMISSED
+}
+
+/// What shape the change is, which decides where the user (or a write channel)
+/// puts it.
+enum FixKind {
+  HEAD_TAG // snippet for <head>: title, description, canonical, OG, JSON-LD
+  FILE // whole file at the site root: robots.txt, sitemap.xml, IndexNow key
+  ATTRIBUTE // attribute on existing markup, e.g. img alt text
+  MANUAL // needs a human decision or infra change — we can't hand over a patch
+}
+
+/// One actionable change derived from an audit finding.
+///
+/// Deliberately shaped like ScheduledPost: it is a unit of work with a status,
+/// an attempt count and an error, so the same propose → apply → verify loop and
+/// the same UI patterns carry over.
+model SeoFix {
+  id          String     @id @default(cuid())
+  orgId       String
+  auditId     String
+  findingCode String // the audit rule this resolves, e.g. "missing_description"
+  kind        FixKind
+  channel     FixChannel @default(FIX_PACK)
+  status      FixStatus  @default(PROPOSED)
+  severity    String // critical | warning | info — mirrors the finding
+  targetUrl   String // page (or site root, for FILE fixes) the change applies to
+  title       String // short human label, e.g. "Add a meta description"
+  // What is on the page today; null when nothing is there yet. Kept so an
+  // automated channel can revert exactly what it wrote.
+  before      String?    @db.Text
+  // The literal replacement — the tag, the attribute value, the file body.
+  // Null for MANUAL fixes, which carry guidance only.
+  after       String?    @db.Text
+  filePath    String? // FILE fixes: "robots.txt", "sitemap.xml"
+  guidance    String     @db.Text // where to put it, written for the detected stack
+  attempts    Int        @default(0)
+  appliedAt   DateTime?
+  verifiedAt  DateTime?
+  error       String?    @db.Text
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  org   Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  audit SeoAudit     @relation(fields: [auditId], references: [id], onDelete: Cascade)
+
+  @@index([orgId, status])
+  @@index([auditId])
 }
 
 // ============================================================

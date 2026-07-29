@@ -10,18 +10,34 @@ import {
   Injectable,
   NotFoundException,
   Param,
+  Patch,
   Post,
   UseGuards,
 } from "@nestjs/common";
 import { ApiBearerAuth, ApiOperation, ApiTags } from "@nestjs/swagger";
 import { Throttle } from "@nestjs/throttler";
 import { runSeoAuditSchema, type RunSeoAuditInput } from "@godeye/shared";
+import { z } from "zod";
 import { AuditService } from "../common/audit.service";
 import { CurrentAuth } from "../common/current-auth.decorator";
 import { AccessTokenPayload, JwtAuthGuard } from "../common/jwt-auth.guard";
 import { PrismaService } from "../common/prisma.service";
 import { ZodPipe } from "../common/zod.pipe";
 import { EngineService } from "../engine/engine.service";
+import { renderFixPack } from "./fix-pack";
+
+const updateFixSchema = z.object({
+  status: z.enum(["PROPOSED", "APPLIED", "DISMISSED"]),
+});
+
+const bulkFixSchema = z.object({
+  ids: z.array(z.string()).min(1).max(200),
+  status: z.enum(["PROPOSED", "APPLIED", "DISMISSED"]),
+});
+
+const indexNowSchema = z.object({
+  urls: z.array(z.string().url()).max(1000).optional(),
+});
 
 /** Bare hostname (no protocol, no www) for comparing site ownership. */
 function hostOf(u?: string | null): string | null {
@@ -178,12 +194,203 @@ export class SeoService {
       keywords: audit.keywords ?? null,
       metaSuggestions: audit.metaSuggestions ?? null,
       schemaMarkup: audit.schemaMarkup ?? null,
+      platform: audit.platform,
       hasSitemap: !!audit.sitemapXml,
       hasRobots: !!audit.robotsTxt,
       error: audit.error,
       createdAt: audit.createdAt.toISOString(),
       completedAt: audit.completedAt?.toISOString() ?? null,
     };
+  }
+
+  // ---------- Fixes ----------
+
+  /** The actionable changes derived from an audit, worst first. */
+  async listFixes(orgId: string, auditId: string) {
+    const audit = await this.prisma.seoAudit.findFirst({
+      where: { id: auditId, orgId },
+      select: { id: true },
+    });
+    if (!audit) throw new NotFoundException("Audit not found");
+
+    const rows = await this.prisma.seoFix.findMany({
+      where: { auditId, orgId },
+      orderBy: { createdAt: "asc" },
+    });
+    // Severity is a string, and "critical" < "info" < "warning" alphabetically,
+    // which is not the order a human wants to read them in — so rank in code.
+    const rank: Record<string, number> = { critical: 0, warning: 1, info: 2 };
+    return rows
+      .sort((a, b) => (rank[a.severity] ?? 3) - (rank[b.severity] ?? 3))
+      .map((f) => ({
+        id: f.id,
+        findingCode: f.findingCode,
+        kind: f.kind,
+        channel: f.channel,
+        status: f.status,
+        severity: f.severity,
+        targetUrl: f.targetUrl,
+        title: f.title,
+        before: f.before,
+        after: f.after,
+        filePath: f.filePath,
+        guidance: f.guidance,
+        appliedAt: f.appliedAt?.toISOString() ?? null,
+        verifiedAt: f.verifiedAt?.toISOString() ?? null,
+        error: f.error,
+      }));
+  }
+
+  /**
+   * Move a fix through the loop. VERIFIED is deliberately not settable here —
+   * only a re-crawl that no longer reports the finding can award it.
+   */
+  async updateFixStatus(
+    orgId: string,
+    id: string,
+    userId: string,
+    status: "PROPOSED" | "APPLIED" | "DISMISSED",
+  ) {
+    const fix = await this.prisma.seoFix.findFirst({ where: { id, orgId } });
+    if (!fix) throw new NotFoundException("Fix not found");
+    const updated = await this.prisma.seoFix.update({
+      where: { id },
+      data: {
+        status,
+        appliedAt: status === "APPLIED" ? new Date() : null,
+        // Re-opening or dismissing clears a stale verification verdict.
+        verifiedAt: null,
+        error: null,
+      },
+    });
+    this.auditLog.log({
+      orgId,
+      userId,
+      action: "seo.fix_status_changed",
+      targetType: "SeoFix",
+      targetId: id,
+      metadata: { status, findingCode: fix.findingCode },
+    });
+    return { id: updated.id, status: updated.status };
+  }
+
+  /** Same transition for a batch — "I've done all of these" is the common case. */
+  async bulkUpdateFixStatus(
+    orgId: string,
+    userId: string,
+    ids: string[],
+    status: "PROPOSED" | "APPLIED" | "DISMISSED",
+  ) {
+    const { count } = await this.prisma.seoFix.updateMany({
+      where: { id: { in: ids }, orgId },
+      data: {
+        status,
+        appliedAt: status === "APPLIED" ? new Date() : null,
+        verifiedAt: null,
+        error: null,
+      },
+    });
+    this.auditLog.log({
+      orgId,
+      userId,
+      action: "seo.fixes_bulk_status_changed",
+      targetType: "SeoFix",
+      targetId: "*",
+      metadata: { status, count },
+    });
+    return { updated: count };
+  }
+
+  /** Re-crawl the pages applied fixes touched and record whether they took. */
+  async verifyFixes(orgId: string, auditId: string, userId: string) {
+    const audit = await this.prisma.seoAudit.findFirst({
+      where: { id: auditId, orgId },
+      select: { id: true },
+    });
+    if (!audit) throw new NotFoundException("Audit not found");
+
+    const pending = await this.prisma.seoFix.count({
+      where: { auditId, orgId, status: { in: ["APPLIED", "FAILED"] } },
+    });
+    if (pending === 0) {
+      throw new BadRequestException(
+        "Nothing to verify yet — mark the fixes you've made as applied first",
+      );
+    }
+
+    const { taskId } = await this.engine.enqueueVerifySeoFixes({ orgId, auditId });
+    this.auditLog.log({
+      orgId,
+      userId,
+      action: "seo.fixes_verification_requested",
+      targetType: "SeoAudit",
+      targetId: auditId,
+      metadata: { pending },
+    });
+    return { taskId, checking: pending };
+  }
+
+  async fixPack(orgId: string, auditId: string): Promise<string> {
+    const audit = await this.prisma.seoAudit.findFirst({ where: { id: auditId, orgId } });
+    if (!audit) throw new NotFoundException("Audit not found");
+    const fixes = await this.prisma.seoFix.findMany({
+      where: { auditId, orgId },
+      orderBy: { createdAt: "asc" },
+    });
+    return renderFixPack(audit, fixes);
+  }
+
+  // ---------- IndexNow ----------
+
+  async indexNowStatus(orgId: string, auditId: string) {
+    const audit = await this.prisma.seoAudit.findFirst({
+      where: { id: auditId, orgId },
+      select: { url: true },
+    });
+    if (!audit) throw new NotFoundException("Audit not found");
+    return this.engine.indexNowStatus(orgId, audit.url);
+  }
+
+  /**
+   * Push URLs to IndexNow. With no explicit list, submits the pages whose fixes
+   * are verified — those are the ones we know actually changed.
+   */
+  async submitIndexNow(orgId: string, auditId: string, userId: string, urls?: string[]) {
+    const audit = await this.prisma.seoAudit.findFirst({
+      where: { id: auditId, orgId },
+      select: { url: true },
+    });
+    if (!audit) throw new NotFoundException("Audit not found");
+
+    let targets = urls ?? [];
+    if (targets.length === 0) {
+      const verified = await this.prisma.seoFix.findMany({
+        where: { auditId, orgId, status: "VERIFIED", kind: { not: "FILE" } },
+        select: { targetUrl: true },
+        distinct: ["targetUrl"],
+      });
+      targets = verified.map((f) => f.targetUrl);
+    }
+    if (targets.length === 0) {
+      throw new BadRequestException(
+        "No verified pages to submit yet — apply some fixes and verify them first",
+      );
+    }
+
+    const result = await this.engine.submitIndexNow({
+      orgId,
+      siteUrl: audit.url,
+      urls: targets,
+    });
+    this.auditLog.log({
+      orgId,
+      userId,
+      action: "seo.indexnow_submitted",
+      targetType: "SeoAudit",
+      targetId: auditId,
+      metadata: { requested: targets.length, status: result.status },
+    });
+    return result;
   }
 
   async getArtifact(orgId: string, id: string, kind: "sitemap" | "robots"): Promise<string> {
@@ -243,6 +450,63 @@ export class SeoController {
   @Header("Content-Disposition", 'attachment; filename="robots.txt"')
   robots(@CurrentAuth() auth: AccessTokenPayload, @Param("id") id: string) {
     return this.seo.getArtifact(auth.orgId, id, "robots");
+  }
+
+  @Get("audits/:id/fixes")
+  @ApiOperation({ summary: "Actionable fixes derived from an audit's findings" })
+  listFixes(@CurrentAuth() auth: AccessTokenPayload, @Param("id") id: string) {
+    return this.seo.listFixes(auth.orgId, id);
+  }
+
+  @Get("audits/:id/fix-pack.md")
+  @Header("Content-Type", "text/markdown; charset=utf-8")
+  @Header("Content-Disposition", 'attachment; filename="godeye-seo-fixes.md"')
+  @ApiOperation({ summary: "Every fix as one Markdown document, ready to hand to a developer" })
+  fixPack(@CurrentAuth() auth: AccessTokenPayload, @Param("id") id: string) {
+    return this.seo.fixPack(auth.orgId, id);
+  }
+
+  @Patch("fixes/:id")
+  @ApiOperation({ summary: "Mark a fix applied, dismissed, or back to proposed" })
+  updateFix(
+    @CurrentAuth() auth: AccessTokenPayload,
+    @Param("id") id: string,
+    @Body(new ZodPipe(updateFixSchema)) body: z.infer<typeof updateFixSchema>,
+  ) {
+    return this.seo.updateFixStatus(auth.orgId, id, auth.sub, body.status);
+  }
+
+  @Post("fixes/bulk")
+  @ApiOperation({ summary: "Apply the same status change to several fixes" })
+  bulkUpdateFixes(
+    @CurrentAuth() auth: AccessTokenPayload,
+    @Body(new ZodPipe(bulkFixSchema)) body: z.infer<typeof bulkFixSchema>,
+  ) {
+    return this.seo.bulkUpdateFixStatus(auth.orgId, auth.sub, body.ids, body.status);
+  }
+
+  @Post("audits/:id/verify")
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  @ApiOperation({ summary: "Re-crawl to confirm applied fixes actually took effect" })
+  verify(@CurrentAuth() auth: AccessTokenPayload, @Param("id") id: string) {
+    return this.seo.verifyFixes(auth.orgId, id, auth.sub);
+  }
+
+  @Get("audits/:id/indexnow")
+  @ApiOperation({ summary: "IndexNow key and whether the site publishes it yet" })
+  indexNowStatus(@CurrentAuth() auth: AccessTokenPayload, @Param("id") id: string) {
+    return this.seo.indexNowStatus(auth.orgId, id);
+  }
+
+  @Post("audits/:id/indexnow")
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  @ApiOperation({ summary: "Submit changed URLs to Bing, Yandex, Seznam and Naver" })
+  submitIndexNow(
+    @CurrentAuth() auth: AccessTokenPayload,
+    @Param("id") id: string,
+    @Body(new ZodPipe(indexNowSchema)) body: z.infer<typeof indexNowSchema>,
+  ) {
+    return this.seo.submitIndexNow(auth.orgId, id, auth.sub, body.urls);
   }
 }
 

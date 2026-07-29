@@ -187,9 +187,35 @@ SeoAudit = Table(
     Column("schemaMarkup", JSONB),
     Column("sitemapXml", Text),
     Column("robotsTxt", Text),
+    Column("platform", String),
     Column("error", Text),
     Column("createdAt", DateTime(timezone=False)),
     Column("completedAt", DateTime(timezone=False)),
+)
+
+SeoFix = Table(
+    "SeoFix",
+    metadata,
+    Column("id", String, primary_key=True),
+    Column("orgId", String, nullable=False),
+    Column("auditId", String, nullable=False),
+    Column("findingCode", String, nullable=False),
+    Column("kind", PgEnum("FixKind"), nullable=False),
+    Column("channel", PgEnum("FixChannel"), nullable=False),
+    Column("status", PgEnum("FixStatus"), nullable=False),
+    Column("severity", String, nullable=False),
+    Column("targetUrl", String, nullable=False),
+    Column("title", String, nullable=False),
+    Column("before", Text),
+    Column("after", Text),
+    Column("filePath", String),
+    Column("guidance", Text, nullable=False),
+    Column("attempts", Integer, nullable=False),
+    Column("appliedAt", DateTime(timezone=False)),
+    Column("verifiedAt", DateTime(timezone=False)),
+    Column("error", Text),
+    Column("createdAt", DateTime(timezone=False)),
+    Column("updatedAt", DateTime(timezone=False)),
 )
 
 MediaAsset = Table(

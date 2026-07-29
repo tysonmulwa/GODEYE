@@ -63,6 +63,32 @@ export class EngineService {
     return this.post("/tasks/run-seo-audit", payload);
   }
 
+  /** Re-crawl the pages an audit's applied fixes touched and record the verdict. */
+  async enqueueVerifySeoFixes(payload: {
+    orgId: string;
+    auditId: string;
+  }): Promise<{ taskId: string }> {
+    return this.post("/tasks/verify-seo-fixes", payload);
+  }
+
+  /** Push changed URLs to IndexNow (Bing, Yandex, Seznam, Naver). */
+  async submitIndexNow(payload: {
+    orgId: string;
+    siteUrl: string;
+    urls: string[];
+  }): Promise<{ submitted: number; status: string; reason?: string; key?: string }> {
+    return this.post("/seo/indexnow", payload);
+  }
+
+  /** Whether the site serves its IndexNow key file yet. */
+  async indexNowStatus(
+    orgId: string,
+    siteUrl: string,
+  ): Promise<{ key: string; keyFileUrl: string; published: boolean }> {
+    const query = new URLSearchParams({ orgId, siteUrl }).toString();
+    return this.get(`/seo/indexnow/status?${query}`);
+  }
+
   /** Store a brand logo in object storage via the engine (which owns S3 creds). */
   async storeLogo(payload: {
     orgId: string;
