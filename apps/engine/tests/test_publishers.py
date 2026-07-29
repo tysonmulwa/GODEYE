@@ -231,15 +231,56 @@ class TestTikTok:
 
         assert isinstance(get_publisher("TIKTOK"), TikTokPublisher)
 
-    def test_requires_video(self):
-        """TikTok has no image or text-only post — fail before calling the API."""
+    def test_requires_media(self):
+        """TikTok has no text-only post — fail before calling the API."""
         from godeye_engine.publishers.tiktok import TikTokPublisher
 
-        with pytest.raises(PublishError, match="must be video"):
-            TikTokPublisher().publish(
-                {"accessToken": "t"},
-                PostPayload(text="hi", media_urls=["https://cdn/x.jpg"]),
-            )
+        with pytest.raises(PublishError, match="needs media"):
+            TikTokPublisher().publish({"accessToken": "t"}, PostPayload(text="hi"))
+
+    def test_photos_use_the_content_endpoint_and_pull_from_url(self, monkeypatch):
+        """Photos have no upload path — they must be pulled from their URLs."""
+        import httpx
+
+        from godeye_engine.publishers.tiktok import TikTokPublisher
+
+        class Resp:
+            status_code = 200
+
+            def __init__(self, body):
+                self._body = body
+
+            def json(self):
+                return self._body
+
+        calls = []
+
+        def fake_post(self, url, **kw):
+            calls.append((url, kw))
+            return Resp({"data": {"publish_id": "pub-1"}, "error": {"code": "ok"}})
+
+        monkeypatch.setattr(TikTokPublisher, "_post", fake_post)
+        monkeypatch.setattr(
+            httpx, "post",
+            lambda *a, **kw: Resp({"data": {"status": "PUBLISH_COMPLETE",
+                                            "privacy_level_options": ["SELF_ONLY"]}}),
+        )
+        # Nothing should be uploaded for a photo post.
+        def no_put(*a, **kw):
+            raise AssertionError("photos must not be uploaded")
+
+        monkeypatch.setattr(httpx, "put", no_put)
+
+        result = TikTokPublisher().publish(
+            {"accessToken": "t"},
+            PostPayload(text="hi", media_urls=["https://cdn/1.jpg", "https://cdn/2.jpg"]),
+        )
+        assert result.external_post_id == "pub-1"
+        init = next(c for c in calls if "content/init" in c[0])
+        body = init[1]["json"]
+        assert body["media_type"] == "PHOTO"
+        assert body["source_info"]["source"] == "PULL_FROM_URL"
+        assert body["source_info"]["photo_images"] == ["https://cdn/1.jpg", "https://cdn/2.jpg"]
 
     def test_polls_until_complete(self, monkeypatch):
         import httpx

@@ -1,14 +1,13 @@
 """TikTok publisher — Content Posting API (direct post).
 
-TikTok only accepts video, and posting is asynchronous: /init returns a
+TikTok takes video or a photo carousel, and posting is asynchronous: /init returns a
 publish_id, we upload the bytes, and TikTok processes them before the post
 appears. We poll until it leaves the processing states so a failure surfaces
 here rather than silently never appearing on the account.
 
-Uses source=FILE_UPLOAD rather than PULL_FROM_URL: pulling requires the media's
-domain to be verified on the developer app, which can't be done when the media
-is served from a host we don't own (Supabase, S3). Uploading the bytes sidesteps
-verification entirely.
+Video uses source=FILE_UPLOAD, which needs no domain verification. Photos have
+no upload option — TikTok will only pull them from a URL — so a photo post
+requires the media host to be a verified domain or URL prefix on the app.
 """
 
 from __future__ import annotations
@@ -34,6 +33,11 @@ PUBLISH_POLL_SEC = 5
 # TikTok caps the caption; leave room rather than have it truncate mid-hashtag.
 CAPTION_LIMIT = 2200
 
+# TikTok shows a short title above a photo carousel, separate from the caption.
+TITLE_LIMIT = 90
+# TikTok allows up to 35 images per photo post; GODEYE caps a post at 4.
+PHOTO_LIMIT = 35
+
 # A single chunk may be up to 64 MB. Larger videos need a multi-chunk upload,
 # which isn't implemented — we fail with a clear message instead.
 MAX_SINGLE_CHUNK = 64 * 1024 * 1024
@@ -42,16 +46,19 @@ UPLOAD_TIMEOUT_SEC = 300
 
 class TikTokPublisher(BasePublisher):
     def _publish(self, credentials: dict[str, Any], payload: PostPayload) -> PublishResult:
-        if not payload.video_urls:
+        if not payload.video_urls and not payload.media_urls:
             raise PublishError(
-                "TikTok posts must be video — attach a video to this post "
-                "(images and text-only posts aren't supported by the API)"
+                "TikTok needs media — attach a video or photos to this post "
+                "(text-only posts aren't supported by the API)"
             )
         token = credentials["accessToken"]
         headers = {
             "Authorization": f"Bearer {token}",
             "Content-Type": "application/json; charset=UTF-8",
         }
+
+        if not payload.video_urls:
+            return self._publish_photos(headers, payload)
 
         # Fetch the bytes and upload them, rather than handing TikTok a URL.
         # PULL_FROM_URL requires the media's domain to be verified on the
@@ -97,6 +104,43 @@ class TikTokPublisher(BasePublisher):
             raise PublishError(f"TikTok did not return an upload target: {str(body)[:300]}")
 
         self._upload(upload_url, video_bytes, content_type)
+        self._await_publish(publish_id, headers)
+        return PublishResult(external_post_id=publish_id, external_post_url=None)
+
+    def _publish_photos(self, headers: dict[str, str], payload: PostPayload) -> PublishResult:
+        """Post images as a TikTok photo carousel.
+
+        Photos go through a different endpoint to video, and unlike video they
+        have no upload option — TikTok will only pull them from a URL, and that
+        URL must sit under a domain or prefix verified on the developer app. So
+        the media host itself has to be verified; bytes can't be sent instead.
+        """
+        init = self._post(
+            f"{API}/post/publish/content/init/",
+            headers=headers,
+            json={
+                "post_info": {
+                    "title": (payload.title or payload.text)[:TITLE_LIMIT],
+                    "description": payload.text[:CAPTION_LIMIT],
+                    "privacy_level": self._privacy_level(headers),
+                },
+                "source_info": {
+                    "source": "PULL_FROM_URL",
+                    "photo_cover_index": 0,
+                    "photo_images": payload.media_urls[:PHOTO_LIMIT],
+                },
+                "post_mode": "DIRECT_POST",
+                "media_type": "PHOTO",
+            },
+        )
+        body = init.json()
+        if init.status_code >= 400 or (body.get("error") or {}).get("code") not in (None, "ok"):
+            raise self._fail(init, "TikTok (photo init)")
+
+        publish_id = (body.get("data") or {}).get("publish_id")
+        if not publish_id:
+            raise PublishError(f"TikTok did not return a publish_id: {str(body)[:300]}")
+
         self._await_publish(publish_id, headers)
         return PublishResult(external_post_id=publish_id, external_post_url=None)
 
