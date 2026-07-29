@@ -156,6 +156,38 @@ describe("SchedulingService", () => {
     );
   });
 
+  it("edits a failed post and re-queues it", async () => {
+    prisma.scheduledPost.findFirst.mockResolvedValue({
+      id: "sp1", status: "FAILED", contentItemId: "content1",
+    });
+    prisma.contentItem.update.mockResolvedValue({});
+    prisma.scheduledPost.update.mockResolvedValue({
+      id: "sp1", status: "PENDING", scheduledAt: new Date("2026-08-01T10:00:00Z"),
+    });
+    const result = await service.editPending("org1", "sp1", "user1", {
+      body: "fixed copy",
+      scheduledAt: "2026-08-01T10:00:00.000Z",
+    });
+    expect(result.status).toBe("PENDING");
+    // The body lives on the content item, not the scheduled post.
+    expect(prisma.contentItem.update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: { body: "fixed copy" } }),
+    );
+    // Re-queued: cleared error and attempts, or it would stay failed.
+    expect(prisma.scheduledPost.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ status: "PENDING", error: null, attempts: 0 }),
+      }),
+    );
+  });
+
+  it("won't edit an already published post", async () => {
+    prisma.scheduledPost.findFirst.mockResolvedValue({ id: "sp1", status: "PUBLISHED" });
+    await expect(
+      service.editPending("org1", "sp1", "user1", { body: "too late" }),
+    ).rejects.toThrow(BadRequestException);
+  });
+
   it("only retries FAILED posts", async () => {
     prisma.scheduledPost.findFirst.mockResolvedValue({ id: "sp1", status: "PENDING" });
     await expect(service.retry("org1", "sp1", "user1")).rejects.toThrow(BadRequestException);

@@ -8,11 +8,21 @@ import {
   type SchedulePostInput,
   type UpdatePostingPlanInput,
 } from "@godeye/shared";
+import { z } from "zod";
 import { CurrentAuth } from "../common/current-auth.decorator";
 import { AccessTokenPayload, JwtAuthGuard } from "../common/jwt-auth.guard";
 import { MinRole, RolesGuard } from "../common/roles.guard";
 import { ZodPipe } from "../common/zod.pipe";
 import { SchedulingService } from "./scheduling.service";
+
+const editScheduledPostSchema = z
+  .object({
+    body: z.string().min(1).max(50_000).optional(),
+    scheduledAt: z.string().datetime().optional(),
+  })
+  .refine((v) => v.body !== undefined || v.scheduledAt !== undefined, {
+    message: "Provide a new body, a new time, or both",
+  });
 
 @ApiTags("scheduling")
 @Controller()
@@ -44,6 +54,17 @@ export class SchedulingController {
   @MinRole("EDITOR")
   cancel(@CurrentAuth() auth: AccessTokenPayload, @Param("id") id: string) {
     return this.scheduling.cancel(auth.orgId, id, auth.sub);
+  }
+
+  @Patch("schedule/:id")
+  @MinRole("EDITOR")
+  @ApiOperation({ summary: "Edit a pending or failed post's text and/or time, and re-queue it" })
+  edit(
+    @CurrentAuth() auth: AccessTokenPayload,
+    @Param("id") id: string,
+    @Body(new ZodPipe(editScheduledPostSchema)) body: z.infer<typeof editScheduledPostSchema>,
+  ) {
+    return this.scheduling.editPending(auth.orgId, id, auth.sub, body);
   }
 
   @Post("schedule/:id/retry")

@@ -141,6 +141,67 @@ export class SchedulingService {
   }
 
   /** Re-queue a failed post: reset to PENDING so the scheduler dispatches it again. */
+  /**
+   * Edit a post that hasn't gone out yet: change its text and/or its time, and
+   * re-queue it. A failed post otherwise had to be retried unchanged, which is
+   * useless when the failure was caused by the content itself.
+   *
+   * The body edit applies to the underlying content item, so sibling posts of
+   * the same content see it too — that is the same object, not a copy.
+   */
+  async editPending(
+    orgId: string,
+    id: string,
+    userId: string,
+    input: { body?: string; scheduledAt?: string },
+  ) {
+    const post = await this.prisma.scheduledPost.findFirst({ where: { id, orgId } });
+    if (!post) throw new NotFoundException("Scheduled post not found");
+    if (post.status === "PUBLISHED") {
+      throw new BadRequestException("This post is already published — it can't be edited here");
+    }
+    if (post.status === "PROCESSING") {
+      throw new BadRequestException("This post is publishing right now — try again in a moment");
+    }
+
+    if (input.body !== undefined) {
+      await this.prisma.contentItem.update({
+        where: { id: post.contentItemId },
+        data: { body: input.body },
+      });
+    }
+
+    const when = input.scheduledAt ? new Date(input.scheduledAt) : null;
+    if (when && Number.isNaN(when.getTime())) {
+      throw new BadRequestException("Invalid scheduled time");
+    }
+
+    const updated = await this.prisma.scheduledPost.update({
+      where: { id },
+      data: {
+        // Editing re-queues it: the point is to send the corrected version.
+        status: "PENDING",
+        error: null,
+        lockedAt: null,
+        attempts: 0,
+        ...(when ? { scheduledAt: when } : {}),
+      },
+    });
+    this.audit.log({
+      orgId,
+      userId,
+      action: "post.edited",
+      targetType: "ScheduledPost",
+      targetId: id,
+      metadata: { rescheduled: !!when, bodyChanged: input.body !== undefined },
+    });
+    return {
+      id: updated.id,
+      status: updated.status,
+      scheduledAt: updated.scheduledAt.toISOString(),
+    };
+  }
+
   async retry(orgId: string, id: string, userId: string) {
     const post = await this.prisma.scheduledPost.findFirst({ where: { id, orgId } });
     if (!post) throw new NotFoundException("Scheduled post not found");

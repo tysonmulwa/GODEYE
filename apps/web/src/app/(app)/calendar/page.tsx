@@ -1,7 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ChevronLeft, ChevronRight, ExternalLink, RotateCcw, XCircle } from "lucide-react";
+import { ChevronLeft, ChevronRight, ExternalLink, Pencil, RotateCcw, XCircle } from "lucide-react";
 import { useState } from "react";
 import { api } from "@/lib/api";
 import { PlatformGlyph, cx, platformColor } from "@/components/ui";
@@ -53,6 +53,21 @@ export default function CalendarPage() {
   const cancelMutation = useMutation({
     mutationFn: (id: string) => api(`/schedule/${id}/cancel`, { method: "POST" }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["schedule"] }),
+  });
+
+  // The post being edited, with its working copy of text and time.
+  const [editing, setEditing] = useState<{ id: string; body: string; at: string } | null>(null);
+
+  const editMutation = useMutation({
+    mutationFn: ({ id, body, at }: { id: string; body: string; at: string }) =>
+      api(`/schedule/${id}`, {
+        method: "PATCH",
+        body: { body, scheduledAt: new Date(at).toISOString() },
+      }),
+    onSuccess: () => {
+      setEditing(null);
+      queryClient.invalidateQueries({ queryKey: ["schedule"] });
+    },
   });
 
   const retryMutation = useMutation({
@@ -114,6 +129,51 @@ export default function CalendarPage() {
           </button>
         </div>
       </div>
+
+      {editing && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-4 sm:items-center">
+          <div className="w-full max-w-lg rounded-[11px] border border-line bg-surface-2 p-4 shadow-lg">
+            <h2 className="mb-3 text-sm font-semibold">Edit post</h2>
+            <label className="mb-1.5 block font-mono text-[12px] font-semibold uppercase tracking-[0.09em] text-ink-3">
+              Post text
+            </label>
+            <textarea
+              rows={6}
+              value={editing.body}
+              onChange={(e) => setEditing({ ...editing, body: e.target.value })}
+              className="w-full rounded-lg border border-line bg-surface-3 px-3 py-2 text-[14px] leading-relaxed text-ink focus:border-accent focus:outline-none"
+            />
+            <label className="mb-1.5 mt-3 block font-mono text-[12px] font-semibold uppercase tracking-[0.09em] text-ink-3">
+              Publish time
+            </label>
+            <input
+              type="datetime-local"
+              value={editing.at}
+              onChange={(e) => setEditing({ ...editing, at: e.target.value })}
+              className="w-full rounded-lg border border-line bg-surface-3 px-3 py-2 text-[14px] text-ink focus:border-accent focus:outline-none"
+            />
+            <p className="mt-2 text-xs text-ink-3">
+              Saving re-queues the post. The text belongs to the content item, so other
+              destinations sharing it change too.
+            </p>
+            <div className="mt-4 flex justify-end gap-2">
+              <button
+                onClick={() => setEditing(null)}
+                className="rounded-[9px] border border-line px-3.5 py-2 text-[14px] font-semibold text-ink-2 hover:border-line-hover"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => editMutation.mutate(editing)}
+                disabled={editMutation.isPending || !editing.body.trim()}
+                className="rounded-[9px] bg-accent px-3.5 py-2 text-[14px] font-semibold text-white hover:bg-accent-hover disabled:opacity-50"
+              >
+                {editMutation.isPending ? "Saving…" : "Save & re-queue"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="overflow-x-auto rounded-[11px] border border-line bg-surface-2">
         <div className="grid min-w-[900px] grid-cols-7">
@@ -194,6 +254,26 @@ export default function CalendarPage() {
                             className="hidden text-ink-3 hover:text-red-500 group-hover:block"
                           >
                             <XCircle className="h-3 w-3" />
+                          </button>
+                        )}
+                        {post.status !== "PUBLISHED" && post.status !== "PROCESSING" && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              // datetime-local wants local time, no seconds
+                              const d = new Date(post.scheduledAt);
+                              const pad = (n: number) => String(n).padStart(2, "0");
+                              setEditing({
+                                id: post.id,
+                                body: post.contentPreview,
+                                at: `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`,
+                              });
+                            }}
+                            aria-label="Edit"
+                            title="Edit text or time"
+                            className="text-ink-3 hover:text-accent"
+                          >
+                            <Pencil className="h-3 w-3" />
                           </button>
                         )}
                         {post.status === "FAILED" && (
