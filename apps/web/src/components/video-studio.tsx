@@ -2,10 +2,13 @@
 
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { motion } from "framer-motion";
-import { Clapperboard, Film } from "lucide-react";
-import { useEffect, useState } from "react";
+import { Clapperboard, Film, Upload } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import { TTS_VOICES, VIDEO_DURATIONS, VIDEO_PRESETS, VIDEO_PRESET_IDS } from "@godeye/shared";
 import { api } from "@/lib/api";
+
+// base64 in a JSON body inflates ~33%, against the API's 30 MB limit.
+const MAX_VIDEO_BYTES = 20_000_000;
 import { Button, ErrorNote, Input, Label, Switch, cx } from "@/components/ui";
 
 interface AgentRun {
@@ -94,6 +97,42 @@ export function VideoStudio({
     onError: (e) => setError(e instanceof Error ? e.message : "Failed to start video generation"),
   });
 
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const upload = useMutation({
+    mutationFn: async (file: File) => {
+      const dataBase64 = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve((reader.result as string).split(",")[1] ?? "");
+        reader.onerror = () => reject(new Error("Could not read the video"));
+        reader.readAsDataURL(file);
+      });
+      return api<{ url: string }>("/media/upload", {
+        method: "POST",
+        body: { contentItemId, contentType: file.type, dataBase64, filename: file.name },
+      });
+    },
+    onMutate: () => setError(null),
+    onSuccess: (data) => setVideoUrl(data.url),
+    onError: (e) => setError(e instanceof Error ? e.message : "Video upload failed"),
+  });
+
+  const onPickVideo = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    // The upload travels as base64 JSON, which inflates ~33% against the API's
+    // 30 MB body limit — so the practical ceiling is around 20 MB.
+    if (file.size > MAX_VIDEO_BYTES) {
+      setError(
+        `${file.name} is ${Math.round(file.size / 1_000_000)} MB — keep uploads under ` +
+          `${MAX_VIDEO_BYTES / 1_000_000} MB.`,
+      );
+      return;
+    }
+    upload.mutate(file);
+  };
+
   const generating = generate.isPending || !!agentRunId;
   const currentStep = run?.output?.progress ?? "script";
   const currentStepIndex = STEP_ORDER.indexOf(currentStep);
@@ -172,6 +211,30 @@ export function VideoStudio({
         <Clapperboard className="h-4 w-4" />
         {generating ? "Producing video…" : "Generate video"}
       </Button>
+      <div className="flex items-center gap-3 py-0.5">
+        <span className="h-px flex-1 bg-line" />
+        <span className="text-[11px] uppercase tracking-wide text-ink-4">or</span>
+        <span className="h-px flex-1 bg-line" />
+      </div>
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="video/mp4,video/quicktime"
+        className="hidden"
+        onChange={onPickVideo}
+      />
+      <Button
+        variant="secondary"
+        className="w-full"
+        loading={upload.isPending}
+        onClick={() => fileInputRef.current?.click()}
+      >
+        <Upload className="h-4 w-4" />
+        {upload.isPending ? "Uploading…" : "Upload your own video"}
+      </Button>
+      <p className="text-xs text-ink-3">
+        TikTok posts must be video. MP4 or MOV, up to {MAX_VIDEO_BYTES / 1_000_000} MB.
+      </p>
       <ErrorNote message={error} />
 
       {generating && (

@@ -135,9 +135,13 @@ export type XConnectInput = z.infer<typeof xConnectSchema>;
 
 export const uploadMediaSchema = z.object({
   contentItemId: z.string().optional().describe("attach the upload to this content item"),
+  // Video is here because TikTok accepts nothing else, and Reels/Shorts need it.
   contentType: z
     .string()
-    .regex(/^image\/(png|jpe?g|webp|gif)$/, "Only PNG, JPEG, WebP or GIF images"),
+    .regex(
+      /^(image\/(png|jpe?g|webp|gif)|video\/(mp4|quicktime))$/,
+      "Only PNG, JPEG, WebP, GIF images or MP4/MOV video",
+    ),
   dataBase64: z.string().min(1).describe("base64-encoded file bytes (no data: prefix)"),
   filename: z.string().max(200).optional(),
 });

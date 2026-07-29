@@ -129,7 +129,7 @@ export class MediaService {
     }
   }
 
-  /** Upload the user's own photo and attach it to a content item as a MediaAsset. */
+  /** Upload the user's own image or video and attach it to a content item. */
   async uploadPhoto(orgId: string, userId: string, input: UploadMediaInput) {
     if (input.contentItemId) {
       const content = await this.prisma.contentItem.findFirst({
@@ -149,7 +149,9 @@ export class MediaService {
       data: {
         orgId,
         contentItemId: input.contentItemId ?? null,
-        kind: "IMAGE",
+        // The scheduler splits media by kind — video sent as an image would be
+        // handed to the wrong publisher path (and TikTok takes video only).
+        kind: input.contentType.startsWith("video/") ? "VIDEO" : "IMAGE",
         source: "UPLOADED",
         storageKey,
         url,
