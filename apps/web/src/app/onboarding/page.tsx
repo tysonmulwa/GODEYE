@@ -60,7 +60,7 @@ export default function OnboardingPage() {
 
   if (status !== "authed") {
     return (
-      <div className="flex h-screen items-center justify-center">
+      <div className="flex h-svh items-center justify-center">
         <Loader2 className="h-6 w-6 animate-spin text-ink-3" />
       </div>
     );
@@ -122,7 +122,7 @@ export default function OnboardingPage() {
   const steps = [isCreator ? "About you" : "Business", "Audience & goals", "Brand"];
 
   return (
-    <div className="mx-auto flex min-h-screen max-w-xl flex-col justify-center px-4 py-10">
+    <div className="mx-auto flex min-h-svh max-w-xl flex-col justify-center px-4 py-10">
       <div className="mb-8 flex items-center gap-3">
         <GodeyeEmblem variant="compact" style={{ width: 38, height: 38 }} />
         <div>

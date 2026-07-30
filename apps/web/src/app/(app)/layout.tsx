@@ -26,6 +26,7 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { cx } from "@/components/ui";
 import { api, AUTH_URL } from "@/lib/api";
 import { useAuthStore, type SessionOrg, type SessionUser } from "@/lib/auth-store";
+import { useScrollLock } from "@/lib/use-scroll-lock";
 import { useRealtime } from "@/lib/socket";
 
 const NAV = [
@@ -115,9 +116,13 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     setNavOpen(false);
   }, [pathname]);
 
+  // Now that the document scrolls on phones, an open drawer would otherwise let
+  // the page slide around underneath it.
+  useScrollLock(navOpen);
+
   if (status !== "authed") {
     return (
-      <div className="flex h-screen items-center justify-center">
+      <div className="flex h-svh items-center justify-center">
         <Loader2 className="h-6 w-6 animate-spin text-ink-3" />
       </div>
     );
@@ -129,8 +134,13 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     router.replace("/login");
   };
 
+  // Below lg the document scrolls; from lg up the shell is pinned and <main>
+  // scrolls inside it. A fixed dvh shell on a phone is re-measured every frame
+  // as the address bar collapses, so the page changes height while you scroll
+  // it — which is the shakiness itself. svh is the stable floor: it is the
+  // viewport with browser chrome showing, and it never changes.
   return (
-    <div className="flex h-dvh overflow-hidden">
+    <div className="flex min-h-svh lg:h-dvh lg:overflow-hidden">
       {/* Dim + dismiss layer behind the mobile drawer */}
       {navOpen && (
         <button
@@ -222,9 +232,12 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
       {/* min-w-0 lets flex children shrink; without it wide content forces the
           whole page to scroll sideways on a phone. */}
-      <main className="flex min-w-0 flex-1 flex-col overflow-y-auto">
-        {/* Phone-only top bar — the only way to reach the nav below lg */}
-        <header className="sticky top-0 z-30 flex items-center gap-2 border-b border-line-soft bg-surface/95 px-4 py-3 backdrop-blur lg:hidden">
+      <main className="flex min-w-0 flex-1 flex-col lg:overflow-y-auto">
+        {/* Phone-only top bar — the only way to reach the nav below lg.
+            Opaque, not translucent: a backdrop-blur on a sticky bar is
+            re-composited on every scroll frame, which is visible stutter on a
+            mid-range phone and buys nothing the solid fill doesn't. */}
+        <header className="sticky top-0 z-30 flex items-center gap-2 border-b border-line-soft bg-surface px-4 py-3 lg:hidden">
           <button
             type="button"
             onClick={() => setNavOpen(true)}

@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronLeft, ChevronRight, ExternalLink, Pencil, RotateCcw, XCircle } from "lucide-react";
 import { useState } from "react";
 import { api } from "@/lib/api";
+import { useScrollLock } from "@/lib/use-scroll-lock";
 import { ErrorNote, PlatformGlyph, cx, platformColor } from "@/components/ui";
 import { ImageStudio } from "@/components/image-studio";
 
@@ -66,6 +67,8 @@ export default function CalendarPage() {
   } | null>(null);
 
   const [editError, setEditError] = useState<string | null>(null);
+
+  useScrollLock(editing !== null);
 
   const editMutation = useMutation({
     mutationFn: ({ id, body, at }: { id: string; body: string; at: string }) =>
@@ -192,7 +195,10 @@ export default function CalendarPage() {
         </div>
       )}
 
-      <div className="overflow-x-auto rounded-[11px] border border-line bg-surface-2">
+      {/* overscroll-x-contain stops a sideways swipe in the week grid from
+          chaining out to the page — without it a touch that drifts horizontally
+          drags the whole document and the screen judders. */}
+      <div className="overflow-x-auto overscroll-x-contain rounded-[11px] border border-line bg-surface-2">
         <div className="grid min-w-[900px] grid-cols-7">
           {days.map((day, i) => {
             const isToday = +day === +today;

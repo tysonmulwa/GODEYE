@@ -16,7 +16,7 @@ export default function Home() {
   }, [status, org, router]);
 
   return (
-    <div className="flex h-screen items-center justify-center">
+    <div className="flex h-svh items-center justify-center">
       <Loader2 className="h-6 w-6 animate-spin text-ink-3" />
     </div>
   );

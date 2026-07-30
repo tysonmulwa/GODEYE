@@ -5,6 +5,7 @@ import { CalendarDays, Link2, Rocket, Search } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "@/lib/api";
+import { useScrollLock } from "@/lib/use-scroll-lock";
 import { cx } from "@/components/ui";
 
 export interface CommandItem {
@@ -159,6 +160,9 @@ export function CommandPalette({ items }: { items: CommandItem[] }) {
 
   useEffect(() => setActive(0), [query]);
 
+  // Must run before the early return below — hooks can't be conditional.
+  useScrollLock(open);
+
   if (!open) return null;
 
   const go = (href: string) => {
@@ -172,7 +176,7 @@ export function CommandPalette({ items }: { items: CommandItem[] }) {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-start justify-center bg-ink/40 pt-[15vh]"
+      className="fixed inset-0 z-50 flex items-start justify-center bg-ink/40 px-4 pt-[12svh]"
       onClick={() => setOpen(false)}
     >
       <div

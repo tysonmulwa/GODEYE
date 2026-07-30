@@ -74,7 +74,7 @@ function CodeBlock({ label, body }: { label: string; body: string }) {
           {copied ? "copied" : "copy"}
         </button>
       </div>
-      <pre className="overflow-x-auto rounded-lg border border-line bg-surface-3 p-2.5 font-mono text-[12px] leading-relaxed text-ink-2">
+      <pre className="overflow-x-auto overscroll-x-contain rounded-lg border border-line bg-surface-3 p-2.5 font-mono text-[12px] leading-relaxed text-ink-2">
         {body}
       </pre>
     </div>

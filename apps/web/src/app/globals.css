@@ -80,6 +80,27 @@ body {
   color: var(--ink);
   font-feature-settings: "cv02", "cv03", "cv04";
   -webkit-font-smoothing: antialiased;
+  /* Grey flash on every tap reads as the UI lurching. Focus rings still show. */
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* iOS Safari zooms the page whenever a focused form control computes to under
+   16px, and never zooms back out — which is why tapping a field appears to
+   break the layout. The UI is 14px by design, so lift only the controls, and
+   only on the narrow viewports where the behaviour exists.
+
+   This beats Tailwind's text-[14px] despite the weaker selector because these
+   rules are unlayered while Tailwind's utilities sit in @layer utilities, and
+   unlayered styles outrank every layer. That also makes !important pointless
+   here: for important declarations the layer order reverses, so a layered
+   utility would win anyway. Controls are written inline across the app rather
+   than funnelled through one component, hence the element selector. */
+@media (max-width: 767px) {
+  input:not([type="checkbox"]):not([type="radio"]),
+  textarea,
+  select {
+    font-size: 16px;
+  }
 }
 
 ::selection {
