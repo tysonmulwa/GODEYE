@@ -278,7 +278,15 @@ export class ConnectionsService {
     return { connected: await this.storeMetaPages(payload.orgId, payload.sub, pages) };
   }
 
-  /** Upsert Facebook Pages (and any linked Instagram accounts) as connections. */
+  /**
+   * Upsert the user's Facebook Pages as connections.
+   *
+   * Facebook connects Pages and nothing else. Instagram used to be created here
+   * too, from the account linked to a Page, but that route needed permissions
+   * we no longer request; a connection made that way would look ready on the
+   * Connections page and then fail at publish time, which is worse than not
+   * offering it. Instagram has its own button.
+   */
   private async storeMetaPages(
     orgId: string,
     userId: string,
@@ -293,15 +301,6 @@ export class ConnectionsService {
         credentials: { pageAccessToken: page.pageAccessToken, pageId: page.pageId },
       });
       connected++;
-      if (page.igUserId) {
-        await this.upsertConnection(orgId, userId, {
-          platform: "INSTAGRAM",
-          externalId: page.igUserId,
-          displayName: `@${page.igUsername ?? page.igUserId}`,
-          credentials: { pageAccessToken: page.pageAccessToken, igUserId: page.igUserId },
-        });
-        connected++;
-      }
     }
     return connected;
   }

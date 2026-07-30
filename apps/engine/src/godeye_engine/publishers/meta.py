@@ -137,10 +137,38 @@ class InstagramPublisher(BasePublisher):
 
     Two connection shapes exist:
       * Facebook Login  — a page token, called against the Facebook Graph host.
-      * Instagram Login — the account's own token and graph.instagram.com, used
-        when there is no linked Facebook Page.
+        Legacy: GODEYE no longer requests instagram_content_publish, so no new
+        connections take this shape and existing ones stop working once the
+        token is re-authorized. Kept so they keep publishing until then.
+      * Instagram Login — the account's own token and graph.instagram.com, and
+        the only route offered now.
     `authMethod` on the stored credentials picks between them.
     """
+
+    # Meta error codes that mean "this token isn't allowed to do that": 10 and
+    # 200 are permission errors, 190 is an invalid/expired token, and subcode 33
+    # arrives as a bogus "Unsupported get request" when a scope is absent.
+    _PERMISSION_HINT = (
+        "This Instagram account was connected through Facebook, which GODEYE no "
+        "longer has permission to publish with. Reconnect it from Connections "
+        "using the Instagram button — it takes a few seconds and needs no "
+        "Facebook Page."
+    )
+
+    def _fail_ig(self, response, stage: str, legacy: bool) -> PublishError:
+        """Meta's own wording for a missing scope is unactionable, so when a
+        legacy Facebook-linked connection hits one, say what to do about it."""
+        error = self._fail(response, stage)
+        if not legacy:
+            return error
+        try:
+            body = response.json().get("error", {})
+            code, subcode = body.get("code"), body.get("error_subcode")
+        except Exception:  # noqa: BLE001 — a non-JSON body just isn't a scope error
+            return error
+        if code in (10, 190, 200) or subcode == 33:
+            return PublishError(f"{error}. {self._PERMISSION_HINT}")
+        return error
 
     def _publish(self, credentials: dict[str, Any], payload: PostPayload) -> PublishResult:
         if not payload.media_urls:
@@ -148,10 +176,11 @@ class InstagramPublisher(BasePublisher):
                 "Instagram requires an image or video — attach media to this post"
             )
         ig_user_id = credentials["igUserId"]
-        if credentials.get("authMethod") == "instagram_login":
-            base, token = IG_GRAPH, credentials["accessToken"]
-        else:
+        legacy = credentials.get("authMethod") != "instagram_login"
+        if legacy:
             base, token = GRAPH, credentials["pageAccessToken"]
+        else:
+            base, token = IG_GRAPH, credentials["accessToken"]
 
         if len(payload.media_urls) > 1:
             container = self._create_carousel(base, ig_user_id, token, payload)
@@ -166,7 +195,7 @@ class InstagramPublisher(BasePublisher):
             )
         container_body = container.json()
         if container.status_code >= 400 or "error" in container_body:
-            raise self._fail(container, "Instagram (container)")
+            raise self._fail_ig(container, "Instagram (container)", legacy)
 
         creation_id = container_body["id"]
         self._await_container(base, creation_id, token)
@@ -177,7 +206,7 @@ class InstagramPublisher(BasePublisher):
         )
         publish_body = publish.json()
         if publish.status_code >= 400 or "error" in publish_body:
-            raise self._fail(publish, "Instagram (publish)")
+            raise self._fail_ig(publish, "Instagram (publish)", legacy)
 
         media_id = str(publish_body.get("id") or "")
         return PublishResult(external_post_id=media_id, external_post_url=None)

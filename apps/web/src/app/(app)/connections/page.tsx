@@ -306,8 +306,10 @@ function ConnectionsInner() {
               <div className="flex items-center gap-3">
                 <PlatformGlyph platform="FACEBOOK" size={36} className="!rounded-[9px]" />
                 <div>
-                  <p className="text-sm font-medium">Facebook & Instagram</p>
-                  <p className="text-xs text-ink-3">One click — sign in and pick your Page</p>
+                  <p className="text-sm font-medium">Facebook Pages</p>
+                  <p className="text-xs text-ink-3">
+                    Sign in and pick your Page. Instagram connects separately, below.
+                  </p>
                 </div>
               </div>
               <Button variant="secondary" onClick={connectMeta}>
@@ -322,7 +324,9 @@ function ConnectionsInner() {
                 <PlatformGlyph platform="INSTAGRAM" size={36} className="!rounded-[9px]" />
                 <div>
                   <p className="text-sm font-medium">Instagram</p>
-                  <p className="text-xs text-ink-3">Business/Creator — no Facebook Page needed</p>
+                  <p className="text-xs text-ink-3">
+                    Business/Creator — works with or without a Facebook Page
+                  </p>
                 </div>
               </div>
               <Button variant="secondary" onClick={connectInstagram}>

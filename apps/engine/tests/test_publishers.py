@@ -146,6 +146,57 @@ class TestInstagram:
         assert all("graph.instagram.com" in url for url in calls), calls
         assert any("/media_publish" in url for url in calls), calls
 
+    def test_legacy_connection_permission_error_says_how_to_fix_it(self, monkeypatch):
+        """GODEYE dropped instagram_content_publish, so Facebook-linked
+        Instagram connections die once re-authorized. Meta's own wording for a
+        missing scope tells the user nothing they can act on."""
+        monkeypatch.setattr(
+            InstagramPublisher,
+            "_post",
+            lambda self, url, **kw: http_response(
+                403, {"error": {"message": "Requires instagram_content_publish", "code": 200}}
+            ),
+        )
+        with pytest.raises(PublishError, match="Reconnect it from Connections"):
+            InstagramPublisher().publish(
+                {"igUserId": "1", "pageAccessToken": "t"},
+                PostPayload(text="hi", media_urls=["https://cdn/x.jpg"]),
+            )
+
+    def test_instagram_login_errors_are_left_alone(self, monkeypatch):
+        """The reconnect advice would be nonsense on a connection that already
+        uses Instagram Login — it is the thing being recommended."""
+        monkeypatch.setattr(
+            InstagramPublisher,
+            "_post",
+            lambda self, url, **kw: http_response(
+                400, {"error": {"message": "Media upload failed", "code": 200}}
+            ),
+        )
+        with pytest.raises(PublishError) as caught:
+            InstagramPublisher().publish(
+                {"igUserId": "1", "accessToken": "t", "authMethod": "instagram_login"},
+                PostPayload(text="hi", media_urls=["https://cdn/x.jpg"]),
+            )
+        assert "Reconnect it from Connections" not in str(caught.value)
+
+    def test_a_legacy_non_permission_error_is_not_blamed_on_scopes(self, monkeypatch):
+        """A broken image URL is not a permissions problem, and saying so would
+        send the user off reconnecting an account that is working fine."""
+        monkeypatch.setattr(
+            InstagramPublisher,
+            "_post",
+            lambda self, url, **kw: http_response(
+                400, {"error": {"message": "media_url is not reachable", "code": 9004}}
+            ),
+        )
+        with pytest.raises(PublishError) as caught:
+            InstagramPublisher().publish(
+                {"igUserId": "1", "pageAccessToken": "t"},
+                PostPayload(text="hi", media_urls=["https://cdn/x.jpg"]),
+            )
+        assert "Reconnect it from Connections" not in str(caught.value)
+
 
 X_CREDS = {
     "apiKey": "k",

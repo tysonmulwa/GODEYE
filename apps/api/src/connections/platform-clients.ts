@@ -220,12 +220,17 @@ export function metaAuthorizeUrl(state: string): string {
     redirect_uri: env.meta.redirectUri,
     state,
     response_type: "code",
+    // Facebook Login covers Pages only. Instagram has its own button and its
+    // own API (Instagram Login → graph.instagram.com), which reaches every IG
+    // Business account including ones attached to a Page — so requesting
+    // instagram_basic/instagram_content_publish here bought no extra reach and
+    // doubled the App Review surface. Do not add them back without also
+    // restoring the permissions in the Meta app, or Meta rejects this whole
+    // dialog and Page publishing goes down with it.
     scope: [
       "pages_manage_posts",
       "pages_read_engagement",
       "pages_show_list",
-      "instagram_basic",
-      "instagram_content_publish",
       "business_management",
     ].join(","),
   });
@@ -259,8 +264,6 @@ export interface MetaPage {
   pageId: string;
   pageName: string;
   pageAccessToken: string;
-  igUserId: string | null;
-  igUsername: string | null;
 }
 
 // ---------- TikTok (Content Posting API) ----------
@@ -399,44 +402,30 @@ export async function instagramExchangeCode(code: string): Promise<InstagramAcco
   };
 }
 
+/**
+ * The Facebook Pages this user administers.
+ *
+ * No Instagram lookup happens here any more. Reading a Page's linked
+ * instagram_business_account requires instagram_basic, which we deliberately no
+ * longer request — Instagram is connected through its own button. Keeping the
+ * call would spend a request per Page to be told we lack permission.
+ */
 export async function metaListPages(userToken: string): Promise<MetaPage[]> {
   const accounts = await getJson(
     graph(`/me/accounts?fields=id,name,access_token&access_token=${userToken}`),
   );
-  const pages: MetaPage[] = [];
-  for (const page of accounts.data ?? []) {
-    let igUserId: string | null = null;
-    let igUsername: string | null = null;
-    try {
-      const ig = await getJson(
-        graph(
-          `/${page.id}?fields=instagram_business_account{id,username}&access_token=${page.access_token}`,
-        ),
-      );
-      igUserId = ig.instagram_business_account?.id ?? null;
-      igUsername = ig.instagram_business_account?.username ?? null;
-      if (!igUserId) {
-        // Meta omits the field entirely when nothing is linked, so silence here
-        // looks identical to a failed lookup. Say which it was — otherwise
-        // Instagram just never appears and there's no way to tell why.
-        metaLogger.log(
-          `Page "${page.name}" has no linked Instagram Business account — ` +
-            "Instagram not connected. Link one in Page settings, then reconnect.",
-        );
-      }
-    } catch (e) {
-      metaLogger.warn(
-        `Instagram lookup failed for page "${page.name}": ${e instanceof Error ? e.message : e}. ` +
-          "Usually the token is missing instagram_basic.",
-      );
-    }
-    pages.push({
+  const pages: MetaPage[] = (accounts.data ?? []).map(
+    (page: { id: string; name: string; access_token: string }) => ({
       pageId: page.id,
       pageName: page.name,
       pageAccessToken: page.access_token,
-      igUserId,
-      igUsername,
-    });
+    }),
+  );
+  if (pages.length === 0) {
+    metaLogger.log(
+      "Facebook returned no Pages for this user — they may administer none, or " +
+        "may not have granted access to any during the dialog.",
+    );
   }
   return pages;
 }

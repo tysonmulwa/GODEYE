@@ -98,13 +98,21 @@ export default function PrivacyPage() {
           <code>pages_read_engagement</code> — to read back likes and comments on those posts.
         </li>
         <li>
-          <code>instagram_basic</code> — to identify the Instagram Business account linked to your Page.
-        </li>
-        <li>
-          <code>instagram_content_publish</code> — to publish the posts you schedule to Instagram.
-        </li>
-        <li>
           <code>business_management</code> — to list Pages held in your Business Manager.
+        </li>
+      </ul>
+      <p>
+        Instagram is connected separately, through Instagram Login, and grants two further
+        permissions:
+      </p>
+      <ul>
+        <li>
+          <code>instagram_business_basic</code> — to identify the Instagram account you connected
+          and show its username next to your scheduled posts.
+        </li>
+        <li>
+          <code>instagram_business_content_publish</code> — to publish the posts you schedule to
+          Instagram.
         </li>
       </ul>
       <p>
