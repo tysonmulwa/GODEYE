@@ -19,6 +19,7 @@ from pathlib import Path
 
 import boto3
 from botocore.client import Config
+from botocore.exceptions import ClientError
 
 from .config import get_settings
 
@@ -68,6 +69,68 @@ def ensure_bucket() -> None:
         client.create_bucket(Bucket=settings.s3_bucket)
 
 
+def describe_upload_failure(e: Exception) -> str:
+    """Turn a boto3 failure into something that names the misconfiguration.
+
+    botocore prints an unrecognised response as "An error occurred () ... : "
+    with the code and message empty, which says nothing. The HTTP status does
+    say something, and the two cases are opposites, so this reads the status
+    rather than the emptiness. Verified against a real Supabase project:
+
+      403 + empty code  the endpoint is right and the credentials were refused
+      404 + code "404"  the request never reached the S3 API, so the endpoint
+                        is missing its /storage/v1/s3 path
+
+    Guessing that empty meant "wrong endpoint" would have sent someone to
+    change the one setting that was already correct.
+
+    Endpoint and bucket are named here; credentials never are.
+    """
+    settings = get_settings()
+    endpoint = settings.s3_endpoint.rstrip("/")
+    detail = str(e)
+    status = None
+    code = None
+    if isinstance(e, ClientError):
+        code = (e.response.get("Error") or {}).get("Code") or None
+        status = (e.response.get("ResponseMetadata") or {}).get("HTTPStatusCode")
+
+    lines = [
+        f"Upload to {endpoint} (bucket {settings.s3_bucket!r}) failed",
+        f"  HTTP status: {status if status is not None else 'unknown'}",
+        f"  S3 error code: {code or '(none returned)'}",
+        f"  raw: {detail[:200]}",
+    ]
+
+    # Specific codes first: NoSuchBucket also arrives as a 404, and the generic
+    # endpoint advice below would otherwise shadow it.
+    if code == "NoSuchBucket":
+        lines += ["", f"Create the bucket {settings.s3_bucket!r}, or correct S3_BUCKET."]
+    elif status == 403 or code in ("SignatureDoesNotMatch", "InvalidAccessKeyId", "AccessDenied"):
+        lines += [
+            "",
+            "403 means the endpoint is correct and the credentials were refused.",
+            "S3 access keys are a separate credential from the project API keys:",
+            "in Supabase they come from Storage settings, not from the anon or",
+            "service-role keys. S3_REGION must also match the project's region,",
+            "or the request signature will not verify.",
+            "The engine API uploads successfully, so copy S3_ACCESS_KEY,",
+            "S3_SECRET_KEY and S3_REGION from that service to this one.",
+        ]
+    elif status == 404:
+        lines += [
+            "",
+            "404 means the request never reached an S3 API, so the endpoint is",
+            "missing its API path. Supabase Storage expects",
+            "https://<project-ref>.supabase.co/storage/v1/s3 rather than the",
+            "bare project URL.",
+        ]
+    elif code == "NoSuchBucket":
+        lines += ["", f"Create the bucket {settings.s3_bucket!r}, or correct S3_BUCKET."]
+
+    return "\n".join(lines)
+
+
 def upload_bytes(key: str, data: bytes, content_type: str) -> str:
     """Store an object and return its public URL."""
     if _is_local():
@@ -77,13 +140,16 @@ def upload_bytes(key: str, data: bytes, content_type: str) -> str:
         return public_url(key)
 
     settings = get_settings()
-    _client().put_object(
-        Bucket=settings.s3_bucket,
-        Key=key,
-        Body=io.BytesIO(data),
-        ContentType=content_type,
-        ContentLength=len(data),
-    )
+    try:
+        _client().put_object(
+            Bucket=settings.s3_bucket,
+            Key=key,
+            Body=io.BytesIO(data),
+            ContentType=content_type,
+            ContentLength=len(data),
+        )
+    except Exception as e:  # noqa: BLE001 — re-raised with the detail botocore drops
+        raise RuntimeError(describe_upload_failure(e)) from e
     return public_url(key)
 
 
