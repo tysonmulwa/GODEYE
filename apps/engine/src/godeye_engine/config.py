@@ -70,6 +70,13 @@ class Settings(BaseSettings):
     # Public base URL for stored objects (MinIO bucket is download-public in dev)
     s3_public_url: str = "http://localhost:9000"
 
+    # TikTok only lets an *audited* app publish anything more visible than
+    # "Only me". Until the Content Posting API audit is approved this must stay
+    # false, or every post is rejected with
+    # unaudited_client_can_only_post_to_private_accounts. Flip it after approval
+    # and posts go out at the most public level the creator allows.
+    tiktok_audited: bool = False
+
     reddit_client_id: str = ""
     reddit_client_secret: str = ""
     reddit_user_agent: str = "godeye/0.1"

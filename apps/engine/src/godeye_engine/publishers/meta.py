@@ -60,13 +60,38 @@ class FacebookPublisher(BasePublisher):
 
         body = response.json()
         if response.status_code >= 400 or "error" in body:
-            raise self._fail(response, "Facebook")
+            raise self._fail_page(response, "Facebook")
 
         post_id = str(body.get("id") or body.get("post_id") or "")
         return PublishResult(
             external_post_id=post_id,
             external_post_url=f"https://www.facebook.com/{post_id}" if post_id else None,
         )
+
+    # Meta answers a token that has lost its Page permissions with a list of six
+    # permission names and the phrase "before impersonating a user's page",
+    # which reads as a code problem and is not one.
+    _PAGE_PERMISSION_HELP = (
+        "This Page's saved login no longer carries permission to post. That "
+        "happens when the app's permissions change in the Meta dashboard: "
+        "tokens issued beforehand lose what was removed, and they cannot be "
+        "repaired, only replaced. Reconnect this Page from Connections and the "
+        "new token will carry the current permissions."
+    )
+
+    def _fail_page(self, response, stage: str) -> PublishError:
+        """Translate a revoked-permission rejection into the one useful action."""
+        error = self._fail(response, stage)
+        try:
+            err = response.json().get("error") or {}
+        except ValueError:
+            return error
+        message = str(err.get("message") or "")
+        # Code 190 is Meta's catch-all for a token that is no longer good for
+        # what it is being used for; the wording is what identifies this case.
+        if err.get("code") == 190 or "must be granted" in message:
+            return PublishError(f"{stage}: {self._PAGE_PERMISSION_HELP}")
+        return error
 
     def _post_photo_album(self, page_id: str, token: str, payload: PostPayload):
         """Publish several photos as one feed post.

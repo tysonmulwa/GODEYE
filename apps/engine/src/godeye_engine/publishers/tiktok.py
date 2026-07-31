@@ -15,6 +15,7 @@ from __future__ import annotations
 import time
 from typing import Any
 
+from ..config import get_settings
 from .base import (
     BasePublisher,
     PostPayload,
@@ -25,6 +26,21 @@ from .base import (
 )
 
 API = "https://open.tiktokapis.com/v2"
+
+# "Only me". The single privacy level an unaudited app is permitted to publish.
+SELF_ONLY = "SELF_ONLY"
+
+# TikTok's wording blames the account, which is not where the problem is.
+UNAUDITED_CODE = "unaudited_client_can_only_post_to_private_accounts"
+UNAUDITED_HELP = (
+    "TikTok refused because this app has not passed its Content Posting audit. "
+    "Despite the wording, your account's privacy setting is not the cause: an "
+    "unaudited app may only publish at SELF_ONLY, and the request asked for "
+    "something more visible. GODEYE now sends SELF_ONLY until you set "
+    "TIKTOK_AUDITED=true on the worker, which you should do once TikTok "
+    "approves the app. Until then posts land on your account visible to you "
+    "alone."
+)
 
 # Time TikTok spends processing the uploaded video before the post appears.
 PUBLISH_TIMEOUT_SEC = 180
@@ -96,7 +112,7 @@ class TikTokPublisher(BasePublisher):
         )
         body = init.json()
         if init.status_code >= 400 or (body.get("error") or {}).get("code") not in (None, "ok"):
-            raise self._fail(init, "TikTok (init)")
+            raise self._fail_tiktok(init, "TikTok (init)")
 
         data = body.get("data") or {}
         publish_id, upload_url = data.get("publish_id"), data.get("upload_url")
@@ -135,7 +151,7 @@ class TikTokPublisher(BasePublisher):
         )
         body = init.json()
         if init.status_code >= 400 or (body.get("error") or {}).get("code") not in (None, "ok"):
-            raise self._fail(init, "TikTok (photo init)")
+            raise self._fail_tiktok(init, "TikTok (photo init)")
 
         publish_id = (body.get("data") or {}).get("publish_id")
         if not publish_id:
@@ -144,14 +160,40 @@ class TikTokPublisher(BasePublisher):
         self._await_publish(publish_id, headers)
         return PublishResult(external_post_id=publish_id, external_post_url=None)
 
-    def _privacy_level(self, headers: dict[str, str]) -> str:
-        """The most public visibility TikTok will accept for this account.
+    def _fail_tiktok(self, response, stage: str) -> PublishError:
+        """TikTok's own message for the audit error points at the wrong thing.
 
-        An unaudited app may only post SELF_ONLY (private); once it passes
-        TikTok's audit, public becomes available. Rather than hardcode either —
-        which fails before approval or silently stays private after it — ask
-        creator_info what this creator/app pair is allowed and take the best.
+        Left as-is it sends people to change their account's privacy setting,
+        which cannot fix it, because the account was never what was refused.
         """
+        error = self._fail(response, stage)
+        try:
+            code = (response.json().get("error") or {}).get("code")
+        except ValueError:
+            return error
+        if code == UNAUDITED_CODE:
+            return PublishError(f"{stage}: {UNAUDITED_HELP}")
+        return error
+
+    def _privacy_level(self, headers: dict[str, str]) -> str:
+        """The visibility to request for this post.
+
+        This used to ask creator_info for the account's options and take the
+        most public one, which is wrong and rejected every post. creator_info
+        reports what the *creator's account* permits; it says nothing about what
+        an *unaudited app* may publish, and those are different limits. An app
+        that has not passed TikTok's Content Posting audit may only ever send
+        SELF_ONLY, whatever the account allows.
+
+        The error for getting this wrong reads
+        "unaudited_client_can_only_post_to_private_accounts", which sounds like
+        the account is at fault and sends people off making it private. It is
+        not: the account is irrelevant, the privacy_level in the request is the
+        whole of it.
+        """
+        if not get_settings().tiktok_audited:
+            return SELF_ONLY
+
         import httpx
 
         try:
@@ -167,9 +209,9 @@ class TikTokPublisher(BasePublisher):
         for preferred in ("PUBLIC_TO_EVERYONE", "MUTUAL_FOLLOW_FRIENDS", "FOLLOWER_OF_CREATOR"):
             if preferred in options:
                 return preferred
-        # SELF_ONLY is always permitted, so it's the safe fallback when the
-        # query fails or the app is still unaudited.
-        return "SELF_ONLY"
+        # SELF_ONLY is always permitted, so it stays the safe fallback when the
+        # query fails or the account itself offers nothing more public.
+        return SELF_ONLY
 
     def _upload(self, upload_url: str, video_bytes: bytes, content_type: str) -> None:
         """PUT the video to the one-time upload URL from /init."""

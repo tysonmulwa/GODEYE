@@ -2,6 +2,8 @@
 
 from unittest.mock import MagicMock
 
+import httpx
+
 import pytest
 
 from godeye_engine.publishers import get_publisher
@@ -10,6 +12,8 @@ from godeye_engine.publishers.linkedin import LinkedInPublisher
 from godeye_engine.publishers.meta import InstagramPublisher
 from godeye_engine.publishers.telegram import TelegramPublisher
 from godeye_engine.publishers.x import XPublisher
+from godeye_engine.publishers.tiktok import TikTokPublisher
+from godeye_engine.config import get_settings
 
 
 def http_response(status_code: int, body: dict) -> MagicMock:
@@ -495,43 +499,103 @@ class TestMultiImage:
         assert len(parent) == 1 and parent[0][1]["data"]["children"] == "c1,c2"
 
 
-class TestTikTokPrivacy:
-    """An unaudited TikTok app may only post SELF_ONLY; a hardcoded public
-    level fails before approval and stays private after it."""
+class TestTikTokPrivacyLevel:
+    """Every post was rejected with
+    unaudited_client_can_only_post_to_private_accounts while the account was
+    already private, because the account was never what TikTok was refusing."""
 
-    class Resp:
-        status_code = 200
+    HEADERS = {"Authorization": "Bearer t"}
 
-        def __init__(self, body):
-            self._body = body
-
-        def json(self):
-            return self._body
-
-    def _levels(self, monkeypatch, options):
-        import httpx
-
-        from godeye_engine.publishers.tiktok import TikTokPublisher
-
+    def test_an_unaudited_app_always_asks_for_self_only(self, monkeypatch):
+        """creator_info describes what the creator's account allows. It says
+        nothing about what an unaudited app may publish, and taking its most
+        public option is what caused the rejection."""
+        monkeypatch.setenv("TIKTOK_AUDITED", "false")
+        get_settings.cache_clear()
+        called = []
         monkeypatch.setattr(
             httpx, "post",
-            lambda *a, **kw: TestTikTokPrivacy.Resp({"data": {"privacy_level_options": options}}),
+            lambda *a, **kw: called.append(a) or http_response(200, {}),
         )
-        return TikTokPublisher()._privacy_level({"Authorization": "Bearer t"})
+        assert TikTokPublisher()._privacy_level(self.HEADERS) == "SELF_ONLY"
+        assert not called, "an unaudited app need not ask; the answer cannot change"
+        get_settings.cache_clear()
 
-    def test_prefers_public_when_audited(self, monkeypatch):
-        assert self._levels(monkeypatch, ["SELF_ONLY", "PUBLIC_TO_EVERYONE"]) == "PUBLIC_TO_EVERYONE"
+    def test_an_audited_app_takes_the_most_public_option(self, monkeypatch):
+        monkeypatch.setenv("TIKTOK_AUDITED", "true")
+        get_settings.cache_clear()
+        monkeypatch.setattr(
+            httpx, "post",
+            lambda *a, **kw: http_response(
+                200,
+                {"data": {"privacy_level_options": ["SELF_ONLY", "PUBLIC_TO_EVERYONE"]}},
+            ),
+        )
+        assert TikTokPublisher()._privacy_level(self.HEADERS) == "PUBLIC_TO_EVERYONE"
+        get_settings.cache_clear()
 
-    def test_falls_back_to_self_only_when_unaudited(self, monkeypatch):
-        assert self._levels(monkeypatch, ["SELF_ONLY"]) == "SELF_ONLY"
+    def test_an_audited_app_falls_back_when_the_account_offers_nothing_public(
+        self, monkeypatch
+    ):
+        monkeypatch.setenv("TIKTOK_AUDITED", "true")
+        get_settings.cache_clear()
+        monkeypatch.setattr(
+            httpx, "post",
+            lambda *a, **kw: http_response(200, {"data": {"privacy_level_options": ["SELF_ONLY"]}}),
+        )
+        assert TikTokPublisher()._privacy_level(self.HEADERS) == "SELF_ONLY"
+        get_settings.cache_clear()
 
-    def test_self_only_when_the_query_fails(self, monkeypatch):
-        import httpx
+    def test_the_audit_error_explains_itself(self):
+        """TikTok's wording blames the account and sends people to change a
+        setting that cannot help."""
+        response = http_response(
+            403, {"error": {"code": "unaudited_client_can_only_post_to_private_accounts"}}
+        )
+        detail = str(TikTokPublisher()._fail_tiktok(response, "TikTok (photo init)"))
+        assert "not passed its Content Posting audit" in detail
+        assert "privacy setting is not the cause" in detail
+        assert "TIKTOK_AUDITED" in detail
 
-        from godeye_engine.publishers.tiktok import TikTokPublisher
+    def test_other_errors_are_left_alone(self):
+        response = http_response(400, {"error": {"code": "invalid_param"}})
+        detail = str(TikTokPublisher()._fail_tiktok(response, "TikTok (init)"))
+        assert "invalid_param" in detail
+        assert "Content Posting audit" not in detail
 
-        def boom(*a, **kw):
-            raise httpx.ConnectError("down")
 
-        monkeypatch.setattr(httpx, "post", boom)
-        assert TikTokPublisher()._privacy_level({"Authorization": "Bearer t"}) == "SELF_ONLY"
+class TestFacebookRevokedPermissions:
+    """A Page that had been publishing for days stopped mid-afternoon. Its token
+    predated a change to the app's permissions in the Meta dashboard, and tokens
+    issued before such a change lose what was removed. A Page reconnected after
+    the change kept working, which is what identified it."""
+
+    from godeye_engine.publishers.meta import FacebookPublisher as _FB
+
+    REVOKED = {
+        "error": {
+            "message": (
+                "Any of the pages_read_engagement, pages_manage_metadata, "
+                "pages_read_user_content, pages_manage_ads, pages_show_list or "
+                "pages_messaging permission(s) must be granted before "
+                "impersonating a user's page."
+            ),
+            "type": "OAuthException",
+            "code": 190,
+        }
+    }
+
+    def test_the_fix_is_named_instead_of_the_six_permissions(self):
+        detail = str(self._FB()._fail_page(http_response(400, self.REVOKED), "Facebook"))
+        assert "Reconnect this Page from Connections" in detail
+        assert "cannot be repaired" in detail
+
+    def test_a_real_content_rejection_is_left_alone(self):
+        """Blaming the token for a bad image URL would send someone to redo an
+        OAuth flow that was never the problem."""
+        response = http_response(
+            400, {"error": {"message": "The image is too large", "code": 324}}
+        )
+        detail = str(self._FB()._fail_page(response, "Facebook"))
+        assert "image is too large" in detail
+        assert "Reconnect this Page" not in detail
