@@ -67,6 +67,9 @@ def harness(monkeypatch):
         ),
     )
     monkeypatch.setattr(image_task.branding, "fit_to_preset", lambda data, preset: data)
+    # Real Pillow would reject the placeholder bytes; encoding is covered in
+    # test_media.py, and what matters here is which paths report their outcome.
+    monkeypatch.setattr(image_task.branding, "to_jpeg", lambda data, *a, **kw: data)
     return failures
 
 

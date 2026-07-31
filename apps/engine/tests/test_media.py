@@ -313,3 +313,49 @@ class TestVariationAcrossRuns:
         )
         assert "prompt number 3" in captured["user"]
         assert "prompt number 9" not in captured["user"]
+
+
+class TestJpegEncoding:
+    """Generated images ship as JPEG. TikTok's photo endpoint rejects PNG with
+    file_format_check_failed, and every other network takes JPEG."""
+
+    def test_output_is_a_readable_jpeg(self):
+        out = branding.to_jpeg(make_image(1080, 1080))
+        img = Image.open(io.BytesIO(out))
+        assert img.format == "JPEG"
+        assert img.size == (1080, 1080)
+
+    def test_it_is_much_smaller_than_the_png(self):
+        """The real 1080x1080 frame was 1.6 MB as PNG. Photographic detail is
+        where JPEG wins; a flat colour would compress smaller as PNG and prove
+        nothing about a generated photograph."""
+        import random
+
+        rng = random.Random(0)
+        noisy = Image.new("RGB", (1080, 1080))
+        noisy.putdata([
+            (rng.randrange(256), rng.randrange(256), rng.randrange(256))
+            for _ in range(1080 * 1080)
+        ])
+        buf = io.BytesIO()
+        noisy.save(buf, format="PNG")
+        png = buf.getvalue()
+        jpeg = branding.to_jpeg(png)
+        assert len(jpeg) < len(png) * 0.7, f"png={len(png)} jpeg={len(jpeg)}"
+
+    def test_a_transparent_source_is_flattened_rather_than_failing(self):
+        """JPEG has no alpha channel, and Pillow raises rather than guessing."""
+        buf = io.BytesIO()
+        Image.new("RGBA", (400, 400), (10, 200, 90, 128)).save(buf, format="PNG")
+        img = Image.open(io.BytesIO(branding.to_jpeg(buf.getvalue())))
+        assert img.mode == "RGB"
+
+    def test_a_branded_image_survives_the_round_trip(self):
+        """The badge is composited before this runs, so it has to come through."""
+        branded = branding.apply_brand(
+            make_image(600, 600, color=(120, 80, 200)), logo_bytes=None, accent_hex="#FF0000"
+        )
+        img = Image.open(io.BytesIO(branding.to_jpeg(branded))).convert("RGB")
+        assert img.size == (600, 600)
+        r, g, b = img.getpixel((300, 300))
+        assert abs(r - 120) < 8 and abs(g - 80) < 8 and abs(b - 200) < 8

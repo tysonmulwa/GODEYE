@@ -178,10 +178,14 @@ def generate_image(
     # is the entire difference between a two-minute fix and an afternoon.
     try:
         _progress(agent_run_id, org_id, "upload")
+        # JPEG, not PNG: TikTok's photo endpoint rejects PNG with
+        # file_format_check_failed, and the file is a fraction of the size for
+        # no visible difference at these dimensions.
+        image_bytes = branding.to_jpeg(image_bytes)
         now = utcnow()
         media_id = new_id()
-        key = f"{org_id}/generated/{media_id}.png"
-        url = upload_bytes(key, image_bytes, "image/png")
+        key = f"{org_id}/generated/{media_id}.jpg"
+        url = upload_bytes(key, image_bytes, "image/jpeg")
         duration_ms = int((time.monotonic() - started) * 1000)
 
         with get_session() as session:
@@ -194,7 +198,7 @@ def generate_image(
                     source="AI_GENERATED",
                     storageKey=key,
                     url=url,
-                    mimeType="image/png",
+                    mimeType="image/jpeg",
                     sizeBytes=len(image_bytes),
                     width=preset.width,
                     height=preset.height,

@@ -30,6 +30,11 @@ API = "https://open.tiktokapis.com/v2"
 # "Only me". The single privacy level an unaudited app is permitted to publish.
 SELF_ONLY = "SELF_ONLY"
 
+# TikTok's photo endpoint takes JPEG. It accepts the request, fetches the files,
+# then fails the post minutes later with file_format_check_failed, so these are
+# worth catching before the call.
+UNSUPPORTED_PHOTO_EXT = (".png", ".gif", ".bmp", ".tiff", ".svg", ".heic")
+
 # TikTok's wording blames the account, which is not where the problem is.
 UNAUDITED_CODE = "unaudited_client_can_only_post_to_private_accounts"
 UNAUDITED_HELP = (
@@ -131,6 +136,18 @@ class TikTokPublisher(BasePublisher):
         URL must sit under a domain or prefix verified on the developer app. So
         the media host itself has to be verified; bytes can't be sent instead.
         """
+        images = payload.media_urls[:PHOTO_LIMIT]
+        # TikTok will accept the init call, fetch the files, and only then fail
+        # the whole post with file_format_check_failed. Checking here turns a
+        # three-minute round trip into an immediate, specific answer.
+        rejected = [u for u in images if u.split("?")[0].lower().endswith(UNSUPPORTED_PHOTO_EXT)]
+        if rejected:
+            raise PublishError(
+                "TikTok's photo endpoint only accepts JPEG, and "
+                f"{len(rejected)} of these images are not: {rejected[0].split('/')[-1]}. "
+                "Regenerate the image, or attach a JPEG."
+            )
+
         init = self._post(
             f"{API}/post/publish/content/init/",
             headers=headers,
@@ -157,7 +174,7 @@ class TikTokPublisher(BasePublisher):
         if not publish_id:
             raise PublishError(f"TikTok did not return a publish_id: {str(body)[:300]}")
 
-        self._await_publish(publish_id, headers)
+        self._await_publish(publish_id, headers, kind="photo")
         return PublishResult(external_post_id=publish_id, external_post_url=None)
 
     def _fail_tiktok(self, response, stage: str) -> PublishError:
@@ -237,8 +254,15 @@ class TikTokPublisher(BasePublisher):
                 f"TikTok rejected the upload ({response.status_code}): {response.text[:300]}"
             )
 
-    def _await_publish(self, publish_id: str, headers: dict[str, str]) -> None:
-        """Block until TikTok has fetched and processed the video."""
+    def _await_publish(
+        self, publish_id: str, headers: dict[str, str], kind: str = "video"
+    ) -> None:
+        """Block until TikTok has fetched and processed the upload.
+
+        ``kind`` only shapes the error text, but a photo post reporting that
+        "TikTok rejected the video" sends people to check a file they never
+        sent.
+        """
         import httpx
 
         deadline = time.monotonic() + PUBLISH_TIMEOUT_SEC
@@ -260,8 +284,15 @@ class TikTokPublisher(BasePublisher):
                 return
             if status == "FAILED":
                 reason = data.get("fail_reason") or "no reason given"
+                if reason == "file_format_check_failed" and kind == "photo":
+                    raise PublishError(
+                        "TikTok rejected the images (file_format_check_failed). Its "
+                        "photo endpoint accepts JPEG and will not take PNG. GODEYE "
+                        "now generates JPEG, so an image made before that change "
+                        "has to be regenerated before it can go to TikTok."
+                    )
                 raise PublishError(
-                    f"TikTok rejected the video ({reason}). Check the format and length "
+                    f"TikTok rejected the {kind} ({reason}). Check the format and length "
                     "meet TikTok's requirements, and that the account can post."
                 )
             time.sleep(PUBLISH_POLL_SEC)

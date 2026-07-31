@@ -599,3 +599,73 @@ class TestFacebookRevokedPermissions:
         detail = str(self._FB()._fail_page(response, "Facebook"))
         assert "image is too large" in detail
         assert "Reconnect this Page" not in detail
+
+
+class TestTikTokPhotoFormat:
+    """A generated PNG was accepted at init, fetched, and only then failed the
+    whole post with file_format_check_failed. TikTok's photo endpoint takes
+    JPEG."""
+
+    CREDS = {"accessToken": "t"}
+
+    def test_a_png_is_refused_before_the_api_call(self, monkeypatch):
+        called = []
+        monkeypatch.setattr(
+            TikTokPublisher, "_post", lambda self, *a, **kw: called.append(a)
+        )
+        with pytest.raises(PublishError, match="only accepts JPEG"):
+            TikTokPublisher().publish(
+                self.CREDS,
+                PostPayload(text="hi", media_urls=["https://cdn/generated/x.png"]),
+            )
+        assert not called, "should not spend a request to be told what we know"
+
+    def test_a_signed_url_is_judged_on_its_path(self):
+        """Storage URLs carry query strings; the extension is before the "?"."""
+        with pytest.raises(PublishError, match="only accepts JPEG"):
+            TikTokPublisher().publish(
+                self.CREDS,
+                PostPayload(text="hi", media_urls=["https://cdn/x.png?token=abc&v=2"]),
+            )
+
+    def test_jpeg_is_allowed_through(self, monkeypatch):
+        reached = []
+        monkeypatch.setattr(
+            TikTokPublisher, "_post",
+            lambda self, *a, **kw: reached.append(1) or http_response(200, {"data": {}}),
+        )
+        monkeypatch.setattr(TikTokPublisher, "_privacy_level", lambda self, h: "SELF_ONLY")
+        with pytest.raises(PublishError, match="did not return a publish_id"):
+            TikTokPublisher().publish(
+                self.CREDS,
+                PostPayload(text="hi", media_urls=["https://cdn/x.jpg"]),
+            )
+        assert reached, "a JPEG must reach the API"
+
+    def test_the_photo_failure_does_not_talk_about_video(self, monkeypatch):
+        """"TikTok rejected the video" on a photo post sends people to check a
+        file they never sent."""
+        monkeypatch.setattr(
+            httpx, "post",
+            lambda *a, **kw: http_response(
+                200,
+                {"data": {"status": "FAILED", "fail_reason": "file_format_check_failed"}},
+            ),
+        )
+        with pytest.raises(PublishError) as caught:
+            TikTokPublisher()._await_publish(
+                "pid", {"Authorization": "Bearer t"}, kind="photo"
+            )
+        detail = str(caught.value)
+        assert "video" not in detail
+        assert "JPEG" in detail
+
+    def test_a_video_failure_still_says_video(self, monkeypatch):
+        monkeypatch.setattr(
+            httpx, "post",
+            lambda *a, **kw: http_response(
+                200, {"data": {"status": "FAILED", "fail_reason": "duration_check_failed"}}
+            ),
+        )
+        with pytest.raises(PublishError, match="rejected the video"):
+            TikTokPublisher()._await_publish("pid", {"Authorization": "Bearer t"})

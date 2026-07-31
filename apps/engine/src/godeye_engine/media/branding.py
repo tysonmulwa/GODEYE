@@ -103,6 +103,30 @@ def _to_png(img: Image.Image) -> bytes:
     return buf.getvalue()
 
 
+# Quality 90 is visually indistinguishable from the source at these sizes and
+# cuts a 1080x1080 frame from roughly 1.6 MB to a few hundred kB.
+JPEG_QUALITY = 90
+
+
+def to_jpeg(image_bytes: bytes, quality: int = JPEG_QUALITY) -> bytes:
+    """Re-encode a finished frame as JPEG.
+
+    TikTok's photo endpoint rejects PNG outright with file_format_check_failed,
+    and every other network we publish to takes JPEG happily, so this is the
+    format to leave the building in. Applied once at the end: the intermediate
+    steps stay PNG so cropping and compositing are not re-compressed each time.
+
+    Nothing is lost to the missing alpha channel, because the brand overlay
+    already flattens to RGB before this point.
+    """
+    img = Image.open(io.BytesIO(image_bytes))
+    if img.mode != "RGB":
+        img = img.convert("RGB")
+    buf = io.BytesIO()
+    img.save(buf, format="JPEG", quality=quality, optimize=True, progressive=True)
+    return buf.getvalue()
+
+
 def _hex_to_rgba(hex_color: str, alpha: int = 235) -> tuple[int, int, int, int]:
     h = hex_color.lstrip("#")
     return (int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16), alpha)
