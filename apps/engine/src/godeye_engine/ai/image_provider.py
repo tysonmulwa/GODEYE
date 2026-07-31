@@ -1,4 +1,4 @@
-"""Provider-agnostic image generation: OpenAI gpt-image-1 or Google Imagen.
+"""Provider-agnostic image generation: an OpenAI gpt-image-* model or Google Imagen.
 
 Anthropic does not generate images, so this uses OPENAI_API_KEY (default) or
 GOOGLE_API_KEY. Raises a clear error when neither is configured.
@@ -11,8 +11,16 @@ from dataclasses import dataclass
 
 from ..config import get_settings
 
-# USD per generated image (approximate, standard quality) for cost accounting.
+# USD per generated image (approximate, medium quality, 1024x1024) for cost
+# accounting only — this doesn't gate billing, it's the number that shows up in
+# AgentRun.costUsd and the images_generated UsageRecord. Actual cost varies with
+# quality tier and size, neither of which this app currently requests explicitly
+# (OpenAI defaults apply). Recheck against OpenAI's own pricing page if this
+# figure needs to be precise rather than directional.
 IMAGE_PRICES: dict[str, float] = {
+    "gpt-image-2": 0.03,
+    "gpt-image-1.5": 0.04,
+    "gpt-image-1-mini": 0.005,
     "gpt-image-1": 0.04,
     "dall-e-3": 0.04,
     "imagen-3.0-generate-002": 0.03,
@@ -29,7 +37,23 @@ class ImageResult:
 
     @property
     def cost_usd(self) -> float:
-        return IMAGE_PRICES.get(self.model, DEFAULT_IMAGE_PRICE)
+        return price_for(self.model)
+
+
+def price_for(model: str) -> float:
+    """Price a model name, tolerating OpenAI's dated snapshots.
+
+    Pinning a snapshot ("gpt-image-2-2026-04-21") is normal practice, and it
+    would otherwise miss the table and silently bill at the default — which is
+    the kind of wrong number nobody notices until margins look odd. Longest
+    prefix wins so "gpt-image-1-mini" isn't matched by "gpt-image-1".
+    """
+    if model in IMAGE_PRICES:
+        return IMAGE_PRICES[model]
+    matches = [name for name in IMAGE_PRICES if model.startswith(name)]
+    if matches:
+        return IMAGE_PRICES[max(matches, key=len)]
+    return DEFAULT_IMAGE_PRICE
 
 
 def generate_image(prompt: str, provider_size: str) -> ImageResult:

@@ -40,7 +40,12 @@ class Settings(BaseSettings):
 
     # Image generation
     image_provider: str = "openai"  # openai | google
-    openai_image_model: str = "gpt-image-1"
+    # gpt-image-2 is the current flagship and undercuts both gpt-image-1 and
+    # gpt-image-1.5 on price, so those two are never the right pick. The image
+    # is the product here — it goes straight onto a customer's feed — so this
+    # defaults to quality. Set OPENAI_IMAGE_MODEL=gpt-image-1-mini to cut cost
+    # roughly 6x if volume ever outweighs fidelity.
+    openai_image_model: str = "gpt-image-2"
     google_api_key: str = ""
     google_image_model: str = "imagen-3.0-generate-002"
 

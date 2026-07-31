@@ -81,6 +81,19 @@ class TestProviderSelection:
         )
         assert result.cost_usd == 0.04
 
+    def test_dated_snapshots_price_as_their_base_model(self):
+        """Pinning "gpt-image-2-2026-04-21" is normal; without prefix matching it
+        would miss the table and bill at the default, overstating cost by a third."""
+        assert image_provider.price_for("gpt-image-2-2026-04-21") == 0.03
+
+    def test_mini_is_not_swallowed_by_the_gpt_image_1_prefix(self):
+        """"gpt-image-1-mini" starts with "gpt-image-1", so a naive prefix match
+        would price the cheap tier at 8x its real cost."""
+        assert image_provider.price_for("gpt-image-1-mini") == 0.005
+
+    def test_unknown_model_falls_back(self):
+        assert image_provider.price_for("some-future-model") == image_provider.DEFAULT_IMAGE_PRICE
+
 
 class TestImageAgent:
     def test_fallback_prompt_is_deterministic_and_safe(self):
