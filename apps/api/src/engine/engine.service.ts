@@ -99,6 +99,16 @@ export class EngineService {
     return this.post("/storage/logo", payload);
   }
 
+  /** Store a workspace's background track for mixing under generated video. */
+  async storeBrandMusic(payload: {
+    orgId: string;
+    filename: string;
+    dataBase64: string;
+    contentType: string;
+  }): Promise<{ storageKey: string; url: string }> {
+    return this.post("/storage/brand-music", payload);
+  }
+
   async storeMedia(payload: {
     orgId: string;
     dataBase64: string;

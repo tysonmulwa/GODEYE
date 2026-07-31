@@ -12,6 +12,8 @@ interface BrandKit {
   logoUrl: string | null;
   fontFamily: string | null;
   watermarkEnabled: boolean;
+  musicUrl: string | null;
+  musicName: string | null;
 }
 
 const MANAGE_ROLES = ["OWNER", "ADMIN"];
@@ -233,6 +235,35 @@ function BrandKitCard() {
     onError: (e) => setError(e instanceof Error ? e.message : "Logo upload failed"),
   });
 
+  const uploadMusic = useMutation({
+    mutationFn: async (file: File) => {
+      // 15 MB decoded is the engine's limit; catching it here saves sending
+      // twenty megabytes of base64 to be told no.
+      if (file.size > 15_000_000) {
+        throw new Error(`${file.name} is larger than 15 MB`);
+      }
+      const dataBase64 = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve((reader.result as string).split(",")[1]);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+      return api("/media/brand-kit/music", {
+        method: "POST",
+        body: { filename: file.name, contentType: file.type, dataBase64 },
+      });
+    },
+    onMutate: () => setError(null),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["brand-kit"] }),
+    onError: (e) => setError(e instanceof Error ? e.message : "Track upload failed"),
+  });
+
+  const removeMusic = useMutation({
+    mutationFn: () => api("/media/brand-kit/music", { method: "DELETE" }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["brand-kit"] }),
+    onError: (e) => setError(e instanceof Error ? e.message : "Could not remove the track"),
+  });
+
   if (!current) return null;
   const set = (patch: Partial<BrandKit>) => setDraft({ ...current, ...patch });
 
@@ -267,6 +298,67 @@ function BrandKitCard() {
             }}
           />
         </label>
+      </div>
+
+      {/* Background music for generated video. TikTok's own catalogue only
+          works inside their app, so a directly published post carries whatever
+          audio is baked into the file. */}
+      <div className="mb-4 rounded-lg border border-line p-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="min-w-0">
+            <p className="text-sm font-medium">Background music</p>
+            <p className="mt-0.5 text-xs text-ink-3">
+              Mixed quietly under the voiceover on generated video.
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <label className="cursor-pointer">
+              <span className="inline-flex items-center rounded-lg border border-line px-3 py-2 text-sm text-ink-2 hover:border-ink-3">
+                {uploadMusic.isPending
+                  ? "Uploading…"
+                  : current.musicUrl
+                    ? "Replace track"
+                    : "Upload track (MP3/WAV)"}
+              </span>
+              <input
+                type="file"
+                accept="audio/mpeg,audio/mp3,audio/wav,audio/mp4,audio/aac,audio/ogg"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) uploadMusic.mutate(file);
+                  e.target.value = "";
+                }}
+              />
+            </label>
+            {current.musicUrl && (
+              <button
+                onClick={() => removeMusic.mutate()}
+                disabled={removeMusic.isPending}
+                className="rounded-lg border border-line px-3 py-2 text-sm text-ink-3 hover:border-ink-3 hover:text-ink disabled:opacity-50"
+              >
+                Remove
+              </button>
+            )}
+          </div>
+        </div>
+
+        {current.musicUrl ? (
+          <div className="mt-3">
+            <p className="mb-1.5 truncate font-mono text-[12px] text-ink-3">
+              {current.musicName ?? "Track"}
+            </p>
+            {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
+            <audio controls src={current.musicUrl} className="h-9 w-full" />
+          </div>
+        ) : (
+          <p className="mt-2 text-xs text-ink-3">
+            No track yet, so generated video carries only the voiceover. Use music you
+            own or that is cleared for commercial use. TikTok&rsquo;s in-app library
+            cannot be used here: their licence covers their editor only, and a track
+            taken from it will get the post muted or removed.
+          </p>
+        )}
       </div>
 
       <div className="mb-4 grid grid-cols-2 gap-4">

@@ -11,7 +11,7 @@ function makePrisma() {
       update: jest.fn().mockResolvedValue({}),
     },
     mediaAsset: { findMany: jest.fn(), findFirst: jest.fn(), update: jest.fn(), delete: jest.fn() },
-    brandKit: { findUnique: jest.fn(), upsert: jest.fn() },
+    brandKit: { findUnique: jest.fn(), upsert: jest.fn(), updateMany: jest.fn() },
   };
 }
 
@@ -21,6 +21,7 @@ describe("MediaService", () => {
     enqueueGenerateImage: jest.Mock;
     enqueueGenerateVideo: jest.Mock;
     storeLogo: jest.Mock;
+    storeBrandMusic: jest.Mock;
   };
   let service: MediaService;
   const audit = { log: jest.fn() } as unknown as AuditService;
@@ -31,6 +32,9 @@ describe("MediaService", () => {
       enqueueGenerateImage: jest.fn().mockResolvedValue({ taskId: "task1" }),
       enqueueGenerateVideo: jest.fn().mockResolvedValue({ taskId: "task2" }),
       storeLogo: jest.fn().mockResolvedValue({ storageKey: "k", url: "http://minio/k.png" }),
+      storeBrandMusic: jest
+        .fn()
+        .mockResolvedValue({ storageKey: "m", url: "http://minio/m.mp3" }),
     };
     service = new MediaService(prisma as never, engine as unknown as EngineService, audit);
   });
@@ -124,7 +128,48 @@ describe("MediaService", () => {
       logoUrl: null,
       fontFamily: null,
       watermarkEnabled: false,
+      musicUrl: null,
+      musicName: null,
     });
+  });
+
+  it("stores an uploaded track and remembers its filename", async () => {
+    prisma.brandKit.upsert.mockResolvedValue({});
+    const result = await service.uploadBrandMusic("org1", "user1", {
+      filename: "sunrise-groove.mp3",
+      dataBase64: "AAAA",
+      contentType: "audio/mpeg",
+    });
+    expect(result).toEqual({
+      musicUrl: "http://minio/m.mp3",
+      // The filename is how someone recognises which track is on their videos
+      // without downloading it.
+      musicName: "sunrise-groove.mp3",
+    });
+    expect(engine.storeBrandMusic).toHaveBeenCalledWith(
+      expect.objectContaining({ orgId: "org1", contentType: "audio/mpeg" }),
+    );
+  });
+
+  it("refuses a file that is not audio", async () => {
+    await expect(
+      service.uploadBrandMusic("org1", "user1", {
+        filename: "cat.png",
+        dataBase64: "AAAA",
+        contentType: "image/png",
+      }),
+    ).rejects.toThrow(/MP3/);
+    expect(engine.storeBrandMusic).not.toHaveBeenCalled();
+  });
+
+  it("clears every music field on remove", async () => {
+    prisma.brandKit.updateMany.mockResolvedValue({ count: 1 });
+    await service.removeBrandMusic("org1", "user1");
+    expect(prisma.brandKit.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: { musicStorageKey: null, musicUrl: null, musicName: null },
+      }),
+    );
   });
 
   it("uploads a logo via the engine and stores the URL", async () => {

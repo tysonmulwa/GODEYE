@@ -210,6 +210,8 @@ export class MediaService {
         logoUrl: null,
         fontFamily: null,
         watermarkEnabled: false,
+        musicUrl: null,
+        musicName: null,
       };
     }
     return {
@@ -218,6 +220,8 @@ export class MediaService {
       logoUrl: kit.logoUrl,
       fontFamily: kit.fontFamily,
       watermarkEnabled: kit.watermarkEnabled,
+      musicUrl: kit.musicUrl,
+      musicName: kit.musicName,
     };
   }
 
@@ -258,6 +262,50 @@ export class MediaService {
     });
     this.audit.log({ orgId, userId, action: "brand_kit.logo_uploaded" });
     return { logoUrl: url };
+  }
+
+  /**
+   * Store the background track mixed under generated video.
+   *
+   * TikTok's own catalogue only works inside their app, so anything GODEYE
+   * publishes directly has to carry audio the workspace is licensed to use.
+   */
+  async uploadBrandMusic(
+    orgId: string,
+    userId: string,
+    file: { filename: string; dataBase64: string; contentType: string },
+  ) {
+    if (!/^audio\/(mpeg|mp3|wav|x-wav|mp4|aac|ogg)$/.test(file.contentType)) {
+      throw new BadRequestException(
+        "Track must be MP3, WAV, M4A or OGG",
+      );
+    }
+    const { storageKey, url } = await this.engine.storeBrandMusic({
+      orgId,
+      filename: file.filename,
+      dataBase64: file.dataBase64,
+      contentType: file.contentType,
+    });
+    // Keep the original filename: it is how someone recognises which track is
+    // on their videos without downloading it.
+    const musicName = file.filename.slice(0, 200);
+    await this.prisma.brandKit.upsert({
+      where: { orgId },
+      update: { musicStorageKey: storageKey, musicUrl: url, musicName },
+      create: { orgId, musicStorageKey: storageKey, musicUrl: url, musicName },
+    });
+    this.audit.log({ orgId, userId, action: "brand_kit.music_uploaded" });
+    return { musicUrl: url, musicName };
+  }
+
+  /** Drop the background track; generated video goes back to narration only. */
+  async removeBrandMusic(orgId: string, userId: string) {
+    await this.prisma.brandKit.updateMany({
+      where: { orgId },
+      data: { musicStorageKey: null, musicUrl: null, musicName: null },
+    });
+    this.audit.log({ orgId, userId, action: "brand_kit.music_removed" });
+    return { musicUrl: null, musicName: null };
   }
 
   private toDto(m: {

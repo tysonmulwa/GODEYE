@@ -24,6 +24,14 @@ const logoSchema = z.object({
   dataBase64: z.string().min(1).max(8_000_000),
 });
 
+// base64 inflates by about a third, so this caps the decoded track near 15 MB,
+// which is generous for a background bed under a 30 to 90 second video.
+const brandMusicSchema = z.object({
+  filename: z.string().min(1).max(200),
+  contentType: z.string().regex(/^audio\/(mpeg|mp3|wav|x-wav|mp4|aac|ogg)$/),
+  dataBase64: z.string().min(1).max(21_000_000),
+});
+
 @ApiTags("media")
 @Controller("media")
 @UseGuards(JwtAuthGuard)
@@ -103,5 +111,23 @@ export class MediaController {
     @Body(new ZodPipe(logoSchema)) body: z.infer<typeof logoSchema>,
   ) {
     return this.media.uploadLogo(auth.orgId, auth.sub, body);
+  }
+
+  @Post("brand-kit/music")
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  @ApiOperation({
+    summary: "Upload the background track mixed under generated video (base64 audio)",
+  })
+  uploadBrandMusic(
+    @CurrentAuth() auth: AccessTokenPayload,
+    @Body(new ZodPipe(brandMusicSchema)) body: z.infer<typeof brandMusicSchema>,
+  ) {
+    return this.media.uploadBrandMusic(auth.orgId, auth.sub, body);
+  }
+
+  @Delete("brand-kit/music")
+  @ApiOperation({ summary: "Remove the background track" })
+  removeBrandMusic(@CurrentAuth() auth: AccessTokenPayload) {
+    return this.media.removeBrandMusic(auth.orgId, auth.sub);
   }
 }

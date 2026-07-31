@@ -223,6 +223,40 @@ def store_logo(request: StoreLogoRequest) -> dict:
     return {"storageKey": key, "url": url}
 
 
+class StoreBrandMusicRequest(BaseModel):
+    orgId: str
+    filename: str
+    dataBase64: str
+    contentType: str = "audio/mpeg"
+
+
+@app.post("/storage/brand-music", dependencies=[Depends(verify_internal_secret)])
+def store_brand_music(request: StoreBrandMusicRequest) -> dict:
+    """Store a workspace's background track for mixing under generated video."""
+    import base64
+
+    from .db import new_id
+    from .storage import upload_bytes
+
+    data = base64.b64decode(request.dataBase64)
+    # A background bed for a 30 to 90 second video; anything larger is a whole
+    # album and will not be used.
+    if len(data) > 15_000_000:
+        raise HTTPException(status_code=400, detail="Track exceeds 15 MB")
+    ext = {
+        "audio/mpeg": "mp3",
+        "audio/mp3": "mp3",
+        "audio/wav": "wav",
+        "audio/x-wav": "wav",
+        "audio/mp4": "m4a",
+        "audio/aac": "m4a",
+        "audio/ogg": "ogg",
+    }.get(request.contentType, "mp3")
+    key = f"{request.orgId}/brand/music-{new_id()}.{ext}"
+    url = upload_bytes(key, data, request.contentType)
+    return {"storageKey": key, "url": url}
+
+
 @app.post("/storage/upload", dependencies=[Depends(verify_internal_secret)])
 def store_upload(request: StoreUploadRequest) -> dict:
     """Store an uploaded image/video and return its key + public URL."""
