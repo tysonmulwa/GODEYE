@@ -31,15 +31,44 @@ from ..storage import upload_bytes
 logger = logging.getLogger(__name__)
 
 
-def _progress(agent_run_id: str, org_id: str, step: str, detail: str = "") -> None:
+# Scene rendering dominates: each scene is an image call plus a TTS call, so a
+# four-scene video spends most of its minutes between 10 and 70. The remaining
+# steps are ffmpeg passes over local files and are quick by comparison.
+STAGE_PERCENT: dict[str, int] = {
+    "script": 5,
+    "scenes": 10,  # 10 to 70, split across the scenes
+    "assembly": 75,
+    "captions": 85,
+    "upload": 92,
+}
+SCENES_SPAN = 60
+
+
+def _progress(
+    agent_run_id: str,
+    org_id: str,
+    step: str,
+    detail: str = "",
+    percent: int | None = None,
+) -> None:
+    if percent is None:
+        percent = STAGE_PERCENT.get(step, 0)
     with get_session() as session:
         session.execute(
             update(AgentRun)
             .where(AgentRun.c.id == agent_run_id)
-            .values(output={"progress": step, "detail": detail})
+            .values(output={"progress": step, "detail": detail, "percent": percent})
         )
         session.commit()
-    publish_event(org_id, {"type": "agent_run.progress", "agentRunId": agent_run_id, "step": step})
+    publish_event(
+        org_id,
+        {
+            "type": "agent_run.progress",
+            "agentRunId": agent_run_id,
+            "step": step,
+            "percent": percent,
+        },
+    )
 
 
 @app.task(name="godeye_engine.tasks.video.generate_video", bind=True)
@@ -95,6 +124,8 @@ def generate_video(
                 _progress(
                     agent_run_id, org_id, "scenes",
                     f"Scene {i + 1}/{len(script.scenes)}: image + voiceover",
+                    percent=STAGE_PERCENT["scenes"]
+                    + int(SCENES_SPAN * i / max(1, len(script.scenes))),
                 )
                 img = image_provider.generate_image(
                     scene.visual_prompt,

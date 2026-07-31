@@ -6,6 +6,7 @@ import { Clapperboard, Film, Upload } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { TTS_VOICES, VIDEO_DURATIONS, VIDEO_PRESETS, VIDEO_PRESET_IDS } from "@godeye/shared";
 import { api } from "@/lib/api";
+import { useEasedProgress } from "@/lib/use-eased-progress";
 
 // base64 in a JSON body inflates ~33%, against the API's 30 MB limit.
 const MAX_VIDEO_BYTES = 20_000_000;
@@ -21,6 +22,8 @@ interface AgentRun {
     durationSec?: number;
     progress?: string;
     detail?: string;
+    // Stage percentage from the engine; see STAGE_PERCENT in tasks/video.py.
+    percent?: number;
   } | null;
   error: string | null;
   costUsd: string | null;
@@ -136,6 +139,7 @@ export function VideoStudio({
   const generating = generate.isPending || !!agentRunId;
   const currentStep = run?.output?.progress ?? "script";
   const currentStepIndex = STEP_ORDER.indexOf(currentStep);
+  const percent = useEasedProgress(run?.output?.percent ?? 0, generating);
 
   return (
     <div className="space-y-3">
@@ -246,7 +250,21 @@ export function VideoStudio({
             >
               <Film className="h-4 w-4 text-accent" />
             </motion.div>
-            AI video pipeline running — usually 1–3 minutes
+            <span className="flex-1">AI video pipeline running — usually 1–3 minutes</span>
+            <span className="tnum font-mono text-[13px] text-ink-3">{percent}%</span>
+          </div>
+          <div
+            className="mb-3 h-1.5 w-full overflow-hidden rounded-full bg-surface-3"
+            role="progressbar"
+            aria-valuenow={percent}
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-label="Video generation progress"
+          >
+            <div
+              className="h-full rounded-full bg-accent transition-[width] duration-300 ease-out"
+              style={{ width: `${percent}%` }}
+            />
           </div>
           <ol className="space-y-1.5">
             {STEP_ORDER.map((step, i) => (

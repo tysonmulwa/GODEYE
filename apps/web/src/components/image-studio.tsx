@@ -6,16 +6,24 @@ import { Sparkles, Upload, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { IMAGE_PRESETS, IMAGE_PRESET_IDS } from "@godeye/shared";
 import { api } from "@/lib/api";
+import { useEasedProgress } from "@/lib/use-eased-progress";
 import { GodeyeSpinner } from "@/components/logo";
 import { Button, ErrorNote, Input, Label, cx } from "@/components/ui";
 
 interface AgentRun {
   id: string;
   status: "QUEUED" | "RUNNING" | "SUCCEEDED" | "FAILED";
-  output: { url?: string; mediaAssetId?: string } | null;
+  output: {
+    url?: string;
+    mediaAssetId?: string;
+    // Reported by the engine at each stage; see STAGES in tasks/image.py.
+    percent?: number;
+    detail?: string;
+  } | null;
   error: string | null;
   costUsd: string | null;
 }
+
 
 interface MediaAsset {
   id: string;
@@ -176,6 +184,8 @@ export function ImageStudio({
   };
 
   const generating = generate.isPending || (!!agentRunId && run?.status !== "SUCCEEDED");
+  const percent = useEasedProgress(run?.output?.percent ?? 0, generating);
+  const stageLabel = run?.output?.detail ?? "Starting";
 
   return (
     <div className="space-y-3">
@@ -230,8 +240,30 @@ export function ImageStudio({
         onClick={() => generate.mutate()}
       >
         <Sparkles className="h-4 w-4" />
-        {generating ? "Generating image…" : "Generate image"}
+        {generating ? `Generating image… ${percent}%` : "Generate image"}
       </Button>
+
+      {generating && (
+        <div>
+          <div
+            className="h-1.5 w-full overflow-hidden rounded-full bg-surface-3"
+            role="progressbar"
+            aria-valuenow={percent}
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-label="Image generation progress"
+          >
+            <div
+              className="h-full rounded-full bg-accent transition-[width] duration-300 ease-out"
+              style={{ width: `${percent}%` }}
+            />
+          </div>
+          <p className="mt-1.5 flex justify-between font-mono text-[12px] text-ink-3">
+            <span>{stageLabel}</span>
+            <span className="tnum">{percent}%</span>
+          </p>
+        </div>
+      )}
 
       <div className="flex items-center gap-3 py-0.5">
         <span className="h-px flex-1 bg-line" />

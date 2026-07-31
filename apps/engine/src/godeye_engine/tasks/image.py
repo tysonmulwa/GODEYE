@@ -26,6 +26,44 @@ from ..storage import download_bytes, upload_bytes
 
 logger = logging.getLogger(__name__)
 
+# Where each stage sits on the bar, measured rather than guessed: a probe of the
+# real pipeline put the provider call at roughly 20s against 3s for everything
+# else combined. So generation owns the span from 20 to 80, and the steps around
+# it are deliberately narrow. Inventing even progress across five equal steps
+# would park the bar mid-way for twenty seconds and read as a hang.
+STAGES: dict[str, tuple[int, str]] = {
+    "prompt": (8, "Writing the image prompt"),
+    "generate": (20, "Generating the image"),
+    "fit": (80, "Fitting to the preset"),
+    "brand": (88, "Applying your brand"),
+    "upload": (93, "Uploading"),
+}
+
+
+def _progress(agent_run_id: str, org_id: str, step: str) -> None:
+    """Publish which stage this run is on, and how far along that puts it.
+
+    Written to AgentRun.output as well as pushed over the socket, so a browser
+    that missed the event still sees the right state when it polls.
+    """
+    percent, detail = STAGES[step]
+    with get_session() as session:
+        session.execute(
+            update(AgentRun)
+            .where(AgentRun.c.id == agent_run_id)
+            .values(output={"progress": step, "detail": detail, "percent": percent})
+        )
+        session.commit()
+    publish_event(
+        org_id,
+        {
+            "type": "agent_run.progress",
+            "agentRunId": agent_run_id,
+            "step": step,
+            "percent": percent,
+        },
+    )
+
 
 # One image is a single provider call plus some resizing. If it has not finished
 # in five minutes it is not going to, and waiting costs a worker slot that
@@ -67,6 +105,7 @@ def generate_image(
 
     try:
         # 1. Expand the brief into a strong prompt (LLM if available, else fallback)
+        _progress(agent_run_id, org_id, "prompt")
         try:
             prompt = image_agent.build_image_prompt(
                 profile_dict, image_agent.ImagePromptRequest(brief=brief, style=style)
@@ -78,12 +117,15 @@ def generate_image(
             )
 
         # 2. Generate at the closest provider size, then fit exactly to the preset
+        _progress(agent_run_id, org_id, "generate")
         provider_size = presets.closest_provider_size(preset.width, preset.height)
         result = image_provider.generate_image(prompt, provider_size)
+        _progress(agent_run_id, org_id, "fit")
         image_bytes = branding.fit_to_preset(result.data, preset)
 
         # 3. Optional brand overlay
         if apply_brand and brand:
+            _progress(agent_run_id, org_id, "brand")
             logo_bytes = None
             if brand["logoStorageKey"]:
                 try:
@@ -119,6 +161,7 @@ def generate_image(
     # credentials are the likely thing to be missing here, and being told that
     # is the entire difference between a two-minute fix and an afternoon.
     try:
+        _progress(agent_run_id, org_id, "upload")
         now = utcnow()
         media_id = new_id()
         key = f"{org_id}/generated/{media_id}.png"
