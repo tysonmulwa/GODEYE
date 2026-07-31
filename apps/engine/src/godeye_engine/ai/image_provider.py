@@ -56,6 +56,23 @@ def price_for(model: str) -> float:
     return DEFAULT_IMAGE_PRICE
 
 
+def _missing_key_message(var: str, provider: str) -> str:
+    """Say where the variable is missing, not just that it is.
+
+    Image generation runs inside the Celery worker, which is deployed as its own
+    service and does not inherit the engine API's environment. Setting the key on
+    one service and seeing this from the other is the normal way to hit this, and
+    "not set" alone sends people to re-check the place they already set it.
+    """
+    return (
+        f"IMAGE_PROVIDER={provider} but {var} is empty in this process. "
+        f"Image generation runs in the Celery worker, which is a separate "
+        f"deployment from the engine API and does not share its variables: set "
+        f"{var} on the worker service as well, then redeploy it so the process "
+        f"restarts and picks the value up."
+    )
+
+
 def generate_image(prompt: str, provider_size: str) -> ImageResult:
     """Generate a single image. provider_size is a size the API supports."""
     settings = get_settings()
@@ -63,11 +80,11 @@ def generate_image(prompt: str, provider_size: str) -> ImageResult:
 
     if provider == "openai" or (provider != "google" and settings.openai_api_key):
         if not settings.openai_api_key:
-            raise RuntimeError("IMAGE_PROVIDER=openai but OPENAI_API_KEY is not set")
+            raise RuntimeError(_missing_key_message("OPENAI_API_KEY", "openai"))
         return _openai(prompt, provider_size)
     if provider == "google":
         if not settings.google_api_key:
-            raise RuntimeError("IMAGE_PROVIDER=google but GOOGLE_API_KEY is not set")
+            raise RuntimeError(_missing_key_message("GOOGLE_API_KEY", "google"))
         return _google(prompt, provider_size)
 
     raise RuntimeError(

@@ -37,3 +37,6 @@ coverage/
 .idea/
 .vscode/*
 !.vscode/extensions.json
+
+# setuptools build metadata, regenerated on every install
+*.egg-info/

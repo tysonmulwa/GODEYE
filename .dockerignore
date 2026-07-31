@@ -16,6 +16,9 @@ node_modules
 **/*.pyc
 **/.pytest_cache
 **/.ruff_cache
+# setuptools writes this next to the package in a src layout. A copy from the
+# host is stale by definition and has no business in the image.
+**/*.egg-info
 
 # Local-only state
 .media
