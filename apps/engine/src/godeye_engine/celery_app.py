@@ -32,6 +32,17 @@ app.conf.update(
     task_acks_late=True,
     worker_prefetch_multiplier=1,
     broker_connection_retry_on_startup=True,
+    # Nothing may occupy a worker slot indefinitely. The worker runs with
+    # --concurrency=2, so two wedged tasks stop everything else, publishing
+    # included. These are the outer bounds; video assembly is the slowest
+    # legitimate task and individual tasks tighten them further.
+    #
+    # The soft limit matters more than the hard one: it raises inside the task,
+    # so the handler marks the run FAILED and the message is acked. A hard kill
+    # under task_acks_late would return the message to the queue and the same
+    # task would wedge the next worker that picked it up.
+    task_soft_time_limit=20 * 60,
+    task_time_limit=25 * 60,
     beat_schedule={
         "dispatch-due-posts": {
             "task": "godeye_engine.tasks.scheduler.dispatch_due_posts",

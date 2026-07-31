@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import time
 
+from celery.exceptions import SoftTimeLimitExceeded
 from sqlalchemy import select, update
 
 from ..ai import image_agent, image_provider
@@ -26,7 +27,15 @@ from ..storage import download_bytes, upload_bytes
 logger = logging.getLogger(__name__)
 
 
-@app.task(name="godeye_engine.tasks.image.generate_image", bind=True)
+# One image is a single provider call plus some resizing. If it has not finished
+# in five minutes it is not going to, and waiting costs a worker slot that
+# scheduled posts also need.
+@app.task(
+    name="godeye_engine.tasks.image.generate_image",
+    bind=True,
+    soft_time_limit=5 * 60,
+    time_limit=6 * 60,
+)
 def generate_image(
     self,
     agent_run_id: str,
@@ -84,6 +93,18 @@ def generate_image(
             image_bytes = branding.apply_brand(
                 image_bytes, logo_bytes, brand["primaryColor"]
             )
+    except SoftTimeLimitExceeded:
+        # Raised inside the task, so this handler runs, the run is marked FAILED
+        # and the message is acked. Left to the hard limit the worker would be
+        # killed and task_acks_late would hand the same job to the next worker.
+        logger.warning("Image generation timed out for run %s", agent_run_id)
+        detail = (
+            "The image provider did not respond in time. This usually means the "
+            "model name is wrong for the installed SDK, or the provider is "
+            "degraded. Check OPENAI_IMAGE_MODEL on the worker service."
+        )
+        _fail_run(agent_run_id, org_id, detail)
+        return {"status": "FAILED", "error": detail}
     except Exception as e:  # noqa: BLE001
         logger.exception("Image generation failed for run %s", agent_run_id)
         _fail_run(agent_run_id, org_id, str(e))

@@ -97,7 +97,14 @@ def _openai(prompt: str, provider_size: str) -> ImageResult:
     from openai import OpenAI
 
     settings = get_settings()
-    client = OpenAI(api_key=settings.openai_api_key)
+    # Bound the call explicitly. Left to the SDK defaults (600s, 2 retries) a
+    # single stuck request occupies a worker slot for half an hour, and the
+    # symptom is a spinner rather than an error, which tells nobody anything.
+    client = OpenAI(
+        api_key=settings.openai_api_key,
+        timeout=settings.image_timeout_sec,
+        max_retries=1,
+    )
     response = client.images.generate(
         model=settings.openai_image_model,
         prompt=prompt,

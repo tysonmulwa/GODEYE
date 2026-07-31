@@ -40,6 +40,10 @@ class Settings(BaseSettings):
 
     # Image generation
     image_provider: str = "openai"  # openai | google
+    # The OpenAI SDK defaults to a 600s timeout and 2 retries, so one unlucky
+    # request can hold a worker slot for half an hour. The worker runs with
+    # --concurrency=2, so two of those stall publishing as well as images.
+    image_timeout_sec: float = 120.0
     # gpt-image-2 is the current flagship and undercuts both gpt-image-1 and
     # gpt-image-1.5 on price, so those two are never the right pick. The image
     # is the product here — it goes straight onto a customer's feed — so this
