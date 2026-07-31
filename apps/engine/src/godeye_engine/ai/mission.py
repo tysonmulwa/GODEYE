@@ -140,16 +140,20 @@ SKILLS: dict[str, Skill] = {
         key="image",
         title="Visual Prompt Agent",
         role=(
-            "You write vivid, concrete prompts for an AI image generator that fit "
-            "the brand and the post."
+            "You brief a photographer. The image has to stop someone scrolling, "
+            "so it shows real people in a real place doing something specific."
         ),
         responsibilities=(
-            "Describe subject, setting, lighting, composition, and style so the "
-            "image supports the message."
+            "Name the subject, their age, expression, clothing and action; the "
+            "actual location; the light and time of day; and the framing. Vary "
+            "the composition between posts so a feed does not look repetitive."
         ),
         guardrails=(
             "No text, words, logos, or watermarks in the image (branding is added "
-            "separately). Nothing misleading, unsafe, or off-brand."
+            "separately). Photorealistic people who could be real customers, never "
+            "a recognisable real person or public figure. Match the location and "
+            "audience given; do not default to generic Western stock imagery. "
+            "Nothing misleading, unsafe, or off-brand."
         ),
     ),
     "video": Skill(

@@ -96,7 +96,7 @@ class TestProviderSelection:
 
 
 class TestImageAgent:
-    def test_fallback_prompt_is_deterministic_and_safe(self):
+    def test_fallback_prompt_keeps_the_safety_rules(self):
         profile = {"industry": "coffee roasting", "businessName": "Acme"}
         req = image_agent.ImagePromptRequest(brief="a latte on a table", style="photorealistic")
         prompt = image_agent.fallback_prompt(profile, req)
@@ -124,3 +124,100 @@ class TestImageAgent:
         )
         # surrounding quotes stripped
         assert prompt == "A warm cinematic latte scene"
+
+
+class TestImagePromptQuality:
+    """Two consecutive posts came back as the same stock composition: hands
+    reaching toward each other, split warm and cool light, bokeh. The profile
+    held a location and an audience that were never passed to the agent, so
+    every image was set nowhere and aimed at no one."""
+
+    PROFILE = {
+        "businessName": "PataMpoa",
+        "industry": "Dating",
+        "description": "A dating app.",
+        "location": "Nairobi-Kenya",
+        "targetAudience": "relationship seekers, content creators",
+        "brandVoice": "warm and cool",
+    }
+
+    def test_the_location_reaches_the_model(self, monkeypatch):
+        captured = {}
+
+        def fake_complete(system, user, **kw):
+            captured["user"] = user
+            captured["system"] = system
+            return image_provider_stub()
+
+        monkeypatch.setattr(image_agent.provider, "complete", fake_complete)
+        image_agent.build_image_prompt(
+            self.PROFILE, image_agent.ImagePromptRequest(brief="a date night")
+        )
+        assert "Nairobi" in captured["user"]
+
+    def test_the_audience_reaches_the_model(self, monkeypatch):
+        captured = {}
+        monkeypatch.setattr(
+            image_agent.provider, "complete",
+            lambda system, user, **kw: (captured.update(user=user), image_provider_stub())[1],
+        )
+        image_agent.build_image_prompt(
+            self.PROFILE, image_agent.ImagePromptRequest(brief="a date night")
+        )
+        assert "content creators" in captured["user"]
+
+    def test_brand_voice_is_marked_as_tone_not_lighting(self, monkeypatch):
+        """"warm and cool" was being taken literally and turning up as split
+        warm/cool lighting in the rendered image."""
+        captured = {}
+        monkeypatch.setattr(
+            image_agent.provider, "complete",
+            lambda system, user, **kw: (captured.update(user=user), image_provider_stub())[1],
+        )
+        image_agent.build_image_prompt(
+            self.PROFILE, image_agent.ImagePromptRequest(brief="a date night")
+        )
+        assert "not to be taken as a lighting" in captured["user"]
+
+    def test_the_clichés_are_named_so_the_model_avoids_them(self):
+        system = image_agent.PROMPT_SYSTEM
+        assert "fingertips almost touching" in system
+        assert "warm and cool light" in system
+
+    def test_framing_varies_between_calls(self, monkeypatch):
+        """Identical briefs must not converge on one composition."""
+        seen = set()
+        monkeypatch.setattr(
+            image_agent.provider, "complete",
+            lambda system, user, **kw: (seen.add(user.split("Use this framing: ")[1]),
+                                        image_provider_stub())[1],
+        )
+        import random as _random
+
+        for seed in range(12):
+            image_agent.build_image_prompt(
+                self.PROFILE,
+                image_agent.ImagePromptRequest(brief="a date night"),
+                rng=_random.Random(seed),
+            )
+        assert len(seen) > 1, "every call picked the same framing"
+
+    def test_the_fallback_still_names_the_place_and_the_people(self):
+        """No LLM is exactly when the model is most likely to invent an
+        American office."""
+        prompt = image_agent.fallback_prompt(
+            self.PROFILE, image_agent.ImagePromptRequest(brief="a date night")
+        )
+        assert "Nairobi" in prompt
+        assert "content creators" in prompt
+        assert "no text or logos" in prompt
+
+
+def image_provider_stub():
+    from godeye_engine.ai.provider import LlmResult
+
+    return LlmResult(
+        text="A specific photographic prompt.",
+        provider="anthropic", model="test",
+        input_tokens=1, output_tokens=1,
+    )
