@@ -110,70 +110,100 @@ def generate_image(
         _fail_run(agent_run_id, org_id, str(e))
         return {"status": "FAILED", "error": str(e)}
 
-    # 4. Upload + persist
-    now = utcnow()
-    media_id = new_id()
-    key = f"{org_id}/generated/{media_id}.png"
-    url = upload_bytes(key, image_bytes, "image/png")
-    duration_ms = int((time.monotonic() - started) * 1000)
+    # 4. Upload + persist.
+    #
+    # Inside the same try as everything above. It used to sit outside it, so an
+    # upload failure escaped the task without ever calling _fail_run: the run
+    # stayed RUNNING with no error and no completedAt, the UI span forever, and
+    # the worker carried on to the next job looking perfectly healthy. Storage
+    # credentials are the likely thing to be missing here, and being told that
+    # is the entire difference between a two-minute fix and an afternoon.
+    try:
+        now = utcnow()
+        media_id = new_id()
+        key = f"{org_id}/generated/{media_id}.png"
+        url = upload_bytes(key, image_bytes, "image/png")
+        duration_ms = int((time.monotonic() - started) * 1000)
 
-    with get_session() as session:
-        session.execute(
-            MediaAsset.insert().values(
-                id=media_id,
-                orgId=org_id,
-                contentItemId=content_item_id,
-                kind="IMAGE",
-                source="AI_GENERATED",
-                storageKey=key,
-                url=url,
-                mimeType="image/png",
-                sizeBytes=len(image_bytes),
-                width=preset.width,
-                height=preset.height,
-                prompt=prompt,
-                preset=preset_id,
-                agentRunId=agent_run_id,
-                metadata={"provider": result.provider, "model": result.model},
-                createdAt=now,
+        with get_session() as session:
+            session.execute(
+                MediaAsset.insert().values(
+                    id=media_id,
+                    orgId=org_id,
+                    contentItemId=content_item_id,
+                    kind="IMAGE",
+                    source="AI_GENERATED",
+                    storageKey=key,
+                    url=url,
+                    mimeType="image/png",
+                    sizeBytes=len(image_bytes),
+                    width=preset.width,
+                    height=preset.height,
+                    prompt=prompt,
+                    preset=preset_id,
+                    agentRunId=agent_run_id,
+                    metadata={"provider": result.provider, "model": result.model},
+                    createdAt=now,
+                )
             )
-        )
-        session.execute(
-            update(AgentRun)
-            .where(AgentRun.c.id == agent_run_id)
-            .values(
-                status="SUCCEEDED",
-                output={"mediaAssetId": media_id, "url": url, "prompt": prompt},
-                provider=result.provider,
-                model=result.model,
-                costUsd=round(result.cost_usd, 6),
-                durationMs=duration_ms,
-                completedAt=now,
+            session.execute(
+                update(AgentRun)
+                .where(AgentRun.c.id == agent_run_id)
+                .values(
+                    status="SUCCEEDED",
+                    output={"mediaAssetId": media_id, "url": url, "prompt": prompt},
+                    provider=result.provider,
+                    model=result.model,
+                    costUsd=round(result.cost_usd, 6),
+                    durationMs=duration_ms,
+                    completedAt=now,
+                )
             )
-        )
-        session.execute(
-            UsageRecord.insert().values(
-                id=new_id(),
-                orgId=org_id,
-                metric="images_generated",
-                quantity=1,
-                periodStart=now.replace(day=1, hour=0, minute=0, second=0, microsecond=0),
-                createdAt=now,
+            session.execute(
+                UsageRecord.insert().values(
+                    id=new_id(),
+                    orgId=org_id,
+                    metric="images_generated",
+                    quantity=1,
+                    periodStart=now.replace(day=1, hour=0, minute=0, second=0, microsecond=0),
+                    createdAt=now,
+                )
             )
-        )
-        session.commit()
+            session.commit()
 
-    publish_event(
-        org_id,
-        {
-            "type": "media_asset.created",
-            "agentRunId": agent_run_id,
-            "mediaAssetId": media_id,
-            "url": url,
-        },
+        publish_event(
+            org_id,
+            {
+                "type": "media_asset.created",
+                "agentRunId": agent_run_id,
+                "mediaAssetId": media_id,
+                "url": url,
+            },
+        )
+        logger.info("Generated image %s (%s) for org %s", media_id, preset_id, org_id)
+        return {"status": "SUCCEEDED", "mediaAssetId": media_id, "url": url}
+    except Exception as e:  # noqa: BLE001
+        logger.exception("Storing generated image failed for run %s", agent_run_id)
+        _fail_run(agent_run_id, org_id, _storage_error(e))
+        return {"status": "FAILED", "error": str(e)}
+
+
+def _storage_error(e: Exception) -> str:
+    """Name the likely cause when the image was made but could not be stored.
+
+    The picture already exists at this point and the provider was paid for it,
+    so the failure is local: object storage. The Celery worker is a separate
+    deployment from the engine API, and only the API's own upload endpoint is
+    exercised by normal use, so the worker's storage settings can be wrong
+    without anyone noticing until an agent tries to write.
+    """
+    return (
+        f"The image was generated but could not be stored: {e}. "
+        "Uploads run in the Celery worker, which is a separate deployment from "
+        "the engine API and needs its own storage settings. Check "
+        "STORAGE_BACKEND, S3_ENDPOINT, S3_ACCESS_KEY, S3_SECRET_KEY, S3_BUCKET "
+        "and S3_PUBLIC_URL on the worker service."
     )
-    logger.info("Generated image %s (%s) for org %s", media_id, preset_id, org_id)
-    return {"status": "SUCCEEDED", "mediaAssetId": media_id, "url": url}
 
 
 def _fail_run(agent_run_id: str, org_id: str, error: str) -> None:
