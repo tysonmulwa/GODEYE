@@ -240,7 +240,9 @@ export function ImageStudio({
         onClick={() => generate.mutate()}
       >
         <Sparkles className="h-4 w-4" />
-        {generating ? `Generating image… ${percent}%` : "Generate image"}
+        {/* The percentage lives under the bar, next to the stage it belongs to.
+            Repeating it here showed the same number twice. */}
+        {generating ? "Generating image…" : "Generate image"}
       </Button>
 
       {generating && (
