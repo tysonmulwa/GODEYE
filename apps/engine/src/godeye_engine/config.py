@@ -77,6 +77,17 @@ class Settings(BaseSettings):
     # and posts go out at the most public level the creator allows.
     tiktok_audited: bool = False
 
+    # Where a TikTok post lands.
+    #   direct  publish straight to the profile
+    #   drafts  send to the user's TikTok inbox to finish in the app
+    #   auto    drafts until the app is audited, direct afterwards
+    #
+    # Drafts exists because TikTok's music catalogue is only reachable inside
+    # their editor: opening the draft is what produces the suggested song. It
+    # also sidesteps the unaudited SELF_ONLY limit, since the person publishes
+    # it rather than the app, so posts can be public before the audit lands.
+    tiktok_post_mode: str = "auto"  # auto | direct | drafts
+
     reddit_client_id: str = ""
     reddit_client_secret: str = ""
     reddit_user_agent: str = "godeye/0.1"

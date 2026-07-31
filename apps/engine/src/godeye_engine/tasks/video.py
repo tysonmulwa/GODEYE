@@ -17,6 +17,7 @@ from ..ai import image_provider, tts_provider, video_agent
 from ..celery_app import app
 from ..db import (
     AgentRun,
+    BrandKit,
     BusinessProfile,
     MediaAsset,
     UsageRecord,
@@ -26,7 +27,7 @@ from ..db import (
 )
 from ..events import publish_event
 from ..media import branding, presets, subtitles, video
-from ..storage import upload_bytes
+from ..storage import download_bytes, upload_bytes
 
 logger = logging.getLogger(__name__)
 
@@ -39,6 +40,7 @@ STAGE_PERCENT: dict[str, int] = {
     "scenes": 10,  # 10 to 70, split across the scenes
     "assembly": 75,
     "captions": 85,
+    "music": 90,
     "upload": 92,
 }
 SCENES_SPAN = 60
@@ -96,9 +98,13 @@ def generate_video(
         profile = session.execute(
             select(BusinessProfile).where(BusinessProfile.c.orgId == org_id)
         ).mappings().first()
+        brand = session.execute(
+            select(BrandKit).where(BrandKit.c.orgId == org_id)
+        ).mappings().first()
         session.commit()
 
     profile_dict = dict(profile) if profile else {"industry": "business"}
+    music_key = (brand or {}).get("musicStorageKey")
     total_cost = 0.0
 
     try:
@@ -189,7 +195,26 @@ def generate_video(
                 )
                 final = captioned
 
-            # 5. Upload + persist
+            # 5. Background music.
+            #
+            # Last, so it plays under the finished cut rather than being
+            # re-encoded by the passes after it. Best effort: a missing or
+            # unreadable track must not throw away a video that is otherwise
+            # ready, so the video ships silent-but-narrated instead.
+            if music_key:
+                try:
+                    _progress(agent_run_id, org_id, "music", "Adding background music")
+                    music_path = tmpdir / "music.mp3"
+                    music_path.write_bytes(download_bytes(music_key))
+                    mixed = tmpdir / "mixed.mp4"
+                    video.run(
+                        video.mix_music_cmd(str(final), str(music_path), str(mixed))
+                    )
+                    final = mixed
+                except Exception as e:  # noqa: BLE001
+                    logger.warning("Background music skipped for %s: %s", agent_run_id, e)
+
+            # 6. Upload + persist
             _progress(agent_run_id, org_id, "upload", "Uploading")
             video_bytes = final.read_bytes()
             total_duration = video.probe_duration(str(final))

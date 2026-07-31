@@ -98,23 +98,30 @@ class TikTokPublisher(BasePublisher):
                 f"{MAX_SINGLE_CHUNK // 1_000_000} MB, which isn't supported yet."
             )
 
-        init = self._post(
-            f"{API}/post/publish/video/init/",
-            headers=headers,
-            json={
+        # A whole-file upload is one chunk covering the entire video.
+        source_info = {
+            "source": "FILE_UPLOAD",
+            "video_size": size,
+            "chunk_size": size,
+            "total_chunk_count": 1,
+        }
+        drafts = self._to_drafts()
+        if drafts:
+            # The inbox has its own endpoint and takes no post_info at all: the
+            # caption and privacy are chosen in the app when publishing.
+            endpoint = f"{API}/post/publish/inbox/video/init/"
+            init_json: dict[str, Any] = {"source_info": source_info}
+        else:
+            endpoint = f"{API}/post/publish/video/init/"
+            init_json = {
                 "post_info": {
                     "title": payload.text[:CAPTION_LIMIT],
                     "privacy_level": self._privacy_level(headers),
                 },
-                # A whole-file upload is one chunk covering the entire video.
-                "source_info": {
-                    "source": "FILE_UPLOAD",
-                    "video_size": size,
-                    "chunk_size": size,
-                    "total_chunk_count": 1,
-                },
-            },
-        )
+                "source_info": source_info,
+            }
+
+        init = self._post(endpoint, headers=headers, json=init_json)
         body = init.json()
         if init.status_code >= 400 or (body.get("error") or {}).get("code") not in (None, "ok"):
             raise self._fail_tiktok(init, "TikTok (init)")
@@ -148,23 +155,33 @@ class TikTokPublisher(BasePublisher):
                 "Regenerate the image, or attach a JPEG."
             )
 
+        drafts = self._to_drafts()
+        body_json: dict[str, Any] = {
+            "source_info": {
+                "source": "PULL_FROM_URL",
+                "photo_cover_index": 0,
+                "photo_images": images,
+            },
+            "post_mode": "MEDIA_UPLOAD" if drafts else "DIRECT_POST",
+            "media_type": "PHOTO",
+        }
+        # A draft carries no privacy_level: the person sets it in the app when
+        # they publish, which is also why an unaudited app may send one.
+        if drafts:
+            body_json["post_info"] = {
+                "title": (payload.title or payload.text)[:TITLE_LIMIT],
+            }
+        else:
+            body_json["post_info"] = {
+                "title": (payload.title or payload.text)[:TITLE_LIMIT],
+                "description": payload.text[:CAPTION_LIMIT],
+                "privacy_level": self._privacy_level(headers),
+            }
+
         init = self._post(
             f"{API}/post/publish/content/init/",
             headers=headers,
-            json={
-                "post_info": {
-                    "title": (payload.title or payload.text)[:TITLE_LIMIT],
-                    "description": payload.text[:CAPTION_LIMIT],
-                    "privacy_level": self._privacy_level(headers),
-                },
-                "source_info": {
-                    "source": "PULL_FROM_URL",
-                    "photo_cover_index": 0,
-                    "photo_images": payload.media_urls[:PHOTO_LIMIT],
-                },
-                "post_mode": "DIRECT_POST",
-                "media_type": "PHOTO",
-            },
+            json=body_json,
         )
         body = init.json()
         if init.status_code >= 400 or (body.get("error") or {}).get("code") not in (None, "ok"):
@@ -176,6 +193,21 @@ class TikTokPublisher(BasePublisher):
 
         self._await_publish(publish_id, headers, kind="photo")
         return PublishResult(external_post_id=publish_id, external_post_url=None)
+
+    def _to_drafts(self) -> bool:
+        """Should this post land in the user's TikTok inbox rather than live?
+
+        "auto" is the default and means drafts until the app passes its audit.
+        Before approval a direct post can only be SELF_ONLY, so it goes out
+        silent and visible to nobody; as a draft the person opens the app, takes
+        the song TikTok suggests, and publishes it publicly themselves.
+        """
+        mode = get_settings().tiktok_post_mode.strip().lower()
+        if mode == "direct":
+            return False
+        if mode == "drafts":
+            return True
+        return not get_settings().tiktok_audited
 
     def _fail_tiktok(self, response, stage: str) -> PublishError:
         """TikTok's own message for the audit error points at the wrong thing.

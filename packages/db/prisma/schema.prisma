@@ -351,6 +351,12 @@ model BrandKit {
   logoUrl          String?
   fontFamily       String?
   watermarkEnabled Boolean  @default(false)
+  // Background track mixed under generated video. TikTok's own catalogue is
+  // only usable inside their app, so anything published directly has to carry
+  // audio the workspace is licensed to use.
+  musicStorageKey  String?
+  musicUrl         String?
+  musicName        String?
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 

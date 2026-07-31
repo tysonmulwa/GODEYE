@@ -669,3 +669,68 @@ class TestTikTokPhotoFormat:
         )
         with pytest.raises(PublishError, match="rejected the video"):
             TikTokPublisher()._await_publish("pid", {"Authorization": "Bearer t"})
+
+
+class TestTikTokDraftMode:
+    """TikTok's music catalogue only exists inside their editor, so the
+    suggested song appears when a person opens the post there. A draft is what
+    puts them in it. It also carries no privacy_level, so an unaudited app can
+    send one and the person publishes it publicly themselves."""
+
+    CREDS = {"accessToken": "t"}
+
+    def _mode(self, monkeypatch, post_mode: str, audited: str = "false") -> bool:
+        monkeypatch.setenv("TIKTOK_POST_MODE", post_mode)
+        monkeypatch.setenv("TIKTOK_AUDITED", audited)
+        get_settings.cache_clear()
+        try:
+            return TikTokPublisher()._to_drafts()
+        finally:
+            get_settings.cache_clear()
+
+    def test_auto_uses_drafts_until_the_app_is_audited(self, monkeypatch):
+        assert self._mode(monkeypatch, "auto", audited="false") is True
+
+    def test_auto_publishes_directly_once_audited(self, monkeypatch):
+        assert self._mode(monkeypatch, "auto", audited="true") is False
+
+    def test_explicit_settings_win_over_audit_state(self, monkeypatch):
+        assert self._mode(monkeypatch, "direct", audited="false") is False
+        assert self._mode(monkeypatch, "drafts", audited="true") is True
+
+    def test_a_photo_draft_sends_no_privacy_level(self, monkeypatch):
+        """privacy_level is what an unaudited app is not allowed to raise. A
+        draft has none, which is why it gets past the restriction."""
+        captured = {}
+        monkeypatch.setenv("TIKTOK_POST_MODE", "drafts")
+        get_settings.cache_clear()
+        monkeypatch.setattr(
+            TikTokPublisher, "_post",
+            lambda self, url, **kw: captured.update(url=url, json=kw.get("json"))
+            or http_response(200, {"data": {"publish_id": "p1"}}),
+        )
+        monkeypatch.setattr(TikTokPublisher, "_await_publish", lambda *a, **kw: None)
+        TikTokPublisher().publish(
+            self.CREDS, PostPayload(text="hi", media_urls=["https://cdn/x.jpg"])
+        )
+        assert captured["json"]["post_mode"] == "MEDIA_UPLOAD"
+        assert "privacy_level" not in captured["json"]["post_info"]
+        get_settings.cache_clear()
+
+    def test_a_direct_photo_post_still_carries_privacy_level(self, monkeypatch):
+        captured = {}
+        monkeypatch.setenv("TIKTOK_POST_MODE", "direct")
+        get_settings.cache_clear()
+        monkeypatch.setattr(
+            TikTokPublisher, "_post",
+            lambda self, url, **kw: captured.update(json=kw.get("json"))
+            or http_response(200, {"data": {"publish_id": "p1"}}),
+        )
+        monkeypatch.setattr(TikTokPublisher, "_privacy_level", lambda self, h: "SELF_ONLY")
+        monkeypatch.setattr(TikTokPublisher, "_await_publish", lambda *a, **kw: None)
+        TikTokPublisher().publish(
+            self.CREDS, PostPayload(text="hi", media_urls=["https://cdn/x.jpg"])
+        )
+        assert captured["json"]["post_mode"] == "DIRECT_POST"
+        assert captured["json"]["post_info"]["privacy_level"] == "SELF_ONLY"
+        get_settings.cache_clear()

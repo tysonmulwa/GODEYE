@@ -251,6 +251,9 @@ BrandKit = Table(
     Column("logoUrl", String),
     Column("fontFamily", String),
     Column("watermarkEnabled", Boolean, nullable=False),
+    Column("musicStorageKey", String),
+    Column("musicUrl", String),
+    Column("musicName", String),
     Column("createdAt", DateTime(timezone=False)),
     Column("updatedAt", DateTime(timezone=False)),
 )
