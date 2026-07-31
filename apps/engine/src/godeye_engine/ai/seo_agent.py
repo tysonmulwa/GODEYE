@@ -7,11 +7,12 @@ from typing import Any
 
 from . import mission, provider
 from .content_agent import parse_response
+from .style import dedash
 
 SYSTEM_PROMPT = mission.charter("seo") + "\n\n" + (
     "Deliver realistic keywords a small business can rank for, compelling meta "
     "tags, and valid schema.org markup, grounded in the crawled site. "
-    "Respond ONLY with valid JSON — no markdown fences, no commentary."
+    "Respond ONLY with valid JSON, with no markdown fences, no commentary."
 )
 
 
@@ -27,7 +28,7 @@ def keyword_research(
     """
     lines = [
         "You are auditing the website below. First infer, purely from its real",
-        "crawled content, what this site is actually about — its niche, products,",
+        "crawled content, what this site is actually about: its niche, products,",
         "services and audience. Then do keyword research for THAT. Do not import a",
         "topic the content doesn't support.",
         "",
@@ -39,7 +40,7 @@ def keyword_research(
     if profile and profile.get("businessName"):
         lines += [
             "The site owner describes their business as follows (supporting context",
-            "only — the crawled content above is the source of truth):",
+            "only; the crawled content above is the source of truth):",
             f"- {profile.get('businessName')} ({profile.get('industry')}): {profile.get('description')}",
             f"- Audience: {profile.get('targetAudience')}",
             f"- Location: {profile.get('location') or 'not location-specific'}",
@@ -93,7 +94,7 @@ def meta_suggestions(
     ]
     lines = [
         "These pages have weak or missing meta tags. Base each rewrite on that",
-        "page's own title / heading / URL — describe what the page is actually about.",
+        "page's own title / heading / URL. Describe what the page is actually about.",
         "",
         json.dumps(page_lines, indent=2),
     ]
@@ -101,7 +102,7 @@ def meta_suggestions(
         lines += [
             "",
             f"Site owner (context): {profile.get('businessName')} "
-            f"({profile.get('industry')}) — {profile.get('description')}",
+            f"({profile.get('industry')}): {profile.get('description')}",
         ]
     lines += [
         "",
@@ -132,9 +133,11 @@ def meta_suggestions(
             {
                 "page": item.get("page", ""),
                 "currentTitle": page.get("title") if page else None,
-                "suggestedTitle": str(item.get("suggestedTitle") or "")[:70],
+                "suggestedTitle": dedash(str(item.get("suggestedTitle") or ""))[:70],
                 "currentDescription": page.get("meta_description") if page else None,
-                "suggestedDescription": str(item.get("suggestedDescription") or "")[:170],
+                "suggestedDescription": dedash(
+                    str(item.get("suggestedDescription") or "")
+                )[:170],
             }
         )
     return suggestions, llm

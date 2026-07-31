@@ -12,11 +12,12 @@ from typing import Any
 
 from . import mission, provider
 from .content_agent import parse_response  # tolerant JSON extraction
+from .style import dedash
 
 SYSTEM_PROMPT = mission.charter("video") + "\n\n" + (
     "Write scripts for short vertical videos (TikTok / Reels / Shorts) that hook "
     "in the first two seconds and hold attention to the end. "
-    "Respond ONLY with valid JSON — no markdown fences, no commentary."
+    "Respond ONLY with valid JSON, with no markdown fences, no commentary."
 )
 
 MIN_SCENES = 2
@@ -68,7 +69,7 @@ def build_prompt(profile: dict[str, Any], brief: str, duration_sec: int, style: 
         json.dumps(
             {
                 "title": "internal title",
-                "hook": "the first scene's opening line — must grab attention instantly",
+                "hook": "the first scene's opening line, which must grab attention instantly",
                 "scenes": [
                     {
                         "narration": "spoken words for this scene",
@@ -96,7 +97,9 @@ def normalize_script(raw: dict[str, Any]) -> VideoScript:
         raise ValueError("Script has no scenes")
     scenes: list[Scene] = []
     for item in scenes_raw[:MAX_SCENES]:
-        narration = str(item.get("narration") or "").strip()
+        # Narration is spoken and on-screen text is read, so both carry the
+        # tell. The visual prompt only ever reaches the image model.
+        narration = dedash(str(item.get("narration") or "").strip())
         visual = str(item.get("visualPrompt") or "").strip()
         if not narration or not visual:
             continue
@@ -105,16 +108,16 @@ def normalize_script(raw: dict[str, Any]) -> VideoScript:
             Scene(
                 narration=narration,
                 visual_prompt=visual,
-                on_screen_text=str(text).strip() if text else None,
+                on_screen_text=dedash(str(text).strip()) if text else None,
             )
         )
     if len(scenes) < MIN_SCENES:
         raise ValueError(f"Script needs at least {MIN_SCENES} usable scenes, got {len(scenes)}")
     return VideoScript(
-        title=str(raw.get("title") or "Untitled video"),
-        hook=str(raw.get("hook") or scenes[0].narration),
+        title=dedash(str(raw.get("title") or "Untitled video")),
+        hook=dedash(str(raw.get("hook") or scenes[0].narration)),
         scenes=scenes,
-        cta=str(raw.get("cta") or ""),
+        cta=dedash(str(raw.get("cta") or "")),
         hashtags=[str(t).lstrip("#") for t in (raw.get("hashtags") or [])][:20],
     )
 

@@ -8,6 +8,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from . import mission, provider
+from .style import dedash
 
 PLATFORM_LIMITS = {
     "TELEGRAM": 4096,
@@ -23,7 +24,7 @@ PLATFORM_LIMITS = {
 SYSTEM_PROMPT = mission.charter("content") + "\n\n" + (
     "Write content that sounds human and matches the brand voice exactly, tailored "
     "to each platform's culture and length limits. "
-    "Respond ONLY with valid JSON — no markdown fences, no commentary."
+    "Respond ONLY with valid JSON, with no markdown fences, no commentary."
 )
 
 
@@ -53,7 +54,7 @@ def build_prompt(profile: dict[str, Any], request: ContentRequest) -> str:
     if is_creator:
         lines = [
             "Create social media content for this solo content creator. Write in their",
-            "personal voice (first person where natural) — authentic and direct, not corporate.",
+            "personal voice (first person where natural), authentic and direct, not corporate.",
             "",
             f"Creator / brand: {profile.get('businessName')}",
             f"Niche: {profile.get('industry')}",
@@ -123,7 +124,7 @@ def build_prompt(profile: dict[str, Any], request: ContentRequest) -> str:
     if request.ab_test:
         lines.append(
             "A/B rule: abVariants.A and abVariants.B must take genuinely different creative "
-            "angles (e.g. emotional vs. factual, question vs. statement) — not rewordings."
+            "angles (e.g. emotional vs. factual, question vs. statement), not rewordings."
         )
     return "\n".join(lines)
 
@@ -146,11 +147,14 @@ def parse_response(text: str) -> dict[str, Any]:
 def enforce_limits(data: dict[str, Any], platforms: list[str]) -> dict[str, Any]:
     """Guarantee every variant exists and respects its platform limit."""
     variants: dict[str, dict[str, Any]] = {}
-    base_body = str(data.get("body", ""))
+    # dedash before measuring: it changes length, so cleaning afterwards could
+    # push a variant back under its limit and leave the truncation ellipsis
+    # sitting in text that would now have fit.
+    base_body = dedash(str(data.get("body", "")))
     base_tags = [str(t).lstrip("#") for t in data.get("hashtags", [])][:30]
     for p in platforms:
         raw = (data.get("variants") or {}).get(p) or {}
-        body = str(raw.get("body") or base_body)
+        body = dedash(str(raw.get("body") or base_body))
         tags = [str(t).lstrip("#") for t in (raw.get("hashtags") or base_tags)][:30]
         limit = PLATFORM_LIMITS.get(p, 5000)
         suffix = (" " + " ".join(f"#{t}" for t in tags)) if tags and p != "REDDIT" else ""
@@ -158,7 +162,7 @@ def enforce_limits(data: dict[str, Any], platforms: list[str]) -> dict[str, Any]
             body = body[: max(0, limit - len(suffix) - 1)].rstrip() + "…"
         variants[p] = {"body": body, "hashtags": tags}
     return {
-        "title": str(data.get("title") or base_body[:60] or "Untitled post"),
+        "title": dedash(str(data.get("title") or base_body[:60] or "Untitled post")),
         "body": base_body,
         "hashtags": base_tags,
         "variants": variants,
@@ -174,7 +178,7 @@ def extract_ab_variants(raw: dict[str, Any]) -> dict[str, dict[str, Any]] | None
     for key in ("A", "B"):
         variant = ab[key] or {}
         out[key] = {
-            "body": str(variant.get("body", "")),
+            "body": dedash(str(variant.get("body", ""))),
             "hashtags": [str(t).lstrip("#") for t in (variant.get("hashtags") or [])][:30],
         }
     if not out["A"]["body"] or not out["B"]["body"]:
