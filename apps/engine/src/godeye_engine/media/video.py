@@ -68,6 +68,25 @@ def locate_ffprobe() -> str:
 # ---------- pure command builders ----------
 
 
+# How far narration may be sped up or slowed to hit a requested length. Beyond
+# roughly a tenth either way the change stops being a pace adjustment and starts
+# being audible, so past this the honest answer is to return the length we got.
+MAX_TEMPO_SHIFT = 0.12
+
+
+def tempo_for_target(actual_sec: float, target_sec: float) -> float:
+    """Playback rate that brings a narration of ``actual_sec`` toward the target.
+
+    Returns 1.0 when no correction is possible or warranted. Above 1.0 speeds
+    up (the script over-ran), below 1.0 slows down. Clamped, because a video
+    that is a few seconds long is better than one that sounds like a chipmunk.
+    """
+    if actual_sec <= 0 or target_sec <= 0:
+        return 1.0
+    factor = actual_sec / target_sec
+    return max(1.0 - MAX_TEMPO_SHIFT, min(1.0 + MAX_TEMPO_SHIFT, factor))
+
+
 def scene_clip_cmd(
     image_path: str,
     audio_path: str,
@@ -75,8 +94,15 @@ def scene_clip_cmd(
     width: int,
     height: int,
     duration: float,
+    tempo: float = 1.0,
 ) -> list[str]:
-    """Still image + narration audio → motion clip (subtle Ken Burns zoom)."""
+    """Still image + narration audio → motion clip (subtle Ken Burns zoom).
+
+    ``tempo`` retimes the narration so the finished video lands on the length
+    the user asked for. atempo preserves pitch, so a correction this small is
+    heard as pace rather than as distortion. ``duration`` must already account
+    for it, or the still would outlast the audio.
+    """
     frames = max(1, int(round(duration * FPS)))
     zoom_filter = (
         f"[0:v]scale={width}:{height}:force_original_aspect_ratio=increase,"
@@ -85,14 +111,21 @@ def scene_clip_cmd(
         f":x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)'"
         f":s={width}x{height}:fps={FPS}[v]"
     )
+    # Only build an audio filter when there is something to correct, so the
+    # untimed path stays byte-identical to what it was.
+    filter_complex = zoom_filter
+    audio_map = "1:a"
+    if abs(tempo - 1.0) > 0.001:
+        filter_complex = f"{zoom_filter};[1:a]atempo={tempo:.4f}[a]"
+        audio_map = "[a]"
     return [
         "-y",
         "-loop", "1",
         "-i", image_path,
         "-i", audio_path,
-        "-filter_complex", zoom_filter,
+        "-filter_complex", filter_complex,
         "-map", "[v]",
-        "-map", "1:a",
+        "-map", audio_map,
         "-c:v", "libx264",
         "-preset", "medium",
         "-pix_fmt", "yuv420p",

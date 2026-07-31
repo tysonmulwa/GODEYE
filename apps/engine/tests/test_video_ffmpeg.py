@@ -78,3 +78,40 @@ class TestLocateFfmpeg:
         with pytest.raises(RuntimeError, match="winget install"):
             video.locate_ffmpeg()
         get_settings.cache_clear()
+
+
+class TestDurationTargeting:
+    """duration_sec used to be a suggestion to the script writer. Whatever length
+    the narration ran to was the length the user got, however far off it was."""
+
+    def test_an_overrunning_script_is_sped_up(self):
+        assert video.tempo_for_target(actual_sec=33.0, target_sec=30.0) == pytest.approx(1.1)
+
+    def test_a_short_script_is_slowed_down(self):
+        assert video.tempo_for_target(actual_sec=27.0, target_sec=30.0) == pytest.approx(0.9)
+
+    def test_a_script_already_on_target_is_left_alone(self):
+        assert video.tempo_for_target(30.0, 30.0) == 1.0
+
+    def test_correction_is_capped_so_speech_stays_natural(self):
+        """A script at double the target cannot be fixed by playback rate. Better
+        a video that runs long than one nobody can listen to."""
+        assert video.tempo_for_target(60.0, 30.0) == pytest.approx(1 + video.MAX_TEMPO_SHIFT)
+        assert video.tempo_for_target(5.0, 30.0) == pytest.approx(1 - video.MAX_TEMPO_SHIFT)
+
+    def test_nonsense_inputs_do_not_retime(self):
+        assert video.tempo_for_target(0.0, 30.0) == 1.0
+        assert video.tempo_for_target(30.0, 0.0) == 1.0
+
+    def test_no_audio_filter_when_no_correction_is_needed(self):
+        """The untimed path must stay exactly as it was."""
+        cmd = video.scene_clip_cmd("i.png", "a.mp3", "o.mp4", 1080, 1920, 4.0, tempo=1.0)
+        assert "atempo" not in " ".join(cmd)
+        assert "1:a" in cmd
+
+    def test_atempo_is_applied_and_mapped_when_retiming(self):
+        cmd = video.scene_clip_cmd("i.png", "a.mp3", "o.mp4", 1080, 1920, 4.0, tempo=1.08)
+        joined = " ".join(cmd)
+        assert "atempo=1.0800" in joined
+        assert "[a]" in cmd, "retimed audio must be the stream that gets mapped"
+        assert "1:a" not in cmd, "the raw audio must not be mapped as well"

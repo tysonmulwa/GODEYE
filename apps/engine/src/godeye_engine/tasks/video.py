@@ -112,15 +112,26 @@ def generate_video(
                 duration = video.probe_duration(str(audio_path)) + 0.3  # breathing room
                 scene_files.append((image_path, audio_path, duration))
 
-            # 3. Assemble clips
-            _progress(agent_run_id, org_id, "assembly", "Cutting scenes together")
+            # 3. Assemble clips.
+            #
+            # duration_sec used to be a hint to the script writer and nothing
+            # more: whatever length the narration happened to run to was the
+            # length the user got. Retime it toward the target instead, within
+            # a band small enough to hear as pace rather than distortion.
+            narrated = sum(d for _, _, d in scene_files)
+            tempo = video.tempo_for_target(narrated, float(duration_sec))
+            _progress(
+                agent_run_id, org_id, "assembly",
+                f"Cutting scenes together (script ran {narrated:.0f}s, "
+                f"target {duration_sec}s)",
+            )
             clip_paths: list[str] = []
             for i, (image_path, audio_path, duration) in enumerate(scene_files):
                 clip = tmpdir / f"clip{i}.mp4"
                 video.run(
                     video.scene_clip_cmd(
                         str(image_path), str(audio_path), str(clip),
-                        preset.width, preset.height, duration,
+                        preset.width, preset.height, duration / tempo, tempo,
                     )
                 )
                 clip_paths.append(str(clip))
