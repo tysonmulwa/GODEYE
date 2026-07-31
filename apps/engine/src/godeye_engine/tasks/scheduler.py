@@ -9,6 +9,7 @@ from sqlalchemy import and_, or_, select, update
 
 from ..celery_app import app
 from ..db import (
+    AgentRun,
     ContentItem,
     MediaAsset,
     Organization,
@@ -286,3 +287,74 @@ def _finish(
             "error": error,
         },
     )
+
+
+# An AgentRun is set to RUNNING by the task itself, and only the task can clear
+# it. If the worker process dies mid-task (an out-of-memory kill is the usual
+# way) no handler runs, no time limit fires, and the row stays RUNNING forever
+# while the UI spins on it. Nothing inside a dead process can fix that, so this
+# sweeps up from the outside.
+#
+# Thresholds sit above each task's own hard time limit, so a run only lands here
+# when the task genuinely never returned rather than merely being slow.
+STALE_RUN_MINUTES: dict[str, int] = {
+    "IMAGE": 10,   # hard limit 6m
+    "VIDEO": 30,   # slowest legitimate task
+    "CONTENT": 15,
+    "SEO": 30,
+}
+DEFAULT_STALE_RUN_MINUTES = 30
+
+STALE_RUN_ERROR = (
+    "The worker stopped without finishing this run. That usually means the "
+    "process was killed rather than the task failing, most often by running out "
+    "of memory. Try again, and check the worker service's memory if it repeats."
+)
+
+
+def is_stale_run(agent: str, created_at, now) -> bool:
+    """Has this RUNNING row outlived any chance its task is still working?
+
+    Split out from the task so the thresholds can be tested without a database;
+    getting this wrong in the impatient direction would fail runs that are
+    merely slow.
+    """
+    if created_at is None:
+        return False
+    limit = STALE_RUN_MINUTES.get(agent, DEFAULT_STALE_RUN_MINUTES)
+    return now - created_at > timedelta(minutes=limit)
+
+
+@app.task(name="godeye_engine.tasks.scheduler.reap_stale_runs")
+def reap_stale_runs() -> dict:
+    """Fail out AgentRuns whose worker died before it could report anything."""
+    now = utcnow()
+    reaped: dict[str, int] = {}
+
+    with get_session() as session:
+        rows = session.execute(
+            select(AgentRun.c.id, AgentRun.c.agent, AgentRun.c.orgId, AgentRun.c.createdAt)
+            .where(AgentRun.c.status == "RUNNING")
+        ).mappings().all()
+
+        stale = [row for row in rows if is_stale_run(row["agent"], row["createdAt"], now)]
+        for row in stale:
+            session.execute(
+                update(AgentRun)
+                .where(AgentRun.c.id == row["id"])
+                .values(status="FAILED", error=STALE_RUN_ERROR, completedAt=now)
+            )
+            reaped[row["agent"]] = reaped.get(row["agent"], 0) + 1
+        if stale:
+            session.commit()
+
+    # Tell the browser, or it keeps showing a spinner until the page is reloaded.
+    for row in stale:
+        publish_event(
+            row["orgId"],
+            {"type": "agent_run.completed", "agentRunId": row["id"], "status": "FAILED"},
+        )
+
+    if reaped:
+        logger.warning("Reaped stale agent runs: %s", reaped)
+    return {"reaped": sum(reaped.values()), "byAgent": reaped}
