@@ -124,9 +124,11 @@ export default function PrivacyPage() {
       <h2>Where your data lives</h2>
       <p>
         The database and file storage are hosted on Supabase (Amazon Web Services, Canada Central).
-        The application runs on Vercel and Railway. Content generation uses Anthropic&rsquo;s Claude
-        API; the text of your brief and business profile is sent to Anthropic to produce the draft,
-        and per Anthropic&rsquo;s API terms it is not used to train their models.
+        The web application runs on Cloudflare; the API and background workers run on Railway.
+        Content generation uses Anthropic&rsquo;s Claude API; the text of your brief and business
+        profile is sent to Anthropic to produce the draft, and per Anthropic&rsquo;s API terms it is
+        not used to train their models. Anthropic does not receive your connected accounts&rsquo;
+        access tokens or other Meta Platform Data.
       </p>
 
       <h2>How long we keep it</h2>
