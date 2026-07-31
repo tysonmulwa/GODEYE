@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import io
 
-from PIL import Image
+from PIL import Image, ImageDraw
 
 from .presets import Preset
 
@@ -30,29 +30,71 @@ def fit_to_preset(image_bytes: bytes, preset: Preset) -> bytes:
     return _to_png(img)
 
 
+# A round badge in the corner, sized to be noticed and not to intrude. The
+# previous treatment put the logo at a sixth of the image width and ran a
+# full-width colour bar along the bottom, which on a photograph reads as a
+# banner slapped over someone's face rather than as branding.
+BADGE_WIDTH_RATIO = 10
+BADGE_MARGIN_RATIO = 30
+BADGE_MIN_PX = 56
+
+
 def apply_brand(
     image_bytes: bytes,
     logo_bytes: bytes | None,
     accent_hex: str | None = None,
 ) -> bytes:
-    """Composite a logo watermark (bottom-right) and an accent bar on the image."""
+    """Composite a small round brand badge into the bottom-right corner."""
     base = Image.open(io.BytesIO(image_bytes)).convert("RGBA")
+    if not logo_bytes and not accent_hex:
+        return _to_png(base.convert("RGB"))
 
+    diameter = max(BADGE_MIN_PX, base.width // BADGE_WIDTH_RATIO)
+    diameter = min(diameter, base.width // 2, base.height // 2)
+    margin = max(8, base.width // BADGE_MARGIN_RATIO)
+
+    badge = _round_badge(diameter, logo_bytes, accent_hex)
+    base.alpha_composite(
+        badge, (base.width - diameter - margin, base.height - diameter - margin)
+    )
+    return _to_png(base.convert("RGB"))
+
+
+def _round_badge(
+    diameter: int, logo_bytes: bytes | None, accent_hex: str | None
+) -> Image.Image:
+    """A circular badge: soft backing, accent ring, logo centred and clipped.
+
+    The backing exists so a logo stays legible over whatever the photograph put
+    behind it, which for a generated image is not knowable in advance.
+    """
+    badge = Image.new("RGBA", (diameter, diameter), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(badge)
+
+    draw.ellipse((0, 0, diameter - 1, diameter - 1), fill=(255, 255, 255, 225))
     if accent_hex:
-        bar_height = max(6, base.height // 90)
-        accent = Image.new("RGBA", (base.width, bar_height), _hex_to_rgba(accent_hex))
-        base.alpha_composite(accent, (0, base.height - bar_height))
+        ring = max(2, diameter // 22)
+        draw.ellipse(
+            (0, 0, diameter - 1, diameter - 1),
+            outline=_hex_to_rgba(accent_hex, alpha=255),
+            width=ring,
+        )
 
     if logo_bytes:
+        # Inset so the logo sits inside the ring rather than touching it.
+        inner = int(diameter * 0.62)
         logo = Image.open(io.BytesIO(logo_bytes)).convert("RGBA")
-        target_w = max(48, base.width // 6)
-        scale = target_w / logo.width
-        logo = logo.resize((target_w, int(logo.height * scale)), Image.LANCZOS)
-        margin = base.width // 40
-        pos = (base.width - logo.width - margin, base.height - logo.height - margin * 2)
-        base.alpha_composite(logo, pos)
+        logo.thumbnail((inner, inner), Image.LANCZOS)
+        badge.alpha_composite(
+            logo, ((diameter - logo.width) // 2, (diameter - logo.height) // 2)
+        )
 
-    return _to_png(base.convert("RGB"))
+    # Clip anything that strayed outside the circle, including a square logo's
+    # own background if it shipped with one.
+    mask = Image.new("L", (diameter, diameter), 0)
+    ImageDraw.Draw(mask).ellipse((0, 0, diameter - 1, diameter - 1), fill=255)
+    badge.putalpha(Image.composite(badge.getchannel("A"), mask, mask))
+    return badge
 
 
 def _to_png(img: Image.Image) -> bytes:

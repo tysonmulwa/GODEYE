@@ -99,6 +99,20 @@ def generate_image(
         brand = session.execute(
             select(BrandKit).where(BrandKit.c.orgId == org_id)
         ).mappings().first()
+        # What this org's last few images actually were, so the agent can be
+        # told not to make another one like them.
+        recent_prompts = list(
+            session.execute(
+                select(MediaAsset.c.prompt)
+                .where(
+                    MediaAsset.c.orgId == org_id,
+                    MediaAsset.c.source == "AI_GENERATED",
+                    MediaAsset.c.prompt.isnot(None),
+                )
+                .order_by(MediaAsset.c.createdAt.desc())
+                .limit(4)
+            ).scalars()
+        )
         session.commit()
 
     profile_dict = dict(profile) if profile else {"industry": "business"}
@@ -108,7 +122,9 @@ def generate_image(
         _progress(agent_run_id, org_id, "prompt")
         try:
             prompt = image_agent.build_image_prompt(
-                profile_dict, image_agent.ImagePromptRequest(brief=brief, style=style)
+                profile_dict,
+                image_agent.ImagePromptRequest(brief=brief, style=style),
+                recent_prompts=recent_prompts,
             )
         except Exception as e:  # noqa: BLE001 — text LLM optional for images
             logger.info("Image prompt LLM unavailable (%s); using fallback prompt", e)

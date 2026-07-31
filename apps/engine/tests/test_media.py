@@ -49,20 +49,67 @@ class TestFitToPreset:
 
 
 class TestApplyBrand:
-    def test_accent_bar_applied_without_logo(self):
-        src = make_image(600, 600)
+    """The overlay is a small round badge in the corner. It used to be a logo a
+    sixth of the image wide plus a full-width colour bar, which on a photograph
+    reads as a banner over someone's face."""
+
+    def test_the_photo_itself_is_left_alone(self):
+        """The old full-width bar painted across the bottom of every image."""
+        src = make_image(600, 600, color=(120, 80, 200))
         out = branding.apply_brand(src, logo_bytes=None, accent_hex="#FF0000")
         img = Image.open(io.BytesIO(out)).convert("RGB")
-        # bottom row should now contain red pixels from the accent bar
-        bottom_pixel = img.getpixel((300, 599))
-        assert bottom_pixel[0] > 200 and bottom_pixel[1] < 60
+        assert img.getpixel((300, 300)) == (120, 80, 200), "centre was altered"
+        assert img.getpixel((20, 590)) == (120, 80, 200), "bottom-left was altered"
 
-    def test_logo_composited(self):
+    def test_the_badge_lands_in_the_bottom_right(self):
+        src = make_image(600, 600, color=(120, 80, 200))
+        out = branding.apply_brand(src, logo_bytes=None, accent_hex="#FF0000")
+        img = Image.open(io.BytesIO(out)).convert("RGB")
+        diameter = max(branding.BADGE_MIN_PX, 600 // branding.BADGE_WIDTH_RATIO)
+        margin = max(8, 600 // branding.BADGE_MARGIN_RATIO)
+        centre = (600 - margin - diameter // 2, 600 - margin - diameter // 2)
+        assert img.getpixel(centre) != (120, 80, 200), "nothing was drawn"
+
+    def test_the_badge_is_round_not_square(self):
+        """The corner of the badge's bounding box must still be the photograph."""
+        src = make_image(600, 600, color=(120, 80, 200))
+        out = branding.apply_brand(src, logo_bytes=None, accent_hex="#FF0000")
+        img = Image.open(io.BytesIO(out)).convert("RGB")
+        diameter = max(branding.BADGE_MIN_PX, 600 // branding.BADGE_WIDTH_RATIO)
+        margin = max(8, 600 // branding.BADGE_MARGIN_RATIO)
+        top_left_of_box = (600 - margin - diameter + 1, 600 - margin - diameter + 1)
+        assert img.getpixel(top_left_of_box) == (120, 80, 200), "badge is square"
+
+    def test_the_badge_stays_small(self):
+        """A watermark, not a billboard."""
+        diameter = max(branding.BADGE_MIN_PX, 1080 // branding.BADGE_WIDTH_RATIO)
+        assert diameter / 1080 < 0.15
+
+    def test_a_logo_is_composited_and_dimensions_are_preserved(self):
         src = make_image(800, 800)
         logo = make_image(200, 200, color=(0, 255, 0))
         out = branding.apply_brand(src, logo_bytes=logo, accent_hex=None)
         img = Image.open(io.BytesIO(out))
-        assert img.size == (800, 800)  # dimensions preserved
+        assert img.size == (800, 800)
+
+    def test_a_square_logo_is_clipped_to_the_circle(self):
+        """A logo shipped on its own square background would otherwise show as a
+        square patch inside the round badge."""
+        src = make_image(600, 600, color=(120, 80, 200))
+        logo = make_image(400, 400, color=(0, 255, 0))
+        out = branding.apply_brand(src, logo_bytes=logo, accent_hex=None)
+        img = Image.open(io.BytesIO(out)).convert("RGB")
+        diameter = max(branding.BADGE_MIN_PX, 600 // branding.BADGE_WIDTH_RATIO)
+        margin = max(8, 600 // branding.BADGE_MARGIN_RATIO)
+        corner = (600 - margin - diameter + 1, 600 - margin - diameter + 1)
+        assert img.getpixel(corner) == (120, 80, 200)
+
+    def test_nothing_to_apply_leaves_the_image_untouched(self):
+        src = make_image(400, 400, color=(10, 20, 30))
+        out = branding.apply_brand(src, logo_bytes=None, accent_hex=None)
+        img = Image.open(io.BytesIO(out)).convert("RGB")
+        assert img.getpixel((200, 200)) == (10, 20, 30)
+        assert img.getpixel((395, 395)) == (10, 20, 30)
 
 
 class TestProviderSelection:
@@ -221,3 +268,48 @@ def image_provider_stub():
         provider="anthropic", model="test",
         input_tokens=1, output_tokens=1,
     )
+
+
+class TestVariationAcrossRuns:
+    """Rotating the framing alone is not enough: given the same brief a model
+    lands on the same idea and merely photographs it from a new angle."""
+
+    PROFILE = {"businessName": "PataMpoa", "industry": "Dating", "description": "A dating app."}
+
+    def _capture(self, monkeypatch) -> dict:
+        captured = {}
+        monkeypatch.setattr(
+            image_agent.provider, "complete",
+            lambda system, user, **kw: (captured.update(user=user), image_provider_stub())[1],
+        )
+        return captured
+
+    def test_recent_images_are_shown_to_the_agent(self, monkeypatch):
+        captured = self._capture(monkeypatch)
+        image_agent.build_image_prompt(
+            self.PROFILE,
+            image_agent.ImagePromptRequest(brief="a date night"),
+            recent_prompts=["Two hands reaching toward each other over a map"],
+        )
+        assert "hands reaching toward each other" in captured["user"]
+        assert "must be a different photograph" in captured["user"]
+
+    def test_no_history_means_no_stray_instruction(self, monkeypatch):
+        """A first image has nothing to differ from, and inventing a list would
+        have the agent avoiding pictures nobody made."""
+        captured = self._capture(monkeypatch)
+        image_agent.build_image_prompt(
+            self.PROFILE, image_agent.ImagePromptRequest(brief="a date night")
+        )
+        assert "different photograph" not in captured["user"]
+
+    def test_only_the_last_few_are_sent(self, monkeypatch):
+        """The whole back catalogue would crowd out the brief itself."""
+        captured = self._capture(monkeypatch)
+        image_agent.build_image_prompt(
+            self.PROFILE,
+            image_agent.ImagePromptRequest(brief="a date night"),
+            recent_prompts=[f"prompt number {i}" for i in range(20)],
+        )
+        assert "prompt number 3" in captured["user"]
+        assert "prompt number 9" not in captured["user"]

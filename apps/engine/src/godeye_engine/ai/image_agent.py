@@ -43,24 +43,31 @@ BANNED_CLICHES = (
 )
 
 PROMPT_SYSTEM = mission.charter("image") + "\n\n" + (
-    "You write briefs for a photographer, not descriptions of a concept.\n\n"
-    "Rules:\n"
-    "1. Put real people in the frame whenever the subject allows it. Give each "
-    "an age range, an expression, what they are wearing, and what they are "
-    "doing with their hands. A believable face carries a post; an abstract "
-    "arrangement of objects does not.\n"
-    "2. Photorealistic people who could be actual customers. Never a named or "
-    "recognisable real person, and never a public figure.\n"
-    "3. Ground it in the stated location. Real streets, real interiors, clothing "
-    "and skin tones that match the audience described. A business in Nairobi "
-    "should not be illustrated with generic Western stock imagery.\n"
-    "4. Describe one specific moment, not a theme. Something is happening, and "
-    "it happened a second ago.\n"
-    "5. Say the light plainly: time of day, where it comes from, hard or soft. "
-    f"6. Never use any of these: {BANNED_CLICHES}.\n"
-    "7. No text, words, signage, logos or watermarks anywhere in the image; "
+    "You write briefs for a photographer, not descriptions of a concept. A "
+    "one-line prompt gives the model nothing to hold onto and it falls back on "
+    "stock imagery, so every brief you write is complete.\n\n"
+    "Cover all of these, in flowing prose rather than a list:\n"
+    "1. SUBJECT. Real people in the frame whenever the subject allows it, each "
+    "with an age range, an expression, what they are wearing, and what their "
+    "hands are doing. A believable face carries a post; an arrangement of "
+    "objects does not. Photorealistic people who could be actual customers, "
+    "never a named or recognisable real person or public figure.\n"
+    "2. MOMENT. One specific thing happening, caught a second after it started. "
+    "Not a theme, not a mood board.\n"
+    "3. PLACE. The stated location, named and real: its streets, interiors, "
+    "vehicles, plants, weather. Clothing and skin tones that match the audience "
+    "described. A business in Nairobi is not illustrated with generic Western "
+    "stock imagery, and a business anywhere else is not either.\n"
+    "4. LIGHT. Time of day, which direction it comes from, hard or soft, and "
+    "what it does to the shadows.\n"
+    "5. CAMERA. Framing, how close, the angle, and what falls out of focus.\n"
+    "6. TEXTURE. The detail that separates a photograph from a render: skin "
+    "with pores and flyaway hair, creased fabric, scuffed leather, condensation, "
+    "dust in the air, fingerprints, honest wear on real objects.\n\n"
+    f"Never use any of these: {BANNED_CLICHES}.\n"
+    "No text, words, signage, logos or watermarks anywhere in the image; "
     "branding is added separately.\n\n"
-    "Return ONLY the image prompt, no preamble and no quotes. Under 90 words."
+    "Return ONLY the image prompt, no preamble and no quotes. 70 to 120 words."
 )
 
 
@@ -74,11 +81,18 @@ def build_image_prompt(
     profile: dict[str, Any],
     request: ImagePromptRequest,
     rng: random.Random | None = None,
+    recent_prompts: list[str] | None = None,
 ) -> str:
     """Expand a short brief into a detailed image prompt via the text LLM.
 
     ``rng`` is injectable so tests can pin the shot type; production leaves it
     to chance, which is the point.
+
+    ``recent_prompts`` are what this business's last few images actually were.
+    Rotating the framing alone is not enough, because a model given the same
+    brief converges on the same idea and merely photographs it from a new angle.
+    Showing it what it already made is the only instruction that reliably
+    produces a different picture rather than a different crop.
     """
     picker = rng or random
     context = [
@@ -101,14 +115,26 @@ def build_image_prompt(
         )
 
     style = request.style or "photorealistic editorial photography, natural light"
-    user = (
-        "\n".join(context)
-        + f"\n\nImage brief: {request.brief}"
-        + f"\nVisual style: {style}"
-        + f"\nUse this framing: {picker.choice(SHOT_TYPES)}"
-        + "\n\nWrite the image generation prompt now."
-    )
-    result = provider.complete(PROMPT_SYSTEM, user, max_tokens=300)
+    parts = [
+        "\n".join(context),
+        "",
+        f"Image brief: {request.brief}",
+        f"Visual style: {style}",
+        f"Use this framing: {picker.choice(SHOT_TYPES)}",
+    ]
+    if recent_prompts:
+        parts += [
+            "",
+            "This business's last few images were the following. Yours must be a "
+            "different photograph, not the same idea from another angle: change "
+            "the subject, what they are doing, the setting and the time of day.",
+            *(f"- {p.strip()[:200]}" for p in recent_prompts[:4]),
+        ]
+    parts += ["", "Write the image generation prompt now."]
+    # 300 truncated these mid-word once the brief became a full photographic
+    # description, and the tail is where the texture detail lives, which is the
+    # part that stops the render looking synthetic.
+    result = provider.complete(PROMPT_SYSTEM, "\n".join(parts), max_tokens=600)
     return result.text.strip().strip('"')
 
 

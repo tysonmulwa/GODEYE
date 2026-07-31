@@ -15,13 +15,20 @@ from godeye_engine.tasks import image as image_task
 
 
 class FakeResult:
-    """Whatever session.execute() returns; the task only ever calls .mappings()."""
+    """Whatever session.execute() returns.
+
+    The task reads profile and brand rows through .mappings().first(), and the
+    org's recent image prompts through .scalars().
+    """
 
     def mappings(self):
         return self
 
     def first(self):
         return None
+
+    def scalars(self):
+        return iter([])
 
 
 class FakeSession:
