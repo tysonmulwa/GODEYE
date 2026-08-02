@@ -15,6 +15,24 @@ from pathlib import Path
 from ..config import get_settings
 
 FPS = 30
+
+# x264 was killed by the kernel one second into the first clip of a 1080x1920
+# slideshow (-9, on a container that reported a perfectly healthy ffmpeg). It
+# allocates frame buffers per thread plus a lookahead queue *before* encoding
+# anything, and it sizes the thread count from the cores the host advertises
+# rather than the share the container may use. On a small instance that is
+# hundreds of megabytes reserved up front, and an instant SIGKILL.
+#
+# Both settings target that allocation rather than the encode itself:
+#   threads  caps the per-thread buffers, which is the part that scales with
+#            a machine we do not control
+#   veryfast drops the lookahead from 40 frames to 10 and turns off b-frames
+#
+# The cost is a slightly larger file at the same CRF, which for a few seconds
+# of stills is not visible. The alternative was a post published in silence.
+ENCODE_THREADS = 2
+ENCODE_PRESET = "veryfast"
+
 INSTALL_HINT = (
     "ffmpeg not found — install it (Windows: `winget install Gyan.FFmpeg`, then restart "
     "the terminal) or set FFMPEG_PATH in .env to the ffmpeg executable"
@@ -127,7 +145,8 @@ def scene_clip_cmd(
         "-map", "[v]",
         "-map", audio_map,
         "-c:v", "libx264",
-        "-preset", "medium",
+        "-preset", ENCODE_PRESET,
+        "-threads", str(ENCODE_THREADS),
         "-pix_fmt", "yuv420p",
         "-c:a", "aac",
         "-b:a", "160k",
@@ -160,7 +179,8 @@ def still_clip_cmd(
         f":s={width}x{height}:fps={FPS}[v]",
         "-map", "[v]",
         "-c:v", "libx264",
-        "-preset", "medium",
+        "-preset", ENCODE_PRESET,
+        "-threads", str(ENCODE_THREADS),
         "-pix_fmt", "yuv420p",
         "-t", f"{duration:.3f}",
         "-r", str(FPS),
@@ -229,7 +249,10 @@ def burn_subtitles_cmd(
         "-i", video_in,
         "-vf", vf,
         "-c:v", "libx264",
-        "-preset", "medium",
+        # Burning subtitles re-encodes the whole video at full resolution, so
+        # it carries the same allocation that got the slideshow killed.
+        "-preset", ENCODE_PRESET,
+        "-threads", str(ENCODE_THREADS),
         "-pix_fmt", "yuv420p",
         "-c:a", "copy",
         out_path,

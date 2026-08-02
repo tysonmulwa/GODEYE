@@ -72,6 +72,33 @@ def test_no_images_is_rejected_before_touching_ffmpeg(calls):
     assert calls == []
 
 
+class TestEncodeFitsASmallContainer:
+    """x264 was SIGKILLed one second into the first clip on the deployed
+    worker. It reserves frame buffers per thread plus a lookahead queue before
+    encoding anything, sized from the host's core count rather than the
+    container's share — so the encode has to bound that explicitly."""
+
+    def _commands(self):
+        return [
+            video.still_clip_cmd("i.jpg", "o.mp4", 1080, 1920, 5.0),
+            video.scene_clip_cmd("i.jpg", "a.mp3", "o.mp4", 1080, 1920, 5.0),
+            video.burn_subtitles_cmd("i.mp4", "s.srt", "o.mp4", 1920),
+        ]
+
+    def test_every_encode_caps_its_thread_count(self):
+        for cmd in self._commands():
+            assert "-threads" in cmd, f"unbounded thread count in {cmd[:6]}"
+            assert int(cmd[cmd.index("-threads") + 1]) <= 4
+
+    def test_no_encode_uses_a_preset_with_a_deep_lookahead(self):
+        """medium keeps 40 frames of 1080x1920 in flight before it starts."""
+        for cmd in self._commands():
+            preset = cmd[cmd.index("-preset") + 1]
+            assert preset in {"ultrafast", "superfast", "veryfast", "faster"}, (
+                f"{preset} reserves too much up front for a small container"
+            )
+
+
 class TestRenderSelfTest:
     """Proving the worker can encode, by making it encode. The whole value is
     in what it reports when the render fails, so it must never raise."""
