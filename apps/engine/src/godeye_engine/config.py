@@ -78,15 +78,20 @@ class Settings(BaseSettings):
     tiktok_audited: bool = False
 
     # Where a TikTok post lands.
-    #   direct  publish straight to the profile
+    #   direct  publish straight to the profile, unattended
     #   drafts  send to the user's TikTok inbox to finish in the app
-    #   auto    drafts until the app is audited, direct afterwards
     #
-    # Drafts exists because TikTok's music catalogue is only reachable inside
-    # their editor: opening the draft is what produces the suggested song. It
-    # also sidesteps the unaudited SELF_ONLY limit, since the person publishes
-    # it rather than the app, so posts can be public before the audit lands.
-    tiktok_post_mode: str = "auto"  # auto | direct | drafts
+    # Direct is the default because this is an automation product and drafts
+    # require a person to open the app and press publish on every post; if
+    # nobody is around, nothing goes out at all. Sound no longer depends on
+    # that: photos are rendered into a slideshow carrying the workspace's own
+    # track, so a direct post arrives with audio.
+    #
+    # Drafts remain worth choosing for one reason. TikTok's own music library
+    # exists only inside their editor, so trending audio needs a person there.
+    # It also avoids the unaudited SELF_ONLY limit, since the person publishes
+    # rather than the app.
+    tiktok_post_mode: str = "direct"  # direct | drafts
 
     reddit_client_id: str = ""
     reddit_client_secret: str = ""

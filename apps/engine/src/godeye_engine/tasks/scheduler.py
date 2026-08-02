@@ -10,6 +10,7 @@ from sqlalchemy import and_, or_, select, update
 from ..celery_app import app
 from ..db import (
     AgentRun,
+    BrandKit,
     ContentItem,
     MediaAsset,
     Organization,
@@ -109,6 +110,11 @@ def publish_post(scheduled_post_id: str) -> dict:
             )
             .order_by(MediaAsset.c.createdAt.asc())
         ).fetchall()
+        # TikTok builds a slideshow from images when the workspace has a track,
+        # so a photo post arrives with sound instead of silent.
+        brand_music = session.execute(
+            select(BrandKit.c.musicUrl).where(BrandKit.c.orgId == post["orgId"])
+        ).scalar()
 
     if content is None or connection is None:
         _finish(scheduled_post_id, post["orgId"], error="Content or connection no longer exists")
@@ -118,7 +124,7 @@ def publish_post(scheduled_post_id: str) -> dict:
     media_urls = [row.url for row in media if row.kind == "IMAGE"]
     video_urls = [row.url for row in media if row.kind == "VIDEO"]
     payload = _build_payload(
-        dict(content), platform, post.get("variantKey"), media_urls, video_urls
+        dict(content), platform, post.get("variantKey"), media_urls, video_urls, brand_music
     )
 
     try:
@@ -167,6 +173,7 @@ def _build_payload(
     variant_key: str | None = None,
     media_urls: list[str] | None = None,
     video_urls: list[str] | None = None,
+    music_url: str | None = None,
 ) -> PostPayload:
     """A/B variant wins if assigned; else platform variant; else canonical body."""
     ab_variants = content.get("abVariants") or {}
@@ -186,6 +193,7 @@ def _build_payload(
         title=content.get("title"),
         media_urls=media_urls or None,
         video_urls=video_urls or None,
+        music_url=music_url,
     )
 
 

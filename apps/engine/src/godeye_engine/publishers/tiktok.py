@@ -82,6 +82,15 @@ class TikTokPublisher(BasePublisher):
         }
 
         if not payload.video_urls:
+            # Photos become a slideshow with the workspace's track when it has
+            # one, because a photo post published through the API has no sound
+            # and no way to gain any. Posting it as video also drops the domain
+            # verification that PULL_FROM_URL demands.
+            slideshow_bytes = self._slideshow_from_photos(payload)
+            if slideshow_bytes is not None:
+                logger.info("TikTok: publishing %d photo(s) as a slideshow with audio",
+                            len(payload.media_urls))
+                return self._publish_video_bytes(headers, payload, slideshow_bytes, "video/mp4")
             return self._publish_photos(headers, payload)
 
         # Fetch the bytes and upload them, rather than handing TikTok a URL.
@@ -94,6 +103,17 @@ class TikTokPublisher(BasePublisher):
                 f"Could not download the video from {payload.video_urls[0]} to send to TikTok."
             )
         video_bytes, content_type = fetched
+        return self._publish_video_bytes(headers, payload, video_bytes, content_type)
+
+    def _publish_video_bytes(
+        self,
+        headers: dict[str, str],
+        payload: PostPayload,
+        video_bytes: bytes,
+        content_type: str,
+    ) -> PublishResult:
+        """Upload video bytes and publish, whether they came from an attachment
+        or from a slideshow built here."""
         size = len(video_bytes)
         if size > MAX_SINGLE_CHUNK:
             raise PublishError(
@@ -144,6 +164,37 @@ class TikTokPublisher(BasePublisher):
         self._upload(upload_url, video_bytes, content_type)
         self._await_publish(publish_id, headers)
         return PublishResult(external_post_id=publish_id, external_post_url=None)
+
+    def _slideshow_from_photos(self, payload: PostPayload) -> bytes | None:
+        """Render the attached images into a video with the workspace's track.
+
+        TikTok's API has no way to add music to a post, and its own library only
+        exists inside the app, so a directly published photo post is silent and
+        the alternative is asking a person to finish every post by hand. That is
+        not automation. Building the slideshow ourselves gives a post that
+        publishes unattended and arrives with sound.
+
+        Returns None when it cannot be done, so the caller falls back to the
+        photo carousel rather than dropping the post.
+        """
+        from ..media import slideshow
+
+        if not payload.music_url:
+            return None
+        try:
+            images = []
+            for url in payload.media_urls[:PHOTO_LIMIT]:
+                fetched = download_media(url)
+                if fetched is None:
+                    return None
+                images.append(fetched[0])
+            music = download_media(payload.music_url)
+            if music is None or not images:
+                return None
+            return slideshow.build_slideshow(images, music[0])
+        except Exception as e:  # noqa: BLE001 — a silent post beats no post
+            logger.warning("TikTok slideshow build failed, posting photos instead: %s", e)
+            return None
 
     def _publish_photos(self, headers: dict[str, str], payload: PostPayload) -> PublishResult:
         """Post images as a TikTok photo carousel.
@@ -214,17 +265,21 @@ class TikTokPublisher(BasePublisher):
     def _to_drafts(self) -> bool:
         """Should this post land in the user's TikTok inbox rather than live?
 
-        "auto" is the default and means drafts until the app passes its audit.
-        Before approval a direct post can only be SELF_ONLY, so it goes out
-        silent and visible to nobody; as a draft the person opens the app, takes
-        the song TikTok suggests, and publishes it publicly themselves.
+        Only when asked for. A draft waits for someone to open the app and press
+        publish, so on a quiet day nothing is posted at all, which is the
+        opposite of what a scheduler is for. It stays available because TikTok's
+        music library lives in that editor and nowhere else.
+
+        "auto" used to mean drafts-until-audited and is still honoured for
+        anyone who set it, but it is no longer the default: sound now comes from
+        the slideshow instead of from a person.
         """
         mode = get_settings().tiktok_post_mode.strip().lower()
-        if mode == "direct":
-            return False
         if mode == "drafts":
             return True
-        return not get_settings().tiktok_audited
+        if mode == "auto":
+            return not get_settings().tiktok_audited
+        return False
 
     @staticmethod
     def _scope_denied(response) -> bool:

@@ -12,6 +12,7 @@ from godeye_engine.publishers.linkedin import LinkedInPublisher
 from godeye_engine.publishers.meta import InstagramPublisher
 from godeye_engine.publishers.telegram import TelegramPublisher
 from godeye_engine.publishers.x import XPublisher
+from godeye_engine.publishers import tiktok as tiktok_mod
 from godeye_engine.publishers.tiktok import TikTokPublisher
 from godeye_engine.config import get_settings
 
@@ -810,3 +811,83 @@ class TestTikTokScopeFallback:
         )
         assert "Reconnect TikTok from" in detail
         assert "cannot be extended, only replaced" in detail
+
+
+class TestTikTokSlideshow:
+    """TikTok's API cannot add music to a post and its library only exists in
+    the app, so a direct photo post is silent and a draft needs a person. For an
+    automation product neither works, so the slideshow is built here: photos
+    become a video that already carries the workspace's track."""
+
+    CREDS = {"accessToken": "t"}
+    PHOTOS = ["https://cdn/a.jpg", "https://cdn/b.jpg"]
+
+    def _publisher(self, monkeypatch, built: bytes | None = b"MP4BYTES"):
+        import godeye_engine.media.slideshow as ss
+
+        monkeypatch.setattr(
+            tiktok_mod, "download_media", lambda url: (b"raw", "image/jpeg")
+        )
+        if built is None:
+            monkeypatch.setattr(
+                ss, "build_slideshow",
+                lambda *a, **kw: (_ for _ in ()).throw(RuntimeError("ffmpeg missing")),
+            )
+        else:
+            monkeypatch.setattr(ss, "build_slideshow", lambda *a, **kw: built)
+        monkeypatch.setattr(TikTokPublisher, "_privacy_level", lambda self, h: "SELF_ONLY")
+        monkeypatch.setattr(TikTokPublisher, "_upload", lambda *a, **kw: None)
+        monkeypatch.setattr(TikTokPublisher, "_await_publish", lambda *a, **kw: None)
+
+    def test_photos_with_a_track_are_posted_as_video(self, monkeypatch):
+        """The whole point: unattended, and it has sound."""
+        self._publisher(monkeypatch)
+        seen = []
+        monkeypatch.setattr(
+            TikTokPublisher, "_post",
+            lambda self, url, **kw: seen.append(url)
+            or http_response(200, {"data": {"publish_id": "p1", "upload_url": "https://up"}}),
+        )
+        TikTokPublisher().publish(
+            self.CREDS,
+            PostPayload(text="hi", media_urls=self.PHOTOS, music_url="https://cdn/track.mp3"),
+        )
+        assert any("video/init" in u for u in seen), seen
+        assert not any("content/init" in u for u in seen), "should not be a photo post"
+
+    def test_without_a_track_it_stays_a_photo_post(self, monkeypatch):
+        """No music means a slideshow would be silent too, and a photo carousel
+        is the better-looking silent post."""
+        self._publisher(monkeypatch)
+        seen = []
+        monkeypatch.setattr(
+            TikTokPublisher, "_post",
+            lambda self, url, **kw: seen.append(url)
+            or http_response(200, {"data": {"publish_id": "p1"}}),
+        )
+        TikTokPublisher().publish(self.CREDS, PostPayload(text="hi", media_urls=self.PHOTOS))
+        assert any("content/init" in u for u in seen), seen
+
+    def test_a_failed_render_falls_back_rather_than_losing_the_post(self, monkeypatch):
+        """ffmpeg missing on the worker must cost the sound, not the post."""
+        self._publisher(monkeypatch, built=None)
+        seen = []
+        monkeypatch.setattr(
+            TikTokPublisher, "_post",
+            lambda self, url, **kw: seen.append(url)
+            or http_response(200, {"data": {"publish_id": "p1"}}),
+        )
+        TikTokPublisher().publish(
+            self.CREDS,
+            PostPayload(text="hi", media_urls=self.PHOTOS, music_url="https://cdn/track.mp3"),
+        )
+        assert any("content/init" in u for u in seen), "expected the photo fallback"
+
+    def test_direct_is_the_default_so_posts_go_out_unattended(self, monkeypatch):
+        monkeypatch.delenv("TIKTOK_POST_MODE", raising=False)
+        monkeypatch.delenv("TIKTOK_AUDITED", raising=False)
+        get_settings.cache_clear()
+        try:
+            assert TikTokPublisher()._to_drafts() is False
+        finally:
+            get_settings.cache_clear()

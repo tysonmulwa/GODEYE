@@ -138,6 +138,59 @@ def scene_clip_cmd(
     ]
 
 
+def still_clip_cmd(
+    image_path: str, out_path: str, width: int, height: int, duration: float
+) -> list[str]:
+    """A still held for ``duration`` with a slow push in, and no audio.
+
+    scene_clip_cmd needs a narration track per scene. A slideshow has one piece
+    of music across the whole thing, so the clips are built silent and the audio
+    is attached once at the end.
+    """
+    frames = max(1, int(round(duration * FPS)))
+    return [
+        "-y",
+        "-loop", "1",
+        "-i", image_path,
+        "-filter_complex",
+        f"[0:v]scale={width}:{height}:force_original_aspect_ratio=increase,"
+        f"crop={width}:{height},"
+        f"zoompan=z='min(zoom+0.0008,1.12)':d={frames}"
+        f":x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)'"
+        f":s={width}x{height}:fps={FPS}[v]",
+        "-map", "[v]",
+        "-c:v", "libx264",
+        "-preset", "medium",
+        "-pix_fmt", "yuv420p",
+        "-t", f"{duration:.3f}",
+        "-r", str(FPS),
+        out_path,
+    ]
+
+
+def attach_music_cmd(video_in: str, music_path: str, out_path: str) -> list[str]:
+    """Give a silent video a soundtrack, cut to the video's own length.
+
+    Distinct from mix_music_cmd, which blends a bed under existing narration.
+    There is nothing to blend with here, and amix against a stream that does not
+    exist fails outright.
+    """
+    return [
+        "-y",
+        "-i", video_in,
+        "-i", music_path,
+        "-map", "0:v",
+        "-map", "1:a",
+        "-c:v", "copy",
+        "-c:a", "aac",
+        "-b:a", "192k",
+        "-ar", "44100",
+        # The track is almost always longer than the slideshow; end with the video.
+        "-shortest",
+        out_path,
+    ]
+
+
 def concat_list_content(clip_paths: list[str]) -> str:
     """concat-demuxer list file: forward slashes, quotes escaped."""
     lines = []

@@ -54,6 +54,10 @@ class PostPayload:
     title: str | None = None
     media_urls: list[str] | None = None  # images
     video_urls: list[str] | None = None  # videos (adapters that can't post video ignore these)
+    # The workspace's licensed background track, when it has one. Only TikTok
+    # uses it today, to build a slideshow with sound instead of publishing a
+    # silent photo post, since its API offers no way to add music afterwards.
+    music_url: str | None = None
 
 
 class BasePublisher(ABC):
