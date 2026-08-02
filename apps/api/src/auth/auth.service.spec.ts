@@ -1,6 +1,7 @@
-import { ConflictException, UnauthorizedException } from "@nestjs/common";
+import { BadRequestException, ConflictException, UnauthorizedException } from "@nestjs/common";
 import { JwtService } from "@nestjs/jwt";
 import * as argon2 from "argon2";
+import { authenticator } from "otplib";
 import { AuditService } from "../common/audit.service";
 import { CryptoService } from "../common/crypto.service";
 import { AuthService } from "./auth.service";
@@ -208,5 +209,58 @@ describe("AuthService", () => {
       user: { ...baseUser, memberships: [{ orgId: org.id, role: "OWNER", org }] },
     });
     await expect(service.refresh("stale", {})).rejects.toThrow(UnauthorizedException);
+  });
+
+  describe("disabling MFA", () => {
+    const SECRET = "JBSWY3DPEHPK3PXP";
+
+    async function enabledUser() {
+      return {
+        ...baseUser,
+        mfaEnabled: true,
+        mfaSecret: new CryptoService().encrypt(SECRET),
+        passwordHash: await argon2.hash("correct-horse-9X", { type: argon2.argon2id }),
+      };
+    }
+
+    it("clears the secret as well as the flag", async () => {
+      prisma.user.findUniqueOrThrow.mockResolvedValue(await enabledUser());
+      prisma.user.update.mockResolvedValue({});
+      const code = authenticator.generate(SECRET);
+
+      await service.disableMfa("user1", "correct-horse-9X", code);
+
+      // Leaving the secret would mean re-enabling silently reactivates an old
+      // authenticator entry the user may have deleted, or someone else holds.
+      expect(prisma.user.update).toHaveBeenCalledWith(
+        expect.objectContaining({ data: { mfaEnabled: false, mfaSecret: null } }),
+      );
+    });
+
+    it("refuses a wrong password even with a valid code", async () => {
+      prisma.user.findUniqueOrThrow.mockResolvedValue(await enabledUser());
+      await expect(
+        service.disableMfa("user1", "not-the-password", authenticator.generate(SECRET)),
+      ).rejects.toThrow(UnauthorizedException);
+      expect(prisma.user.update).not.toHaveBeenCalled();
+    });
+
+    it("refuses a wrong code even with the right password", async () => {
+      prisma.user.findUniqueOrThrow.mockResolvedValue(await enabledUser());
+      await expect(
+        service.disableMfa("user1", "correct-horse-9X", "000000"),
+      ).rejects.toThrow(UnauthorizedException);
+      expect(prisma.user.update).not.toHaveBeenCalled();
+    });
+
+    it("rejects turning off what was never on", async () => {
+      prisma.user.findUniqueOrThrow.mockResolvedValue({
+        ...baseUser,
+        passwordHash: await argon2.hash("correct-horse-9X", { type: argon2.argon2id }),
+      });
+      await expect(
+        service.disableMfa("user1", "correct-horse-9X", "123456"),
+      ).rejects.toThrow(BadRequestException);
+    });
   });
 });

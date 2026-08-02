@@ -325,7 +325,7 @@ export function ImageStudio({
                   onClick={() => removeMedia.mutate(m.id)}
                   aria-label="Remove image"
                   title="Remove"
-                  className="absolute right-1 top-1 rounded-md bg-black/60 p-1 text-white opacity-0 transition-opacity hover:bg-red-600 group-hover:opacity-100 focus:opacity-100"
+                  className="hover-reveal absolute right-1 top-1 rounded-md bg-black/60 p-1 text-white hover:bg-red-600"
                 >
                   <X className="h-3 w-3" />
                 </button>

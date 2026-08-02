@@ -4,7 +4,17 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { api } from "@/lib/api";
 import { useAuthStore } from "@/lib/auth-store";
-import { Button, Card, ErrorNote, Input, Label, PageHeader, Switch, cx } from "@/components/ui";
+import {
+  Button,
+  Card,
+  ErrorNote,
+  Input,
+  Label,
+  PageHeader,
+  PasswordInput,
+  Switch,
+  cx,
+} from "@/components/ui";
 
 interface BrandKit {
   primaryColor: string;
@@ -421,6 +431,9 @@ export default function SettingsPage() {
   const [mfaSetup, setMfaSetup] = useState<{ otpauthUrl: string; secret: string } | null>(null);
   const [mfaCode, setMfaCode] = useState("");
   const [mfaDone, setMfaDone] = useState(false);
+  const [mfaOff, setMfaOff] = useState(false);
+  const [disabling, setDisabling] = useState(false);
+  const [mfaPassword, setMfaPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -445,6 +458,28 @@ export default function SettingsPage() {
       setMfaSetup(null);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Invalid code");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const disableMfa = async () => {
+    setError(null);
+    setBusy(true);
+    try {
+      await api("/auth/mfa/disable", {
+        method: "POST",
+        body: { password: mfaPassword, code: mfaCode },
+      });
+      // The session's cached user still says MFA is on; reflect it locally
+      // rather than make someone sign out to see the change.
+      setMfaDone(false);
+      setMfaOff(true);
+      setDisabling(false);
+      setMfaPassword("");
+      setMfaCode("");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not turn off two-factor");
     } finally {
       setBusy(false);
     }
@@ -483,8 +518,75 @@ export default function SettingsPage() {
             Protect your account with a TOTP authenticator app (Google Authenticator, 1Password,
             Authy…).
           </p>
-          {user?.mfaEnabled || mfaDone ? (
-            <p className="text-sm text-emerald-500">✓ MFA is enabled on this account.</p>
+          {(user?.mfaEnabled || mfaDone) && !mfaOff ? (
+            <div className="space-y-3">
+              <p className="text-sm text-emerald-500">✓ MFA is enabled on this account.</p>
+              {disabling ? (
+                <div className="space-y-2 rounded-lg border border-line p-3">
+                  {/* Both factors, because either alone is a way in: a borrowed
+                      unlocked laptop has the session but not the password, and a
+                      leaked password has no authenticator. */}
+                  <p className="text-xs text-ink-2">
+                    Confirm with your password and a current code. Turning this off
+                    means your password alone will get into this account.
+                  </p>
+                  <PasswordInput
+                    value={mfaPassword}
+                    onChange={(e) => setMfaPassword(e.target.value)}
+                    placeholder="Your password"
+                    autoComplete="current-password"
+                  />
+                  <Input
+                    value={mfaCode}
+                    onChange={(e) => setMfaCode(e.target.value)}
+                    placeholder="123456"
+                    inputMode="numeric"
+                    className="max-w-40"
+                  />
+                  <div className="flex gap-2">
+                    <Button
+                      variant="danger"
+                      loading={busy}
+                      disabled={mfaCode.length < 6 || mfaPassword.length < 1}
+                      onClick={disableMfa}
+                    >
+                      Turn off two-factor
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      onClick={() => {
+                        setDisabling(false);
+                        setMfaPassword("");
+                        setMfaCode("");
+                        setError(null);
+                      }}
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <Button variant="secondary" onClick={() => setDisabling(true)}>
+                  Turn off two-factor
+                </Button>
+              )}
+            </div>
+          ) : mfaOff ? (
+            <div className="space-y-3">
+              <p className="text-sm text-ink-2">
+                Two-factor is off. Your password alone now gets into this account.
+              </p>
+              <Button
+                variant="secondary"
+                onClick={() => {
+                  setMfaOff(false);
+                  void startMfa();
+                }}
+                loading={busy}
+              >
+                Set up MFA again
+              </Button>
+            </div>
           ) : mfaSetup ? (
             <div className="space-y-3">
               <p className="text-xs text-ink-2">

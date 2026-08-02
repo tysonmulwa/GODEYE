@@ -265,7 +265,7 @@ export default function CalendarPage() {
                             target="_blank"
                             rel="noreferrer"
                             aria-label="Open published post"
-                            className="hidden text-ink-3 hover:text-accent group-hover:block"
+                            className="hover-reveal text-ink-3 hover:text-accent"
                           >
                             <ExternalLink className="h-3 w-3" />
                           </a>
@@ -274,7 +274,7 @@ export default function CalendarPage() {
                           <button
                             onClick={() => cancelMutation.mutate(post.id)}
                             aria-label="Cancel"
-                            className="hidden text-ink-3 hover:text-red-500 group-hover:block"
+                            className="hover-reveal text-ink-3 hover:text-red-500"
                           >
                             <XCircle className="h-3 w-3" />
                           </button>

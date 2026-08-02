@@ -326,6 +326,32 @@ export class AuthService {
     this.audit.log({ userId, action: "auth.mfa_enabled" });
   }
 
+  /**
+   * Turn MFA off. Requires the account password and a current code.
+   *
+   * Both, because either alone is a way in: a borrowed unlocked laptop has the
+   * session but not the password, and a leaked password has no authenticator.
+   * Disabling is the one action that removes the protection guarding everything
+   * else, so it asks for proof of both factors it is about to stop requiring.
+   *
+   * The secret is cleared as well as the flag. Leaving it would mean re-enabling
+   * silently reactivates an old authenticator entry the user may have deleted,
+   * or that someone else still holds.
+   */
+  async disableMfa(userId: string, password: string, code: string): Promise<void> {
+    const user = await this.prisma.user.findUniqueOrThrow({ where: { id: userId } });
+    if (!user.mfaEnabled) throw new BadRequestException("MFA is not enabled");
+    if (!(await argon2.verify(user.passwordHash, password))) {
+      throw new UnauthorizedException("Incorrect password");
+    }
+    this.assertValidMfaCode(user.mfaSecret, code);
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { mfaEnabled: false, mfaSecret: null },
+    });
+    this.audit.log({ userId, action: "auth.mfa_disabled" });
+  }
+
   private assertValidMfaCode(encryptedSecret: string | null, code: string): void {
     if (!encryptedSecret) throw new BadRequestException("MFA has not been set up");
     const secret = this.crypto.decrypt(encryptedSecret);

@@ -3,10 +3,12 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { motion } from "framer-motion";
 import { CalendarClock, Sparkles, Wand2 } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { PLATFORM_DEFAULT_PRESET } from "@godeye/shared";
 import { api } from "@/lib/api";
 import { useAuthStore } from "@/lib/auth-store";
+import { useToast } from "@/lib/toast";
 import { GodeyeSpinner } from "@/components/logo";
 import { ImageStudio } from "@/components/image-studio";
 import { VideoStudio } from "@/components/video-studio";
@@ -54,6 +56,8 @@ interface AgentRun {
 
 export default function ComposerPage() {
   const queryClient = useQueryClient();
+  const router = useRouter();
+  const toast = useToast();
   const { organization } = useAuthStore();
   const isReviewer = ["OWNER", "ADMIN"].includes(organization?.role ?? "");
   const [goal, setGoal] = useState("");
@@ -151,8 +155,27 @@ export default function ComposerPage() {
     onSuccess: () => {
       setScheduled(true);
       queryClient.invalidateQueries({ queryKey: ["schedule"] });
+      // The inline confirmation sits at the bottom of a long form, below the
+      // fold on a phone, so the screen looked unchanged and the post appeared
+      // not to have been scheduled at all.
+      const when = new Date(scheduledAt).toLocaleString(undefined, {
+        weekday: "short",
+        hour: "2-digit",
+        minute: "2-digit",
+        day: "numeric",
+        month: "short",
+      });
+      toast.success(
+        `Scheduled to ${selectedConnections.length} destination${
+          selectedConnections.length === 1 ? "" : "s"
+        } for ${when}.`,
+        { label: "View on Calendar", onClick: () => router.push("/calendar") },
+      );
     },
-    onError: (e) => setError(e instanceof Error ? e.message : "Scheduling failed"),
+    onError: (e) => {
+      setError(e instanceof Error ? e.message : "Scheduling failed");
+      toast.error(e instanceof Error ? e.message : "Scheduling failed");
+    },
   });
 
   const reviewMutation = useMutation({
@@ -538,10 +561,33 @@ export default function ComposerPage() {
                     </Button>
                   </div>
                   {scheduled && (
-                    <p className="mt-2 text-xs text-emerald-500">
-                      Scheduled to {selectedConnections.length} destination(s). Track it on the
-                      Calendar and Dashboard.
-                    </p>
+                    <div className="mt-3 rounded-lg border border-emerald-500/40 bg-emerald-500/8 p-3">
+                      <p className="text-sm font-medium text-emerald-600">
+                        Scheduled to {selectedConnections.length} destination
+                        {selectedConnections.length === 1 ? "" : "s"}.
+                      </p>
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        <Button variant="secondary" onClick={() => router.push("/calendar")}>
+                          <CalendarClock className="h-3.5 w-3.5" /> View on Calendar
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          onClick={() => {
+                            // Clear the form for the next post rather than leave
+                            // a finished one sitting there looking editable.
+                            setContent(null);
+                            setAgentRunId(null);
+                            setScheduled(false);
+                            setGoal("");
+                            setTopic("");
+                            setError(null);
+                            window.scrollTo({ top: 0, behavior: "smooth" });
+                          }}
+                        >
+                          Write another
+                        </Button>
+                      </div>
+                    </div>
                   )}
                 </div>
               </Card>

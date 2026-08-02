@@ -28,6 +28,12 @@ import { AuthService, SessionResult } from "./auth.service";
 const REFRESH_COOKIE = "godeye_refresh";
 const loginWithMfaSchema = loginSchema.extend({ mfaCode: z.string().optional() });
 const mfaCodeSchema = z.object({ code: z.string().min(6).max(8) });
+// Disabling asks for both factors it is about to stop requiring: a session
+// alone should not be enough to remove the protection guarding the account.
+const mfaDisableSchema = z.object({
+  password: z.string().min(1),
+  code: z.string().min(6).max(8),
+});
 
 /**
  * SameSite is decided by whether WEB_URL and API_URL share a registrable
@@ -163,6 +169,21 @@ export class AuthController {
     @Body(new ZodPipe(mfaCodeSchema)) body: z.infer<typeof mfaCodeSchema>,
   ) {
     await this.auth.enableMfa(auth.sub, body.code);
+    return { ok: true };
+  }
+
+  @Post("mfa/disable")
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  @ApiOperation({
+    summary: "Turn MFA off — needs the account password and a current code",
+  })
+  async disableMfa(
+    @CurrentAuth() auth: AccessTokenPayload,
+    @Body(new ZodPipe(mfaDisableSchema)) body: z.infer<typeof mfaDisableSchema>,
+  ) {
+    await this.auth.disableMfa(auth.sub, body.password, body.code);
     return { ok: true };
   }
 

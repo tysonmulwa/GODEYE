@@ -141,6 +141,23 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
+/* A control that appears on hover is unreachable on a phone, because a phone
+   has no hover: it simply never appears, and the feature may as well not exist.
+   These stay visible by default and only hide on devices that can actually
+   reveal them again. Keyed on the hover media feature rather than a breakpoint,
+   so a touchscreen laptop behaves like a phone rather than like its width. */
+@media (hover: hover) {
+  .hover-reveal {
+    opacity: 0;
+    transition: opacity 150ms ease;
+  }
+  .group:hover .hover-reveal,
+  .hover-reveal:focus-visible,
+  .hover-reveal:focus-within {
+    opacity: 1;
+  }
+}
+
 /* Long-form legal/marketing copy. Scoped so it can't leak into the app UI. */
 .prose-godeye {
   color: var(--ink-2);
