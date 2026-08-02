@@ -185,6 +185,12 @@ def attach_music_cmd(video_in: str, music_path: str, out_path: str) -> list[str]
         "-c:a", "aac",
         "-b:a", "192k",
         "-ar", "44100",
+        "-ac", "2",
+        # An MP3's ID3 tags arrive as a bin_data stream and its title travels
+        # with the file. Neither belongs in a post, and platforms are happier
+        # with a plain video and audio pair.
+        "-dn",
+        "-map_metadata", "-1",
         # The track is almost always longer than the slideshow; end with the video.
         "-shortest",
         out_path,
