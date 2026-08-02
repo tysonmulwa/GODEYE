@@ -191,6 +191,10 @@ class TikTokPublisher(BasePublisher):
         from ..media import slideshow
 
         if not payload.music_url:
+            logger.info(
+                "TikTok: no brand track set, posting %d photo(s) without sound",
+                len(payload.media_urls),
+            )
             return None
         try:
             images = []

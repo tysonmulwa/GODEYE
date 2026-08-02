@@ -1,6 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { AlertTriangle } from "lucide-react";
 import { useState } from "react";
 import { api } from "@/lib/api";
 import { useAuthStore } from "@/lib/auth-store";
@@ -363,12 +364,30 @@ function BrandKitCard() {
           </div>
         ) : (
           <p className="mt-2 text-xs text-ink-3">
-            No track yet, so generated video carries only the voiceover. Use music you
-            own or that is cleared for commercial use. TikTok&rsquo;s in-app library
-            cannot be used here: their licence covers their editor only, and a track
-            taken from it will get the post muted or removed.
+            No track yet, so generated video carries only the voiceover.
           </p>
         )}
+
+        {/* This warning was a paragraph of grey text and a commercial single got
+            uploaded anyway, then muted by TikTok on arrival. The consequence is
+            specific and worth stating as one. */}
+        <div className="mt-3 flex gap-2.5 rounded-lg border border-amber-500/40 bg-amber-500/8 p-3">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
+          <div className="text-xs leading-relaxed text-ink-2">
+            <p className="font-medium text-amber-600">Use music you are licensed to use.</p>
+            <p className="mt-1">
+              Commercial songs are detected on upload and the audio is silenced, so
+              the post goes out with a track name attached and nothing playing. It
+              can also cost the account a copyright strike. TikTok&rsquo;s own
+              library does not help here either: that licence covers their editor,
+              not files published through the API.
+            </p>
+            <p className="mt-1">
+              Royalty-free sources that do work: Pixabay Music, Uppbeat, the YouTube
+              Audio Library, or anything you made or bought a licence for.
+            </p>
+          </div>
+        </div>
       </div>
 
       <div className="mb-4 grid grid-cols-2 gap-4">
