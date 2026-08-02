@@ -734,3 +734,79 @@ class TestTikTokDraftMode:
         assert captured["json"]["post_mode"] == "DIRECT_POST"
         assert captured["json"]["post_info"]["privacy_level"] == "SELF_ONLY"
         get_settings.cache_clear()
+
+
+class TestTikTokScopeFallback:
+    """Drafts need video.upload; direct posting needs video.publish. They are
+    separate grants, not a hierarchy. Switching the default to drafts broke
+    accounts connected before video.upload was ever requested, which had been
+    publishing fine the day before."""
+
+    CREDS = {"accessToken": "t"}
+    DENIED = {"error": {"code": "scope_not_authorized", "message": "not authorized"}}
+
+    def _run(self, monkeypatch, responses: list):
+        monkeypatch.setenv("TIKTOK_POST_MODE", "drafts")
+        get_settings.cache_clear()
+        sent = []
+
+        def fake_post(self, url, **kw):
+            sent.append(kw.get("json") or {})
+            return responses[len(sent) - 1]
+
+        monkeypatch.setattr(TikTokPublisher, "_post", fake_post)
+        monkeypatch.setattr(TikTokPublisher, "_privacy_level", lambda self, h: "SELF_ONLY")
+        monkeypatch.setattr(TikTokPublisher, "_await_publish", lambda *a, **kw: None)
+        try:
+            TikTokPublisher().publish(
+                self.CREDS, PostPayload(text="hi", media_urls=["https://cdn/x.jpg"])
+            )
+        finally:
+            get_settings.cache_clear()
+        return sent
+
+    def test_a_denied_draft_falls_back_to_publishing_directly(self, monkeypatch):
+        """The post still goes out. Losing the suggested song beats losing the
+        post over a permission the person can restore later."""
+        sent = self._run(
+            monkeypatch,
+            [
+                http_response(401, self.DENIED),
+                http_response(200, {"data": {"publish_id": "p1"}}),
+            ],
+        )
+        assert len(sent) == 2, "expected a retry"
+        assert sent[0]["post_mode"] == "MEDIA_UPLOAD"
+        assert sent[1]["post_mode"] == "DIRECT_POST"
+        assert sent[1]["post_info"]["privacy_level"] == "SELF_ONLY"
+
+    def test_a_working_draft_is_not_retried(self, monkeypatch):
+        sent = self._run(monkeypatch, [http_response(200, {"data": {"publish_id": "p1"}})])
+        assert len(sent) == 1
+        assert sent[0]["post_mode"] == "MEDIA_UPLOAD"
+
+    def test_other_failures_do_not_trigger_the_fallback(self, monkeypatch):
+        """Retrying a rejected image as a direct post would just fail twice."""
+        monkeypatch.setenv("TIKTOK_POST_MODE", "drafts")
+        get_settings.cache_clear()
+        sent = []
+        monkeypatch.setattr(
+            TikTokPublisher, "_post",
+            lambda self, url, **kw: sent.append(1)
+            or http_response(400, {"error": {"code": "invalid_param"}}),
+        )
+        with pytest.raises(PublishError):
+            TikTokPublisher().publish(
+                self.CREDS, PostPayload(text="hi", media_urls=["https://cdn/x.jpg"])
+            )
+        assert len(sent) == 1
+        get_settings.cache_clear()
+
+    def test_the_scope_error_says_to_reconnect(self):
+        detail = str(
+            TikTokPublisher()._fail_tiktok(
+                http_response(401, self.DENIED), "TikTok (photo init)"
+            )
+        )
+        assert "Reconnect TikTok from" in detail
+        assert "cannot be extended, only replaced" in detail

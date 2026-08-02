@@ -288,9 +288,12 @@ export function tiktokAuthorizeUrl(state: string): string {
   }
   const params = new URLSearchParams({
     client_key: env.tiktok.clientKey,
-    // video.publish is what allows posting straight to the account; without it
-    // TikTok only permits drafts the user must finish in the app.
-    scope: "user.info.basic,video.publish",
+    // The two posting routes need separate scopes, and they are not a
+    // hierarchy: video.publish covers publishing straight to the account,
+    // video.upload covers sending a draft to the user's inbox to finish in the
+    // TikTok app. Requesting only video.publish and then sending a draft gets
+    // scope_not_authorized, so ask for both.
+    scope: "user.info.basic,video.publish,video.upload",
     response_type: "code",
     redirect_uri: env.tiktok.redirectUri,
     state,

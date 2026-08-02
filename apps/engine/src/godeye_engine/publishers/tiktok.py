@@ -12,6 +12,7 @@ requires the media host to be a verified domain or URL prefix on the app.
 
 from __future__ import annotations
 
+import logging
 import time
 from typing import Any
 
@@ -24,6 +25,8 @@ from .base import (
     TransientPublishError,
     download_media,
 )
+
+logger = logging.getLogger(__name__)
 
 API = "https://open.tiktokapis.com/v2"
 
@@ -105,15 +108,12 @@ class TikTokPublisher(BasePublisher):
             "chunk_size": size,
             "total_chunk_count": 1,
         }
-        drafts = self._to_drafts()
-        if drafts:
-            # The inbox has its own endpoint and takes no post_info at all: the
-            # caption and privacy are chosen in the app when publishing.
-            endpoint = f"{API}/post/publish/inbox/video/init/"
-            init_json: dict[str, Any] = {"source_info": source_info}
-        else:
-            endpoint = f"{API}/post/publish/video/init/"
-            init_json = {
+        def video_target(drafts: bool) -> tuple[str, dict[str, Any]]:
+            if drafts:
+                # The inbox has its own endpoint and takes no post_info at all:
+                # the caption and privacy are chosen in the app when publishing.
+                return f"{API}/post/publish/inbox/video/init/", {"source_info": source_info}
+            return f"{API}/post/publish/video/init/", {
                 "post_info": {
                     "title": payload.text[:CAPTION_LIMIT],
                     "privacy_level": self._privacy_level(headers),
@@ -121,7 +121,17 @@ class TikTokPublisher(BasePublisher):
                 "source_info": source_info,
             }
 
+        drafts = self._to_drafts()
+        endpoint, init_json = video_target(drafts)
         init = self._post(endpoint, headers=headers, json=init_json)
+
+        # See _publish_photos: drafts need video.upload, direct needs
+        # video.publish, and a connection made before we asked for both has only
+        # one of them.
+        if drafts and self._scope_denied(init):
+            logger.info("TikTok drafts unavailable (video.upload not granted); posting directly")
+            endpoint, init_json = video_target(False)
+            init = self._post(endpoint, headers=headers, json=init_json)
         body = init.json()
         if init.status_code >= 400 or (body.get("error") or {}).get("code") not in (None, "ok"):
             raise self._fail_tiktok(init, "TikTok (init)")
@@ -155,34 +165,41 @@ class TikTokPublisher(BasePublisher):
                 "Regenerate the image, or attach a JPEG."
             )
 
-        drafts = self._to_drafts()
-        body_json: dict[str, Any] = {
-            "source_info": {
-                "source": "PULL_FROM_URL",
-                "photo_cover_index": 0,
-                "photo_images": images,
-            },
-            "post_mode": "MEDIA_UPLOAD" if drafts else "DIRECT_POST",
-            "media_type": "PHOTO",
-        }
-        # A draft carries no privacy_level: the person sets it in the app when
-        # they publish, which is also why an unaudited app may send one.
-        if drafts:
-            body_json["post_info"] = {
-                "title": (payload.title or payload.text)[:TITLE_LIMIT],
+        def photo_body(drafts: bool) -> dict[str, Any]:
+            body: dict[str, Any] = {
+                "source_info": {
+                    "source": "PULL_FROM_URL",
+                    "photo_cover_index": 0,
+                    "photo_images": images,
+                },
+                "post_mode": "MEDIA_UPLOAD" if drafts else "DIRECT_POST",
+                "media_type": "PHOTO",
             }
-        else:
-            body_json["post_info"] = {
-                "title": (payload.title or payload.text)[:TITLE_LIMIT],
-                "description": payload.text[:CAPTION_LIMIT],
-                "privacy_level": self._privacy_level(headers),
-            }
+            # A draft carries no privacy_level: the person sets it in the app
+            # when they publish, which is also why an unaudited app may send one.
+            body["post_info"] = (
+                {"title": (payload.title or payload.text)[:TITLE_LIMIT]}
+                if drafts
+                else {
+                    "title": (payload.title or payload.text)[:TITLE_LIMIT],
+                    "description": payload.text[:CAPTION_LIMIT],
+                    "privacy_level": self._privacy_level(headers),
+                }
+            )
+            return body
 
-        init = self._post(
-            f"{API}/post/publish/content/init/",
-            headers=headers,
-            json=body_json,
-        )
+        drafts = self._to_drafts()
+        endpoint = f"{API}/post/publish/content/init/"
+        init = self._post(endpoint, headers=headers, json=photo_body(drafts))
+
+        # Drafts need video.upload, which is a separate grant from the
+        # video.publish that direct posting uses; connections made before we
+        # asked for it cannot send one. Publishing directly still works, so fall
+        # back rather than failing a post over a scope the person can restore by
+        # reconnecting whenever they get round to it.
+        if drafts and self._scope_denied(init):
+            logger.info("TikTok drafts unavailable (video.upload not granted); posting directly")
+            init = self._post(endpoint, headers=headers, json=photo_body(False))
         body = init.json()
         if init.status_code >= 400 or (body.get("error") or {}).get("code") not in (None, "ok"):
             raise self._fail_tiktok(init, "TikTok (photo init)")
@@ -209,6 +226,16 @@ class TikTokPublisher(BasePublisher):
             return True
         return not get_settings().tiktok_audited
 
+    @staticmethod
+    def _scope_denied(response) -> bool:
+        """Did TikTok refuse this for a scope the token does not carry?"""
+        if response.status_code not in (401, 403):
+            return False
+        try:
+            return (response.json().get("error") or {}).get("code") == "scope_not_authorized"
+        except ValueError:
+            return False
+
     def _fail_tiktok(self, response, stage: str) -> PublishError:
         """TikTok's own message for the audit error points at the wrong thing.
 
@@ -222,6 +249,13 @@ class TikTokPublisher(BasePublisher):
             return error
         if code == UNAUDITED_CODE:
             return PublishError(f"{stage}: {UNAUDITED_HELP}")
+        if code == "scope_not_authorized":
+            return PublishError(
+                f"{stage}: this TikTok connection was authorised before GODEYE "
+                "asked for the permissions it now needs. Reconnect TikTok from "
+                "Connections and approve both posting permissions; the existing "
+                "grant cannot be extended, only replaced."
+            )
         return error
 
     def _privacy_level(self, headers: dict[str, str]) -> str:
