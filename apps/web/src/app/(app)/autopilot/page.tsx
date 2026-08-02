@@ -2,10 +2,11 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { motion } from "framer-motion";
-import { Plus, Rocket } from "lucide-react";
+import { Pencil, Plus, Rocket, X } from "lucide-react";
 import { useState } from "react";
 import { PLATFORM_INFO, AVAILABLE_PLATFORMS, type Platform } from "@godeye/shared";
 import { api } from "@/lib/api";
+import { useToast } from "@/lib/toast";
 import {
   Badge,
   Button,
@@ -61,21 +62,35 @@ const CADENCE_LABEL: Record<string, string> = Object.fromEntries(
   CADENCES.map((c) => [c.value, c.label]),
 );
 
+// Mirrors CADENCE_TIMES_PER_DAY in tasks/planner.py: a DAILY_2 plan uses the two
+// earliest times, so listing five and expecting five posts is a surprise worth
+// heading off before it happens.
+const TIMES_PER_DAY: Record<string, number> = { DAILY_1: 1, DAILY_2: 2, DAILY_3: 3, WEEKENDS: 1 };
+const cadenceUsesTimes = (cadence: string) => cadence in TIMES_PER_DAY;
+const timesUsedByCadence = (cadence: string) => TIMES_PER_DAY[cadence] ?? 1;
+
 export default function AutopilotPage() {
   const queryClient = useQueryClient();
+  const toast = useToast();
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [form, setForm] = useState({
+  // Null while creating; a plan id while editing that plan.
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [newTime, setNewTime] = useState("");
+  const emptyForm = {
     name: "",
     cadence: "DAILY_1",
     platforms: [] as Platform[],
-    preferredTimes: "",
+    // A list, not a comma-separated string. Typing "9am, 5.30" into a text box
+    // and having it silently rejected by a regex is not a way to set a time.
+    preferredTimes: [] as string[],
     topics: "",
     autoGenerate: true,
     abTesting: false,
     recycleEvergreen: false,
     generateImages: false,
-  });
+  };
+  const [form, setForm] = useState(emptyForm);
 
   const { data: plans = [], isLoading } = useQuery<PostingPlan[]>({
     queryKey: ["posting-plans"],
@@ -99,47 +114,75 @@ export default function AutopilotPage() {
           ? "Pick at least one platform to publish to."
           : null;
 
+  const planBody = () => ({
+    name: form.name,
+    cadence: form.cadence,
+    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+    platforms: form.platforms,
+    preferredTimes: [...form.preferredTimes].sort(),
+    topics: form.topics
+      .split("\n")
+      .map((t) => t.trim())
+      .filter(Boolean),
+    autoGenerate: form.autoGenerate,
+    abTesting: form.abTesting,
+    recycleEvergreen: form.recycleEvergreen,
+    generateImages: form.generateImages,
+  });
+
+  const closeForm = () => {
+    queryClient.invalidateQueries({ queryKey: ["posting-plans"] });
+    setCreating(false);
+    setEditingId(null);
+    setError(null);
+    setForm(emptyForm);
+  };
+
   const createMutation = useMutation({
-    mutationFn: () =>
-      api("/posting-plans", {
-        method: "POST",
-        body: {
-          name: form.name,
-          cadence: form.cadence,
-          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-          platforms: form.platforms,
-          preferredTimes: form.preferredTimes
-            .split(",")
-            .map((t) => t.trim())
-            .filter(Boolean),
-          topics: form.topics
-            .split("\n")
-            .map((t) => t.trim())
-            .filter(Boolean),
-          autoGenerate: form.autoGenerate,
-          abTesting: form.abTesting,
-          recycleEvergreen: form.recycleEvergreen,
-          generateImages: form.generateImages,
-        },
-      }),
+    mutationFn: () => api("/posting-plans", { method: "POST", body: planBody() }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["posting-plans"] });
-      setCreating(false);
-      setError(null);
-      setForm({
-        name: "",
-        cadence: "DAILY_1",
-        platforms: [],
-        preferredTimes: "",
-        topics: "",
-        autoGenerate: true,
-        abTesting: false,
-        recycleEvergreen: false,
-        generateImages: false,
-      });
+      closeForm();
+      toast.success("Autopilot plan launched. The first slots are booked within 5 minutes.");
     },
     onError: (e) => setError(e instanceof Error ? e.message : "Failed to create plan"),
   });
+
+  const updateMutation = useMutation({
+    mutationFn: () =>
+      api<{ cancelledUpcoming?: number }>(`/posting-plans/${editingId}`, {
+        method: "PATCH",
+        body: planBody(),
+      }),
+    onSuccess: (data) => {
+      closeForm();
+      // Changing the times cancels slots already booked at the old ones, and
+      // that is worth saying rather than leaving someone to notice later.
+      toast.success(
+        data?.cancelledUpcoming
+          ? `Plan updated. ${data.cancelledUpcoming} upcoming post(s) rescheduled to the new times.`
+          : "Plan updated.",
+      );
+    },
+    onError: (e) => setError(e instanceof Error ? e.message : "Failed to update plan"),
+  });
+
+  const startEdit = (plan: PostingPlan) => {
+    setForm({
+      name: plan.name,
+      cadence: plan.cadence,
+      platforms: plan.platforms as Platform[],
+      preferredTimes: plan.preferredTimes ?? [],
+      topics: (plan.topics ?? []).join("\n"),
+      autoGenerate: plan.autoGenerate,
+      abTesting: plan.abTesting,
+      recycleEvergreen: plan.recycleEvergreen,
+      generateImages: plan.generateImages,
+    });
+    setEditingId(plan.id);
+    setCreating(true);
+    setError(null);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
 
   const toggleMutation = useMutation({
     mutationFn: ({ id, active }: { id: string; active: boolean }) =>
@@ -169,7 +212,7 @@ export default function AutopilotPage() {
           </>
         }
         actions={
-          <Button onClick={() => setCreating((v) => !v)}>
+          <Button onClick={() => (creating ? closeForm() : setCreating(true))}>
             <Plus className="h-4 w-4" /> {creating ? "Close" : "New plan"}
           </Button>
         }
@@ -236,12 +279,60 @@ export default function AutopilotPage() {
             </div>
 
             <div>
-              <Label>Preferred times (optional, comma-separated — blank = best-time detection)</Label>
-              <Input
-                value={form.preferredTimes}
-                onChange={(e) => setForm((f) => ({ ...f, preferredTimes: e.target.value }))}
-                placeholder="09:00, 17:30"
-              />
+              <Label>Publish times (leave empty to let GODEYE pick the best times)</Label>
+              <div className="flex flex-wrap items-center gap-2">
+                {[...form.preferredTimes].sort().map((time) => (
+                  <span
+                    key={time}
+                    className="inline-flex items-center gap-1.5 rounded-full border border-accent-border bg-accent-soft py-1 pl-3 pr-1.5 text-xs text-accent"
+                  >
+                    <span className="tnum font-mono">{time}</span>
+                    <button
+                      type="button"
+                      aria-label={`Remove ${time}`}
+                      onClick={() =>
+                        setForm((f) => ({
+                          ...f,
+                          preferredTimes: f.preferredTimes.filter((t) => t !== time),
+                        }))
+                      }
+                      className="rounded-full p-0.5 hover:bg-accent/20"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </span>
+                ))}
+                {/* A native time input: the OS gives a phone its own clock
+                    picker, and there is no format to get wrong. */}
+                <input
+                  type="time"
+                  value={newTime}
+                  onChange={(e) => setNewTime(e.target.value)}
+                  className="rounded-lg border border-line bg-surface-2 px-2.5 py-1.5 text-sm text-ink focus:border-accent focus:outline-none"
+                />
+                <Button
+                  variant="secondary"
+                  disabled={!newTime || form.preferredTimes.includes(newTime)}
+                  onClick={() => {
+                    setForm((f) => ({
+                      ...f,
+                      preferredTimes: [...f.preferredTimes, newTime].sort(),
+                    }));
+                    setNewTime("");
+                  }}
+                >
+                  <Plus className="h-3.5 w-3.5" /> Add time
+                </Button>
+              </div>
+              {form.preferredTimes.length > 0 && (
+                <p className="mt-1.5 text-xs text-ink-3">
+                  {cadenceUsesTimes(form.cadence)
+                    ? `This cadence publishes ${timesUsedByCadence(form.cadence)} a day, so the ${
+                        timesUsedByCadence(form.cadence)
+                      } earliest of these are used.`
+                    : "This cadence sets its own times; these are ignored."}
+                </p>
+              )}
             </div>
 
             <div>
@@ -292,14 +383,28 @@ export default function AutopilotPage() {
                 {blockedReason}
               </p>
             )}
-            <Button
-              className="w-full"
-              loading={createMutation.isPending}
-              disabled={!!blockedReason}
-              onClick={() => createMutation.mutate()}
-            >
-              <Rocket className="h-4 w-4" /> Launch plan
-            </Button>
+            <div className="flex gap-2">
+              <Button
+                className="flex-1"
+                loading={createMutation.isPending || updateMutation.isPending}
+                disabled={!!blockedReason}
+                onClick={() => (editingId ? updateMutation.mutate() : createMutation.mutate())}
+              >
+                <Rocket className="h-4 w-4" />
+                {editingId ? "Save changes" : "Launch plan"}
+              </Button>
+              {editingId && (
+                <Button variant="ghost" onClick={closeForm}>
+                  Cancel
+                </Button>
+              )}
+            </div>
+            {editingId && (
+              <p className="text-xs text-ink-3">
+                Changing the times, cadence or channels cancels posts already booked at
+                the old settings and re-plans them. Anything already published stays.
+              </p>
+            )}
           </Card>
         </motion.div>
       )}
@@ -325,10 +430,15 @@ export default function AutopilotPage() {
                     <MonoChip>{kebab(plan.name)}</MonoChip>
                     <Badge status={plan.active ? "ACTIVE" : "PAUSED"} />
                   </div>
-                  <Switch
-                    checked={plan.active}
-                    onChange={(active) => toggleMutation.mutate({ id: plan.id, active })}
-                  />
+                  <div className="flex items-center gap-2">
+                    <Button variant="ghost" onClick={() => startEdit(plan)} title="Edit this plan">
+                      <Pencil className="h-3.5 w-3.5" /> Edit
+                    </Button>
+                    <Switch
+                      checked={plan.active}
+                      onChange={(active) => toggleMutation.mutate({ id: plan.id, active })}
+                    />
+                  </div>
                 </div>
                 <p className="mt-2 font-mono text-[14px] text-ink-3">
                   {(CADENCE_LABEL[plan.cadence] ?? plan.cadence).toLowerCase().replace(/ /g, "")}

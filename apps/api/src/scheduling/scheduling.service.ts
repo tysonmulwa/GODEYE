@@ -261,6 +261,19 @@ export class SchedulingService {
     if ((input.cadence ?? existing.cadence) === "CUSTOM" && !(input.customCron ?? existing.customCron)) {
       throw new BadRequestException("customCron is required for CUSTOM cadence");
     }
+    // Changing when or where a plan publishes has to reach the slots it already
+    // booked. The planner works 24 hours ahead, so without this an edit looks
+    // like it did nothing: the next few posts still go out at the old times, to
+    // the old channels, and the new settings only appear a day later.
+    const timingChanged =
+      (input.cadence !== undefined && input.cadence !== existing.cadence) ||
+      (input.customCron !== undefined && input.customCron !== existing.customCron) ||
+      (input.timezone !== undefined && input.timezone !== existing.timezone) ||
+      (input.preferredTimes !== undefined &&
+        input.preferredTimes.join() !== existing.preferredTimes.join()) ||
+      (input.platforms !== undefined &&
+        input.platforms.join() !== existing.platforms.join());
+
     const plan = await this.prisma.postingPlan.update({
       where: { id },
       data: {
@@ -276,16 +289,36 @@ export class SchedulingService {
         recycleEvergreen: input.recycleEvergreen,
         generateImages: input.generateImages,
         active: input.active,
+        // Clearing the high-water mark makes the planner re-plan from now.
+        ...(timingChanged ? { lastPlannedAt: null } : {}),
       },
     });
+
+    let rescheduled = 0;
+    if (timingChanged) {
+      // Only posts that have not gone out yet, and only this plan's. Anything
+      // already published, or publishing right now, is left alone.
+      const { count } = await this.prisma.scheduledPost.updateMany({
+        where: {
+          orgId,
+          planId: id,
+          status: "PENDING",
+          scheduledAt: { gt: new Date() },
+        },
+        data: { status: "CANCELLED" },
+      });
+      rescheduled = count;
+    }
+
     this.audit.log({
       orgId,
       userId,
       action: "posting_plan.updated",
       targetType: "PostingPlan",
       targetId: id,
+      metadata: { timingChanged, cancelledUpcoming: rescheduled },
     });
-    return plan;
+    return { ...plan, cancelledUpcoming: rescheduled };
   }
 
   listPlans(orgId: string) {

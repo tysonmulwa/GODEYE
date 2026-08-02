@@ -19,6 +19,7 @@ function makePrisma() {
       findFirst: jest.fn(),
       findMany: jest.fn().mockResolvedValue([]),
       update: jest.fn(),
+      updateMany: jest.fn().mockResolvedValue({ count: 0 }),
     },
     analyticsSnapshot: { findMany: jest.fn().mockResolvedValue([]) },
     postingPlan: { findFirst: jest.fn(), update: jest.fn(), create: jest.fn() },
@@ -236,5 +237,68 @@ describe("SchedulingService", () => {
     expect(report.winner).toBe("B");
     const varA = report.variants.find((v) => v.variant === "A");
     expect(varA?.avgEngagement).toBe(10);
+  });
+
+  describe("editing a posting plan", () => {
+    const existing = {
+      id: "plan1",
+      cadence: "DAILY_2",
+      customCron: null,
+      timezone: "Africa/Nairobi",
+      preferredTimes: ["09:00", "17:00"],
+      platforms: ["FACEBOOK"],
+    };
+
+    beforeEach(() => {
+      prisma.postingPlan.findFirst.mockResolvedValue(existing);
+      prisma.postingPlan.update.mockResolvedValue({ id: "plan1" });
+      prisma.scheduledPost.updateMany.mockResolvedValue({ count: 2 });
+    });
+
+    it("re-plans upcoming posts when the times change", async () => {
+      /* The planner books 24h ahead, so without this an edit appears to do
+         nothing: the next posts still go out at the old times. */
+      const result = await service.updatePlan("org1", "plan1", "user1", {
+        preferredTimes: ["11:00", "19:00"],
+      } as never);
+
+      expect(prisma.postingPlan.update).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ lastPlannedAt: null }) }),
+      );
+      expect(result.cancelledUpcoming).toBe(2);
+    });
+
+    it("only cancels this plan's own future PENDING posts", async () => {
+      await service.updatePlan("org1", "plan1", "user1", {
+        platforms: ["FACEBOOK", "TIKTOK"],
+      } as never);
+
+      const where = prisma.scheduledPost.updateMany.mock.calls[0][0].where;
+      expect(where).toEqual(
+        expect.objectContaining({ orgId: "org1", planId: "plan1", status: "PENDING" }),
+      );
+      // Anything already published, or publishing right now, must be left alone.
+      expect(where.scheduledAt.gt).toBeInstanceOf(Date);
+    });
+
+    it("leaves booked posts alone when only the name changes", async () => {
+      const result = await service.updatePlan("org1", "plan1", "user1", {
+        name: "Renamed",
+      } as never);
+
+      expect(prisma.scheduledPost.updateMany).not.toHaveBeenCalled();
+      expect(result.cancelledUpcoming).toBe(0);
+      expect(prisma.postingPlan.update).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.not.objectContaining({ lastPlannedAt: null }) }),
+      );
+    });
+
+    it("does not re-plan when the times are re-sent unchanged", async () => {
+      await service.updatePlan("org1", "plan1", "user1", {
+        preferredTimes: ["09:00", "17:00"],
+        platforms: ["FACEBOOK"],
+      } as never);
+      expect(prisma.scheduledPost.updateMany).not.toHaveBeenCalled();
+    });
   });
 });
