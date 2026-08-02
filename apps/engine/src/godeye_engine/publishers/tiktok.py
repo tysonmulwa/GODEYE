@@ -43,11 +43,11 @@ UNAUDITED_CODE = "unaudited_client_can_only_post_to_private_accounts"
 UNAUDITED_HELP = (
     "TikTok refused because this app has not passed its Content Posting audit. "
     "Despite the wording, your account's privacy setting is not the cause: an "
-    "unaudited app may only publish at SELF_ONLY, and the request asked for "
-    "something more visible. GODEYE now sends SELF_ONLY until you set "
-    "TIKTOK_AUDITED=true on the worker, which you should do once TikTok "
-    "approves the app. Until then posts land on your account visible to you "
-    "alone."
+    "unaudited app may only publish at SELF_ONLY. GODEYE asked for more than "
+    "that because TIKTOK_AUDITED is set to true on the worker, and then retried "
+    "privately, which TikTok also refused. Set TIKTOK_AUDITED=false until "
+    "approval actually lands; the worker logs the level it asks for on every "
+    "post."
 )
 
 # Time TikTok spends processing the uploaded video before the post appears.
@@ -347,6 +347,20 @@ class TikTokPublisher(BasePublisher):
             )
         return error
 
+    def _log_privacy_choice(self, level: str) -> str:
+        """Record what was asked for, so a refusal does not need inferring.
+
+        The last diagnosis of this error worked backwards: SELF_ONLY cannot be
+        refused for being too visible, so something else must have been sent,
+        so TIKTOK_AUDITED must be set. Correct, but the log should have said so.
+        """
+        settings = get_settings()
+        logger.info(
+            "TikTok privacy_level=%s (TIKTOK_AUDITED=%s, TIKTOK_POST_MODE=%s)",
+            level, settings.tiktok_audited, settings.tiktok_post_mode,
+        )
+        return level
+
     def _privacy_level(self, headers: dict[str, str]) -> str:
         """The visibility to request for this post.
 
@@ -364,7 +378,7 @@ class TikTokPublisher(BasePublisher):
         whole of it.
         """
         if not get_settings().tiktok_audited:
-            return SELF_ONLY
+            return self._log_privacy_choice(SELF_ONLY)
 
         import httpx
 
@@ -380,10 +394,10 @@ class TikTokPublisher(BasePublisher):
 
         for preferred in ("PUBLIC_TO_EVERYONE", "MUTUAL_FOLLOW_FRIENDS", "FOLLOWER_OF_CREATOR"):
             if preferred in options:
-                return preferred
+                return self._log_privacy_choice(preferred)
         # SELF_ONLY is always permitted, so it stays the safe fallback when the
         # query fails or the account itself offers nothing more public.
-        return SELF_ONLY
+        return self._log_privacy_choice(SELF_ONLY)
 
     def _upload(self, upload_url: str, video_bytes: bytes, content_type: str) -> None:
         """PUT the video to the one-time upload URL from /init."""
