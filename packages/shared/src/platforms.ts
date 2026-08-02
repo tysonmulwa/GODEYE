@@ -62,7 +62,7 @@ export const PLATFORM_INFO: Record<Platform, PlatformInfo> = {
   FACEBOOK: { id: "FACEBOOK", label: "Facebook", category: "social", available: true, maxLength: 63206 },
   INSTAGRAM: { id: "INSTAGRAM", label: "Instagram", category: "social", available: true, maxLength: 2200 },
   THREADS: { id: "THREADS", label: "Threads", category: "social", available: false, maxLength: 500 },
-  TIKTOK: { id: "TIKTOK", label: "TikTok", category: "social", available: false, maxLength: 2200 },
+  TIKTOK: { id: "TIKTOK", label: "TikTok", category: "social", available: true, maxLength: 2200 },
   LINKEDIN: { id: "LINKEDIN", label: "LinkedIn", category: "social", available: true, maxLength: 3000 },
   PINTEREST: { id: "PINTEREST", label: "Pinterest", category: "social", available: false, maxLength: 500 },
   SNAPCHAT: { id: "SNAPCHAT", label: "Snapchat", category: "social", available: false },
