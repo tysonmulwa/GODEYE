@@ -123,6 +123,30 @@ def import_products(org_id: str, url: str | None = None, limit: int = 40) -> dic
     }
 
 
+@app.task(name="godeye_engine.tasks.products.scheduled_imports")
+def scheduled_imports() -> dict:
+    """Re-read the shops that asked to be re-read.
+
+    Queues one import per workspace rather than doing the work here: a slow
+    shop would otherwise hold up every other workspace behind it.
+    """
+    with get_session() as session:
+        rows = session.execute(
+            select(BusinessProfile.c.orgId).where(
+                BusinessProfile.c.productAutoImport.is_(True),
+                # Belt and braces: the settings refuse this combination, and
+                # the import would refuse it again. Cheaper not to queue it.
+                BusinessProfile.c.productImportConsentAt.isnot(None),
+            )
+        ).all()
+
+    for row in rows:
+        import_products.delay(org_id=row.orgId)
+    if rows:
+        logger.info("Queued %d scheduled product import(s)", len(rows))
+    return {"queued": len(rows)}
+
+
 def _store(org_id: str, products: list, now) -> tuple[int, int, int]:
     """Upsert on (orgId, sourceUrl); report what actually moved."""
     added = changed = unchanged = 0

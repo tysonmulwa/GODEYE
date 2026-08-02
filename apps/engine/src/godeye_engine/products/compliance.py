@@ -89,16 +89,36 @@ SCARCITY_RULE = "UCPD Annex I — invented scarcity or deadline"
 DISCOUNT_RULE = "Omnibus Art. 6a — price reduction without the 30-day low"
 
 
+_CAMEL_BOUNDARY = re.compile(r"(?<=[a-z0-9])(?=[A-Z])")
+
+
+def expand_hashtags(text: str) -> str:
+    """Put the spaces back into run-together words.
+
+    Every pattern here keys on word boundaries, and a hashtag has none:
+    #SaleNowOn makes exactly the claim "sale now on" does and would otherwise
+    pass untouched. Splitting on the lower-to-upper boundary recovers it.
+    """
+    return _CAMEL_BOUNDARY.sub(" ", text.replace("#", " ").replace("_", " "))
+
+
 def check(text: str) -> list[Violation]:
     """Every rule the finished text breaks. Empty means it may be published."""
+    # Checked as written and as read: a claim does not stop being a claim for
+    # having been packed into a hashtag.
+    candidates = {text, expand_hashtags(text)}
     found: list[Violation] = []
+    seen: set[str] = set()
     for patterns, rule in ((SCARCITY_PATTERNS, SCARCITY_RULE), (DISCOUNT_PATTERNS, DISCOUNT_RULE)):
         for pattern, explanation in patterns:
-            match = pattern.search(text)
-            if match:
-                found.append(
-                    Violation(rule=rule, matched=match.group(0), explanation=explanation)
-                )
+            for candidate in candidates:
+                match = pattern.search(candidate)
+                if match and match.group(0).lower() not in seen:
+                    seen.add(match.group(0).lower())
+                    found.append(
+                        Violation(rule=rule, matched=match.group(0), explanation=explanation)
+                    )
+                    break
     return found
 
 

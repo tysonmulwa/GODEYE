@@ -3,6 +3,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle } from "lucide-react";
 import { useState } from "react";
+import { ProductCatalogueCard } from "@/components/product-catalogue";
 import { api } from "@/lib/api";
 import { useAuthStore } from "@/lib/auth-store";
 import {
@@ -653,6 +654,7 @@ export default function SettingsPage() {
         <ApprovalCard />
 
         <BrandKitCard />
+        <ProductCatalogueCard />
 
         <Card>
           <h2 className="mb-1 text-sm font-semibold">Coming in the next phases</h2>

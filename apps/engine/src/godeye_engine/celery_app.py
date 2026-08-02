@@ -23,6 +23,7 @@ app = Celery(
         "godeye_engine.tasks.seo",
         "godeye_engine.tasks.diagnostics",
         "godeye_engine.tasks.products",
+        "godeye_engine.tasks.product_posts",
     ],
 )
 
@@ -62,6 +63,14 @@ app.conf.update(
         "reap-stale-runs": {
             "task": "godeye_engine.tasks.scheduler.reap_stale_runs",
             "schedule": 120.0,  # 2 minutes
+        },
+        "scheduled-product-imports": {
+            "task": "godeye_engine.tasks.products.scheduled_imports",
+            "schedule": 6 * 3600.0,  # four times a day; a catalogue is not news
+        },
+        "plan-product-posts": {
+            "task": "godeye_engine.tasks.product_posts.plan_product_posts",
+            "schedule": 12 * 3600.0,  # at most two product posts a day
         },
         "reap-stuck-posts": {
             "task": "godeye_engine.tasks.scheduler.reap_stuck_posts",

@@ -79,6 +79,20 @@ class TestDiscountClaims:
         assert is_publishable("Handmade leather boots, £129. Link in bio.")
 
 
+class TestHashtags:
+    """A claim does not stop being a claim for having been packed into a
+    hashtag, and every pattern here keys on word boundaries a hashtag lacks."""
+
+    @pytest.mark.parametrize(
+        "tag", ["#SaleNowOn", "#LimitedTime", "#LastChance", "#50%Off", "#while_stocks_last"]
+    )
+    def test_a_run_together_claim_is_still_caught(self, tag):
+        assert check(f"Great boots. {tag}"), f"slipped through: {tag}"
+
+    def test_ordinary_hashtags_are_left_alone(self):
+        assert is_publishable("Handmade in Nairobi. #Leather #ChelseaBoot #MadeToLast")
+
+
 class TestNormalCopyStillPasses:
     """The filter has to leave ordinary marketing alone, or it is useless."""
 
