@@ -363,9 +363,19 @@ function BrandKitCard() {
             <audio controls src={current.musicUrl} className="h-9 w-full" />
           </div>
         ) : (
-          <p className="mt-2 text-xs text-ink-3">
-            No track yet, so generated video carries only the voiceover.
-          </p>
+          /* Grey text mentioning only the voiceover let a workspace post to
+             TikTok in silence without anything having warned it would. The
+             brand kit is per workspace, so a track on one says nothing here. */
+          <div className="mt-2 rounded-lg border border-line bg-surface-2 p-3">
+            <p className="text-xs font-medium text-ink-1">
+              No track, so TikTok posts from this workspace go out silent.
+            </p>
+            <p className="mt-1 text-xs leading-relaxed text-ink-3">
+              Photos are published as a slideshow carrying this track, and TikTok&rsquo;s
+              own library is only reachable from inside their app. Generated video
+              carries just the voiceover.
+            </p>
+          </div>
         )}
 
         {/* This warning was a paragraph of grey text and a commercial single got

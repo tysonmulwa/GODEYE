@@ -2,7 +2,8 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { motion } from "framer-motion";
-import { CalendarClock, Sparkles, Wand2 } from "lucide-react";
+import { AlertTriangle, CalendarClock, Sparkles, Wand2 } from "lucide-react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { PLATFORM_DEFAULT_PRESET } from "@godeye/shared";
@@ -77,6 +78,13 @@ export default function ComposerPage() {
   const { data: connections = [] } = useQuery<Connection[]>({
     queryKey: ["connections"],
     queryFn: () => api("/connections"),
+  });
+  // A TikTok post with no track publishes silently. Nothing said so — not the
+  // composer, not the result — and the brand kit is per workspace, so having
+  // set a track on one says nothing about the one being posted from.
+  const { data: brandKit } = useQuery<{ musicUrl: string | null }>({
+    queryKey: ["brand-kit"],
+    queryFn: () => api("/media/brand-kit"),
   });
   const activeConnections = connections.filter((c) => c.status === "ACTIVE");
 
@@ -302,6 +310,26 @@ export default function ComposerPage() {
                     <span className="ml-2 shrink-0 text-[14px] text-ink-3">{c.platform}</span>
                   </button>
                 ))}
+              </div>
+            )}
+
+            {selectedPlatforms.includes("TIKTOK") && brandKit && !brandKit.musicUrl && (
+              <div className="mt-3 flex gap-2.5 rounded-lg border border-amber-500/40 bg-amber-500/8 p-3">
+                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
+                <div className="text-xs leading-relaxed text-ink-2">
+                  <p className="font-medium text-amber-600">
+                    This workspace has no track, so the TikTok post will be silent.
+                  </p>
+                  <p className="mt-1">
+                    Photos are published as a slideshow carrying your background
+                    track. Without one there is nothing to carry, and TikTok&rsquo;s
+                    own music library is only reachable from inside their app.{" "}
+                    <Link href="/settings" className="underline hover:text-ink-1">
+                      Add a track in Settings
+                    </Link>
+                    .
+                  </p>
+                </div>
               </div>
             )}
           </div>
