@@ -128,6 +128,55 @@ class TestChosenLength:
         assert "-shortest" in cmd
 
 
+class TestPhotoArrivesAsItIs:
+    """Both of these were visible on arrival at TikTok: the photo appeared to
+    shake, and it had been cut down to fill the frame."""
+
+    def _filter(self) -> str:
+        cmd = video.still_clip_cmd("i.jpg", "o.mp4", 1080, 1920, 5.0)
+        return cmd[cmd.index("-filter_complex") + 1]
+
+    def _chain(self, label: str) -> str:
+        """The filter chain fed by ``label``.
+
+        Selected by chain rather than by splitting the whole string: a label
+        appears both where it is produced and where it is consumed.
+        """
+        for chain in self._filter().split(";"):
+            if chain.startswith(label):
+                return chain
+        raise AssertionError(f"no chain reads {label}: {self._filter()}")
+
+    def test_a_still_photo_does_not_move(self):
+        """zoompan rounds its crop window to whole pixels every frame, so a
+        slow push in arrives as jitter. There is nothing to reveal in a still
+        photograph anyway."""
+        assert "zoompan" not in self._filter()
+
+    def test_the_photo_is_fitted_whole_rather_than_cropped_to_fill(self):
+        """Scaling to cover and cropping takes the top and bottom off a square
+        photo — not the picture the user chose."""
+        foreground = self._chain("[fg]")
+        assert "force_original_aspect_ratio=decrease" in foreground
+        # The background is deliberately cropped to cover; the photo is not.
+        assert "force_original_aspect_ratio=increase" not in foreground
+        assert "crop" not in foreground
+
+    def test_the_leftover_space_is_filled_rather_than_left_black(self):
+        """Bars read as a mistake; a blurred copy of the photo reads as intent."""
+        assert "gblur" in self._filter()
+
+    def test_the_background_blur_is_done_small(self):
+        """Blurring at full resolution is a per-frame filter across every frame
+        of the clip, on a worker with limited memory."""
+        assert "scale=90:160" in self._chain("[bg]")
+
+    def test_the_fitted_photo_has_even_dimensions(self):
+        """yuv420p subsamples chroma; an odd-sized overlay lands the photo half
+        a chroma sample off centre."""
+        assert "trunc(iw/2)*2:trunc(ih/2)*2" in self._filter()
+
+
 class TestEncodeFitsASmallContainer:
     """x264 was SIGKILLed one second into the first clip on the deployed
     worker. It reserves frame buffers per thread plus a lookahead queue before

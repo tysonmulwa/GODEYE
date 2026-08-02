@@ -160,23 +160,43 @@ def scene_clip_cmd(
 def still_clip_cmd(
     image_path: str, out_path: str, width: int, height: int, duration: float
 ) -> list[str]:
-    """A still held for ``duration`` with a slow push in, and no audio.
+    """A photo held still for ``duration``, whole and uncropped, with no audio.
+
+    Two things this deliberately does not do, both of which showed up on
+    arrival at TikTok:
+
+    A slow zoom looked like shaking. zoompan recomputes the crop window every
+    frame and rounds it to whole pixels, so a gentle push in arrives as jitter
+    rather than motion — there is nothing to reveal in a still photograph
+    anyway.
+
+    Overfilling the frame cut the photo up. Scaling to cover a 1080x1920 frame
+    and cropping means a square photo loses its top and bottom, which is not
+    the picture the user chose. It is fitted instead, so it arrives at its own
+    proportions, and the space left over is filled with a blurred copy of
+    itself — black bars read as a mistake.
+
+    The background is blurred small and scaled up, which costs almost nothing;
+    blurring at full resolution would be a per-frame filter across every frame
+    of the clip.
 
     scene_clip_cmd needs a narration track per scene. A slideshow has one piece
     of music across the whole thing, so the clips are built silent and the audio
     is attached once at the end.
     """
-    frames = max(1, int(round(duration * FPS)))
     return [
         "-y",
         "-loop", "1",
         "-i", image_path,
         "-filter_complex",
-        f"[0:v]scale={width}:{height}:force_original_aspect_ratio=increase,"
-        f"crop={width}:{height},"
-        f"zoompan=z='min(zoom+0.0008,1.12)':d={frames}"
-        f":x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)'"
-        f":s={width}x{height}:fps={FPS}[v]",
+        "[0:v]split=2[bg][fg];"
+        f"[bg]scale=90:160:force_original_aspect_ratio=increase,crop=90:160,"
+        f"gblur=sigma=6,scale={width}:{height}[back];"
+        f"[fg]scale={width}:{height}:force_original_aspect_ratio=decrease,"
+        # Even dimensions: yuv420p subsamples chroma, and an odd-sized overlay
+        # lands the photo half a chroma sample off centre.
+        "scale=trunc(iw/2)*2:trunc(ih/2)*2[front];"
+        "[back][front]overlay=(W-w)/2:(H-h)/2,format=yuv420p[v]",
         "-map", "[v]",
         "-c:v", "libx264",
         "-preset", ENCODE_PRESET,
