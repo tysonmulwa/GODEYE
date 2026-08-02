@@ -259,7 +259,13 @@ def import_from_site(url: str, limit: int = MAX_PRODUCT_PAGES) -> ImportResult:
                 verdict=FOUND, products=products, pages_read=pages, route="crawl"
             )
 
-        # Nothing found. Which of the two reasons decides what the user is told.
+        # Nothing found in the markup. Before paying for a browser, see whether
+        # the page fetches its catalogue from somewhere we can read directly:
+        # exact values, one request, and no Chromium to host.
+        via_api = _read_storefront_api(origin, home.text, client, limit)
+        if via_api is not None:
+            return via_api
+
         if looks_client_rendered(home.text):
             rendered = _read_rendered(origin, client, limit)
             if rendered is not None:
@@ -272,6 +278,34 @@ def import_from_site(url: str, limit: int = MAX_PRODUCT_PAGES) -> ImportResult:
                 "have nothing to import, and this is the expected answer for them."
             ),
         )
+
+
+def _read_storefront_api(
+    origin: str, html: str, client: httpx.Client, limit: int
+) -> ImportResult | None:
+    """Read the catalogue from the API the storefront itself calls.
+
+    None means this route did not apply, so the caller carries on. Silence
+    rather than a verdict: not finding a backend here says nothing about the
+    site, only that this particular shortcut was unavailable.
+    """
+    from . import supabase_store
+
+    try:
+        backend = supabase_store.discover(html, origin, client)
+        if backend is None:
+            return None
+        products = supabase_store.fetch_products(backend, origin, limit=limit)
+    except Exception as e:  # noqa: BLE001 — fall through to the other routes
+        logger.info("Storefront API route failed for %s: %s", origin, type(e).__name__)
+        return None
+
+    if not products:
+        return None
+    logger.info("Products: read %d from %s's own API", len(products), origin)
+    return ImportResult(
+        verdict=FOUND, products=products, pages_read=1, route="storefront_api"
+    )
 
 
 def _read_rendered(origin: str, client: httpx.Client, limit: int) -> ImportResult | None:

@@ -195,11 +195,66 @@ def format_price(amount: Decimal | float | int | None, currency: str | None,
 
     if not symbol:
         return body
-    return f"{symbol}{body}" if position == "prefix" else f"{body} {symbol}"
+    if position != "prefix":
+        return f"{body} {symbol}"
+    # A word-shaped symbol takes a space; a single glyph does not. "KSh 8,500"
+    # and "CHF 1'234", but "£129" and "$99" — running the letters into the
+    # digits reads as a typo.
+    separator = " " if symbol[-1].isalpha() else ""
+    return f"{symbol}{separator}{body}"
+
+
+# Plenty of shops store a price without storing a currency — their own site
+# knows which one it means because it only ever sells in one. A bare "8500" in
+# a caption does not, so the workspace's own stated location fills the gap.
+_CURRENCY_BY_PLACE: list[tuple[tuple[str, ...], str]] = [
+    (("united kingdom", "britain", "england", "scotland", "wales", " uk"), "GBP"),
+    (("ireland",), "EUR"),
+    (("united states", "usa", " us,", "america"), "USD"),
+    (("switzerland",), "CHF"),
+    (("sweden",), "SEK"),
+    (("norway",), "NOK"),
+    (("denmark",), "DKK"),
+    (("poland",), "PLN"),
+    (("czech",), "CZK"),
+    (("canada",), "CAD"),
+    (("australia",), "AUD"),
+    (("kenya", "nairobi"), "KES"),
+    (("south africa",), "ZAR"),
+    (("nigeria",), "NGN"),
+    (("united arab emirates", "dubai"), "AED"),
+    (
+        ("germany", "france", "spain", "italy", "netherlands", "belgium", "austria",
+         "portugal", "finland", "greece", "estonia", "latvia", "lithuania",
+         "slovakia", "slovenia", "croatia", "luxembourg", "malta", "cyprus"),
+        "EUR",
+    ),
+]
+
+
+def currency_for_location(location: str | None) -> str | None:
+    """The currency a shop in this place almost certainly quotes in.
+
+    A guess, so it is only ever a fallback for a shop that did not record one.
+    Nothing here changes the number — only how it is labelled — and labelling
+    it wrongly is still better than publishing a bare figure with no unit.
+    """
+    if not location:
+        return None
+    text = f" {location.lower()}, "
+    for needles, code in _CURRENCY_BY_PLACE:
+        if any(needle in text for needle in needles):
+            return code
+    return None
 
 
 # Routes whose price is the one a shopper sees on the page, tax included.
-TAX_INCLUSIVE_SOURCES = {"jsonld", "microdata", "opengraph"}
+# storefront_api belongs here: it is the value the shop's own pages render to
+# customers, read from the same API those pages call, so it carries exactly the
+# standing of a price in the page's structured data. The Shopify feed is the
+# odd one out — that figure is a store configuration setting, not necessarily
+# what anybody is shown.
+TAX_INCLUSIVE_SOURCES = {"jsonld", "microdata", "opengraph", "storefront_api"}
 
 
 def price_is_confirmable(source: str) -> bool:

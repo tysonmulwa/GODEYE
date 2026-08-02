@@ -106,12 +106,15 @@ def fallback_post(product: dict[str, Any], price_text: str | None) -> ProductPos
     and this still says the true and useful things: what it is, what the shop
     says about it, what it costs.
     """
-    parts = [product["title"]]
+    # The title is a name, not a sentence, so it needs closing before the next
+    # one starts: "Premium Perfume Luxurious fragrance" reads as one phrase.
+    title = product["title"].strip()
+    parts = [title if title.endswith((".", "!", "?")) else f"{title}."]
     description = (product.get("description") or "").strip()
     if description:
         sentence = description.split(". ")[0].strip().rstrip(".")
-        if sentence and sentence.lower() != product["title"].lower():
-            parts.append(f"{sentence}.")
+        if sentence and sentence.lower() != title.lower():
+            parts.append(f"{sentence[0].upper()}{sentence[1:]}.")
     if price_text:
         parts.append(f"{price_text}.")
     parts.append("Full details on our website.")
@@ -136,7 +139,12 @@ def generate(product: dict[str, Any], profile: dict[str, Any], angle_index: int 
         product.get("source", "")
     ):
         price_text = compliance.format_price(
-            product["price"], product.get("currency"), locale
+            product["price"],
+            # Many shops store a price with no currency because their own site
+            # only ever sells in one. A bare number in a caption does not carry
+            # that context, so the workspace's stated location fills it in.
+            product.get("currency") or compliance.currency_for_location(profile.get("location")),
+            locale,
         )
 
     prompt = build_prompt(product, profile, angle, price_text)

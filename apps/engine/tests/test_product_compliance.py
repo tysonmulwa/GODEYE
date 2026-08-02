@@ -128,8 +128,14 @@ class TestPriceFormatting:
         assert format_price(Decimal("1234.56"), "GBP") == "£1,234.56"
         assert format_price(Decimal("99"), "USD") == "$99"
 
+    def test_a_word_shaped_symbol_takes_a_space_and_a_glyph_does_not(self):
+        """"KSh8,500" runs the letters into the digits and reads as a typo;
+        "£129" is correct exactly as it is."""
+        assert format_price(Decimal("8500"), "KES") == "KSh 8,500"
+        assert format_price(Decimal("129"), "GBP") == "£129"
+
     def test_swiss_francs_group_with_an_apostrophe(self):
-        assert format_price(Decimal("1234.50"), "CHF") == "CHF1'234.50"
+        assert format_price(Decimal("1234.50"), "CHF") == "CHF 1'234.50"
 
     def test_nordic_and_polish_put_the_symbol_last(self):
         assert format_price(Decimal("1299"), "SEK") == "1 299 kr"
@@ -140,7 +146,7 @@ class TestPriceFormatting:
         assert format_price(Decimal("129.00"), "GBP") == "£129"
 
     def test_an_unknown_currency_shows_its_code_rather_than_guessing(self):
-        assert format_price(Decimal("500"), "XYZ") == "XYZ500"
+        assert format_price(Decimal("500"), "XYZ") == "XYZ 500"
 
     def test_no_price_renders_nothing(self):
         """A caller must be able to omit the price, not print "None"."""
@@ -154,6 +160,12 @@ class TestVatProvenance:
     def test_a_price_from_the_product_page_can_be_published(self):
         for source in ("jsonld", "microdata", "opengraph"):
             assert price_is_confirmable(source)
+
+    def test_a_price_from_the_shops_own_api_can_be_published(self):
+        """It is the value the shop's own pages render to customers, read from
+        the same API those pages call. Excluding it would drop the price from
+        every post on exactly the sites this route exists to serve."""
+        assert price_is_confirmable("storefront_api")
 
     def test_a_price_from_the_shopify_feed_needs_confirming(self):
         assert not price_is_confirmable("shopify")
