@@ -242,6 +242,32 @@ BusinessProfile = Table(
     Column("brandVoice", String),
     Column("competitors", ARRAY(String)),
     Column("seasonalNotes", String),
+    Column("productImportConsentAt", DateTime(timezone=False)),
+    Column("productImportConsentBy", String),
+    Column("lastProductImportAt", DateTime(timezone=False)),
+)
+
+Product = Table(
+    "Product",
+    metadata,
+    Column("id", String, primary_key=True),
+    Column("orgId", String, nullable=False),
+    Column("sourceUrl", String, nullable=False),
+    Column("title", String, nullable=False),
+    Column("description", Text),
+    Column("price", Numeric(14, 2)),
+    Column("currency", String),
+    Column("imageUrl", String),
+    Column("availability", String),
+    Column("sku", String),
+    Column("source", String, nullable=False),
+    Column("contentHash", String, nullable=False),
+    Column("firstSeenAt", DateTime(timezone=False)),
+    Column("lastSeenAt", DateTime(timezone=False)),
+    Column("lastPostedAt", DateTime(timezone=False)),
+    Column("postCount", Integer),
+    Column("createdAt", DateTime(timezone=False)),
+    Column("updatedAt", DateTime(timezone=False)),
 )
 
 SeoAudit = Table(

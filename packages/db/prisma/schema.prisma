@@ -68,6 +68,7 @@ model Organization {
   brandKit           BrandKit?
   seoAudits          SeoAudit[]
   seoFixes           SeoFix[]
+  productCatalogue   Product[]
 }
 
 enum Role {
@@ -230,10 +231,50 @@ model BusinessProfile {
   brandVoice     String?
   competitors    String[] @default([])
   seasonalNotes  String?
+  // Reading a catalogue off a website is something the owner opts into, not a
+  // default. Recorded as who and when rather than a flag, so it can be shown
+  // back and answered for.
+  productImportConsentAt DateTime?
+  productImportConsentBy String?
+  lastProductImportAt    DateTime?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
   org Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+}
+
+/// One product as its own shop describes it. Imported, never invented: the
+/// price and description here go onto a customer's feed.
+model Product {
+  id           String    @id @default(cuid())
+  orgId        String
+  /// The product's own page. Natural key with orgId — a shop does not sell the
+  /// same thing at two URLs, and re-importing must update rather than duplicate.
+  sourceUrl    String
+  title        String
+  description  String?   @db.Text
+  price        Decimal?  @db.Decimal(14, 2)
+  currency     String?
+  imageUrl     String?
+  availability String?
+  sku          String?
+  /// Which route read it: shopify | jsonld | microdata | opengraph
+  source       String
+  /// Fingerprint of the fields that matter, so a re-import can tell a genuine
+  /// change from a shop that simply republished the same page.
+  contentHash  String
+  firstSeenAt  DateTime  @default(now())
+  lastSeenAt   DateTime  @default(now())
+  /// Kept so the same product is not posted twice in a row while others wait.
+  lastPostedAt DateTime?
+  postCount    Int       @default(0)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  org Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@unique([orgId, sourceUrl])
+  @@index([orgId, lastPostedAt])
 }
 
 // ============================================================

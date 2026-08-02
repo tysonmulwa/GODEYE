@@ -22,6 +22,7 @@ app = Celery(
         "godeye_engine.tasks.video",
         "godeye_engine.tasks.seo",
         "godeye_engine.tasks.diagnostics",
+        "godeye_engine.tasks.products",
     ],
 )
 
