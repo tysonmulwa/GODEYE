@@ -93,6 +93,16 @@ class Settings(BaseSettings):
     # rather than the app.
     tiktok_post_mode: str = "direct"  # direct | drafts
 
+    # Reading a storefront that builds its catalogue in the browser needs a
+    # browser. Deliberately not this container: the worker was killed for
+    # memory encoding a five second video, and Chromium is heavier than
+    # ffmpeg. Point this at a Browserless-compatible /content endpoint — one
+    # container, self-hostable, and the hosted services speak it too.
+    browser_render_url: str = ""
+    browser_render_token: str = ""
+    # "playwright" runs it in-process instead, for anyone who accepts the cost.
+    browser_render_provider: str = ""
+
     reddit_client_id: str = ""
     reddit_client_secret: str = ""
     reddit_user_agent: str = "godeye/0.1"

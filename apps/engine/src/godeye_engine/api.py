@@ -128,7 +128,19 @@ def health(render: str = "") -> dict:
             else "error: " + ", ".join(f"{w['node']}: {w.get('ffmpeg')}" for w in cannot_render)
         )
 
-    result = {"status": "", "checks": checks, "build": build, "workers": workers}
+    # Reported beside the checks rather than among them: rendering is opt-in
+    # and only storefronts that build their catalogue in the browser need it,
+    # so its absence must not colour the whole service degraded. Shown at all
+    # so "why did my import say it needs a browser" is one request.
+    from .products import render as product_render
+
+    result = {
+        "status": "",
+        "checks": checks,
+        "build": build,
+        "workers": workers,
+        "browserRendering": "configured" if product_render.is_configured() else "off",
+    }
 
     # Opt-in: this encodes video, so it is far too expensive to run on every
     # health poll. Worth having because a working ffmpeg binary and a container

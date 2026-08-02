@@ -179,11 +179,13 @@ class TestVerdicts:
     """Zero products is not one outcome. The message differs, so the verdict
     has to as well."""
 
-    def test_a_client_rendered_storefront_asks_for_rendering(self, routed):
+    def test_a_client_rendered_storefront_asks_for_a_browser(self, routed):
         routed({"https://spa.example": httpx.Response(200, text=SHELL)})
         result = import_from_site("https://spa.example")
         assert result.verdict == NEEDS_RENDERING
-        assert "rendering" in (result.detail or "")
+        # Names what to set up rather than only reporting failure.
+        assert "browser" in (result.detail or "").lower()
+        assert "BROWSER_RENDER_URL" in (result.detail or "")
 
     def test_a_site_that_sells_nothing_says_so_plainly(self, routed):
         """The real case: a dating app has no catalogue. That is an answer, not

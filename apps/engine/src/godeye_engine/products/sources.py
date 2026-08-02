@@ -261,14 +261,9 @@ def import_from_site(url: str, limit: int = MAX_PRODUCT_PAGES) -> ImportResult:
 
         # Nothing found. Which of the two reasons decides what the user is told.
         if looks_client_rendered(home.text):
-            return ImportResult(
-                verdict=NEEDS_RENDERING,
-                pages_read=pages,
-                detail=(
-                    "This storefront builds its catalogue in the browser, so its pages "
-                    "arrive empty to a plain fetch. Reading it needs rendering enabled."
-                ),
-            )
+            rendered = _read_rendered(origin, client, limit)
+            if rendered is not None:
+                return rendered
         return ImportResult(
             verdict=NO_CATALOGUE,
             pages_read=pages,
@@ -277,6 +272,77 @@ def import_from_site(url: str, limit: int = MAX_PRODUCT_PAGES) -> ImportResult:
                 "have nothing to import, and this is the expected answer for them."
             ),
         )
+
+
+def _read_rendered(origin: str, client: httpx.Client, limit: int) -> ImportResult | None:
+    """Try again with a browser. None means keep the plain-fetch verdict.
+
+    The links a catalogue needs are themselves drawn by the JavaScript, so the
+    rendered landing page is what supplies them — discovering URLs from the
+    empty shell first would find nothing to render.
+    """
+    from . import render
+
+    if not render.is_configured():
+        return ImportResult(verdict=NEEDS_RENDERING, route="render", detail=render.NOT_CONFIGURED)
+
+    logger.info("Products: %s looks client-rendered, asking for a rendered copy", origin)
+    home = render.render(origin)
+    if not home.ok:
+        return ImportResult(verdict=NEEDS_RENDERING, route="render", detail=home.detail)
+
+    products: list[Product] = []
+    seen: set[str] = set()
+    for product in extract_products(home.html, origin):
+        key = (product.sku or product.title).lower()
+        if key not in seen:
+            seen.add(key)
+            products.append(product)
+    pages = 1
+
+    # Product links only exist once the page has run, so they are read from the
+    # rendered copy rather than from the shell fetched earlier.
+    for product_url in _links_in(home.html, origin)[:limit]:
+        page = render.render(product_url)
+        if not page.ok:
+            continue
+        pages += 1
+        for product in extract_products(page.html, product_url):
+            key = (product.sku or product.title).lower()
+            if key not in seen:
+                seen.add(key)
+                products.append(product)
+
+    if products:
+        logger.info("Products: rendered %s, found %d", origin, len(products))
+        return ImportResult(
+            verdict=FOUND, products=products, pages_read=pages, route="render"
+        )
+    # Rendered successfully and still nothing: this one really has no catalogue.
+    return ImportResult(
+        verdict=NO_CATALOGUE,
+        pages_read=pages,
+        route="render",
+        detail=(
+            "The site was rendered in a browser and still published no products. "
+            "Sites that are not shops have nothing to import."
+        ),
+    )
+
+
+def _links_in(html: str, origin: str) -> list[str]:
+    """Product-shaped links on an already-rendered page."""
+    found: list[str] = []
+    seen: set[str] = set()
+    for href in re.findall(r'href=["\']([^"\']+)["\']', html):
+        absolute = urljoin(origin + "/", href.strip()).split("#")[0]
+        if urlparse(absolute).netloc != urlparse(origin).netloc:
+            continue
+        if absolute in seen or not PRODUCT_PATH.search(urlparse(absolute).path):
+            continue
+        seen.add(absolute)
+        found.append(absolute)
+    return found
 
 
 def total_value(products: list[Product]) -> Decimal:
