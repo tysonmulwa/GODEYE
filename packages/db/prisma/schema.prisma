@@ -357,6 +357,13 @@ model BrandKit {
   musicStorageKey  String?
   musicUrl         String?
   musicName        String?
+  // How long a photo post runs once it is rendered to video. Two photos held
+  // once came to six seconds, which is not a post. 30, 45 or 60.
+  slideshowSeconds Int      @default(30)
+  // Photos become a Reel carrying the track, rather than a still carousel.
+  // Only ever applies when a track is set — without one there is nothing to
+  // carry, and a silent Reel is worse than the carousel it replaced.
+  photosAsReels    Boolean  @default(true)
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 

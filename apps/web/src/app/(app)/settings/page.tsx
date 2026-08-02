@@ -25,7 +25,11 @@ interface BrandKit {
   watermarkEnabled: boolean;
   musicUrl: string | null;
   musicName: string | null;
+  slideshowSeconds: 30 | 45 | 60;
+  photosAsReels: boolean;
 }
+
+const SLIDESHOW_LENGTHS = [30, 45, 60] as const;
 
 const MANAGE_ROLES = ["OWNER", "ADMIN"];
 
@@ -220,6 +224,8 @@ function BrandKitCard() {
           secondaryColor: body.secondaryColor,
           fontFamily: body.fontFamily ?? "",
           watermarkEnabled: body.watermarkEnabled,
+          slideshowSeconds: body.slideshowSeconds,
+          photosAsReels: body.photosAsReels,
         },
       }),
     onSuccess: () => {
@@ -396,6 +402,40 @@ function BrandKitCard() {
               Royalty-free sources that do work: Pixabay Music, Uppbeat, the YouTube
               Audio Library, or anything you made or bought a licence for.
             </p>
+          </div>
+        </div>
+
+        <div className="mt-4 border-t border-line pt-4">
+          <Label>Post length</Label>
+          <p className="mb-2 text-xs text-ink-3">
+            How long a photo post runs once it becomes video. Your photos repeat
+            in order to fill it.
+          </p>
+          <div className="flex gap-2">
+            {SLIDESHOW_LENGTHS.map((seconds) => (
+              <button
+                key={seconds}
+                type="button"
+                onClick={() => set({ slideshowSeconds: seconds })}
+                className={cx(
+                  "flex-1 rounded-lg border px-3 py-2 font-mono text-sm transition-colors",
+                  current.slideshowSeconds === seconds
+                    ? "border-accent bg-accent-soft text-ink-1"
+                    : "border-line text-ink-2 hover:border-ink-3",
+                )}
+              >
+                {seconds === 60 ? "1:00" : `0:${seconds}`}
+              </button>
+            ))}
+          </div>
+
+          <div className="mt-4">
+            <Switch
+              checked={current.photosAsReels}
+              onChange={(value) => set({ photosAsReels: value })}
+              label="Publish photo posts as Reels"
+              hint="Instagram and Facebook get the same video TikTok does, carrying your track. Turn this off to post stills as a carousel instead. Either way it only applies once a track is set — a silent Reel is worse than the carousel it replaces."
+            />
           </div>
         </div>
       </div>

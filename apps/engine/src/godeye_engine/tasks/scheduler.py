@@ -110,11 +110,14 @@ def publish_post(scheduled_post_id: str) -> dict:
             )
             .order_by(MediaAsset.c.createdAt.asc())
         ).fetchall()
-        # TikTok builds a slideshow from images when the workspace has a track,
-        # so a photo post arrives with sound instead of silent.
-        brand_music = session.execute(
-            select(BrandKit.c.musicUrl).where(BrandKit.c.orgId == post["orgId"])
-        ).scalar()
+        # Photos are rendered into a slideshow carrying the workspace's track,
+        # so a photo post arrives with sound instead of silent. How long it
+        # runs and whether it becomes a Reel are the workspace's choices.
+        brand = session.execute(
+            select(
+                BrandKit.c.musicUrl, BrandKit.c.slideshowSeconds, BrandKit.c.photosAsReels
+            ).where(BrandKit.c.orgId == post["orgId"])
+        ).mappings().first()
 
     if content is None or connection is None:
         _finish(scheduled_post_id, post["orgId"], error="Content or connection no longer exists")
@@ -124,7 +127,12 @@ def publish_post(scheduled_post_id: str) -> dict:
     media_urls = [row.url for row in media if row.kind == "IMAGE"]
     video_urls = [row.url for row in media if row.kind == "VIDEO"]
     payload = _build_payload(
-        dict(content), platform, post.get("variantKey"), media_urls, video_urls, brand_music
+        dict(content), platform, post.get("variantKey"), media_urls, video_urls,
+        brand["musicUrl"] if brand else None,
+        brand["slideshowSeconds"] if brand else None,
+        # A workspace with no brand kit row at all still gets the default.
+        bool(brand["photosAsReels"]) if brand else True,
+        post["orgId"],
     )
 
     try:
@@ -174,6 +182,9 @@ def _build_payload(
     media_urls: list[str] | None = None,
     video_urls: list[str] | None = None,
     music_url: str | None = None,
+    slideshow_seconds: int | None = None,
+    photos_as_reels: bool = True,
+    org_id: str | None = None,
 ) -> PostPayload:
     """A/B variant wins if assigned; else platform variant; else canonical body."""
     ab_variants = content.get("abVariants") or {}
@@ -194,6 +205,9 @@ def _build_payload(
         media_urls=media_urls or None,
         video_urls=video_urls or None,
         music_url=music_url,
+        slideshow_seconds=slideshow_seconds,
+        photos_as_reels=photos_as_reels,
+        org_id=org_id,
     )
 
 

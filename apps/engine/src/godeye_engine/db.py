@@ -325,6 +325,8 @@ BrandKit = Table(
     Column("musicStorageKey", String),
     Column("musicUrl", String),
     Column("musicName", String),
+    Column("slideshowSeconds", Integer),
+    Column("photosAsReels", Boolean),
     Column("createdAt", DateTime(timezone=False)),
     Column("updatedAt", DateTime(timezone=False)),
 )

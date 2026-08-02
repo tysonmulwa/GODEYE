@@ -198,6 +198,12 @@ def attach_music_cmd(video_in: str, music_path: str, out_path: str) -> list[str]
     return [
         "-y",
         "-i", video_in,
+        # -shortest ends on whichever stream runs out first, so a track shorter
+        # than the video silently truncated the post instead of the music. Now
+        # that the length is the user's choice, a 20 second track and a minute
+        # of slides is an ordinary thing to ask for. Looping makes the audio
+        # the one stream that cannot be the shorter of the two.
+        "-stream_loop", "-1",
         "-i", music_path,
         "-map", "0:v",
         "-map", "1:a",

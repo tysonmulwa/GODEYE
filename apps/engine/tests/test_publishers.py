@@ -9,9 +9,11 @@ import pytest
 from godeye_engine.publishers import get_publisher
 from godeye_engine.publishers.base import PostPayload, PublishError
 from godeye_engine.publishers.linkedin import LinkedInPublisher
-from godeye_engine.publishers.meta import InstagramPublisher
+from godeye_engine.publishers import meta as meta_mod
+from godeye_engine.publishers.meta import FacebookPublisher, InstagramPublisher
 from godeye_engine.publishers.telegram import TelegramPublisher
 from godeye_engine.publishers.x import XPublisher
+from godeye_engine.publishers import base as base_mod
 from godeye_engine.publishers import tiktok as tiktok_mod
 from godeye_engine.publishers.tiktok import TikTokPublisher
 from godeye_engine.config import get_settings
@@ -815,6 +817,190 @@ class TestTikTokScopeFallback:
         assert "cannot be extended, only replaced" in detail
 
 
+class TestReels:
+    """Photos become a Reel carrying the workspace's track, the same way TikTok
+    posts do. A still carousel cannot have sound, and neither network's audio
+    library is reachable from outside its own app."""
+
+    PHOTOS = ["https://cdn/a.jpg", "https://cdn/b.jpg"]
+
+    @pytest.fixture
+    def rendered(self, monkeypatch):
+        """A render that succeeds and a store that returns a fetchable URL."""
+        import godeye_engine.media.slideshow as ss
+
+        monkeypatch.setattr(base_mod, "download_media", lambda url: (b"raw", "image/jpeg"))
+        monkeypatch.setattr(ss, "build_slideshow", lambda *a, **kw: b"MP4BYTES")
+        monkeypatch.setattr(
+            meta_mod, "store_rendered_reel", lambda *a, **kw: "https://cdn/reel.mp4"
+        )
+
+    def _with_track(self, **kw):
+        return PostPayload(
+            text="hi", media_urls=self.PHOTOS, music_url="https://cdn/t.mp3",
+            org_id="org1", **kw,
+        )
+
+    # ---- Instagram ----
+
+    def test_instagram_publishes_photos_as_a_reel(self, monkeypatch, rendered):
+        sent: list[dict] = []
+
+        def fake_post(self, url, **kwargs):
+            sent.append({"url": url, **kwargs.get("data", {})})
+            return http_response(200, {"id": "c1"})
+
+        monkeypatch.setattr(InstagramPublisher, "_post", fake_post)
+        monkeypatch.setattr(InstagramPublisher, "_await_container", lambda *a, **kw: None)
+        InstagramPublisher().publish(
+            {"igUserId": "1", "accessToken": "t", "authMethod": "instagram_login"},
+            self._with_track(),
+        )
+        container = sent[0]
+        assert container.get("media_type") == "REELS", sent
+        assert container.get("video_url") == "https://cdn/reel.mp4"
+
+    def test_instagram_keeps_the_carousel_when_there_is_no_track(self, monkeypatch, rendered):
+        sent: list[dict] = []
+        monkeypatch.setattr(
+            InstagramPublisher, "_post",
+            lambda self, url, **kw: sent.append(kw.get("data", {})) or http_response(
+                200, {"id": "c1"}
+            ),
+        )
+        monkeypatch.setattr(InstagramPublisher, "_await_container", lambda *a, **kw: None)
+        InstagramPublisher().publish(
+            {"igUserId": "1", "accessToken": "t", "authMethod": "instagram_login"},
+            PostPayload(text="hi", media_urls=self.PHOTOS, org_id="org1"),
+        )
+        assert not any(d.get("media_type") == "REELS" for d in sent), (
+            "a silent Reel is worse than the carousel it replaced"
+        )
+
+    def test_instagram_respects_the_workspace_opting_out(self, monkeypatch, rendered):
+        sent: list[dict] = []
+        monkeypatch.setattr(
+            InstagramPublisher, "_post",
+            lambda self, url, **kw: sent.append(kw.get("data", {})) or http_response(
+                200, {"id": "c1"}
+            ),
+        )
+        monkeypatch.setattr(InstagramPublisher, "_await_container", lambda *a, **kw: None)
+        InstagramPublisher().publish(
+            {"igUserId": "1", "accessToken": "t", "authMethod": "instagram_login"},
+            self._with_track(photos_as_reels=False),
+        )
+        assert not any(d.get("media_type") == "REELS" for d in sent)
+
+    def test_instagram_waits_longer_for_a_reel_than_for_a_photo(self, monkeypatch, rendered):
+        waited: list[float] = []
+        monkeypatch.setattr(
+            InstagramPublisher, "_post", lambda self, url, **kw: http_response(200, {"id": "c1"})
+        )
+        monkeypatch.setattr(
+            InstagramPublisher, "_await_container",
+            lambda self, base, cid, token, timeout=60: waited.append(timeout),
+        )
+        InstagramPublisher().publish(
+            {"igUserId": "1", "accessToken": "t", "authMethod": "instagram_login"},
+            self._with_track(),
+        )
+        # Instagram fetches and transcodes a minute of 1080x1920 itself.
+        assert waited[0] > meta_mod.CONTAINER_TIMEOUT_SEC
+
+    def test_instagram_falls_back_to_stills_when_the_reel_cannot_be_stored(
+        self, monkeypatch, rendered
+    ):
+        """Instagram fetches video_url itself, so a render it cannot reach is
+        no use — but that should cost the sound, not the post."""
+        monkeypatch.setattr(meta_mod, "store_rendered_reel", lambda *a, **kw: None)
+        sent: list[dict] = []
+        monkeypatch.setattr(
+            InstagramPublisher, "_post",
+            lambda self, url, **kw: sent.append(kw.get("data", {})) or http_response(
+                200, {"id": "c1"}
+            ),
+        )
+        monkeypatch.setattr(InstagramPublisher, "_await_container", lambda *a, **kw: None)
+        InstagramPublisher().publish(
+            {"igUserId": "1", "accessToken": "t", "authMethod": "instagram_login"},
+            self._with_track(),
+        )
+        assert not any(d.get("media_type") == "REELS" for d in sent)
+
+    # ---- Facebook ----
+
+    def test_facebook_uses_the_three_phase_reel_upload(self, monkeypatch, rendered):
+        calls: list[tuple[str, dict]] = []
+
+        def fake_post(self, url, **kwargs):
+            calls.append((url, kwargs))
+            data = kwargs.get("data") or {}
+            if data.get("upload_phase") == "start":
+                return http_response(
+                    200, {"video_id": "v9", "upload_url": "https://rupload/v9"}
+                )
+            return http_response(200, {"success": True})
+
+        monkeypatch.setattr(FacebookPublisher, "_post", fake_post)
+        result = FacebookPublisher().publish(
+            {"pageId": "p1", "pageAccessToken": "t"}, self._with_track()
+        )
+
+        phases = [(k.get("data") or {}).get("upload_phase") for _, k in calls]
+        assert phases[0] == "start" and phases[-1] == "finish", phases
+        assert any("video_reels" in u for u, _ in calls)
+
+        # The transfer is a raw body with the offset in headers, and OAuth
+        # rather than a token query parameter like every other call here.
+        transfer = next(k for u, k in calls if "rupload" in u)
+        assert transfer["content"] == b"MP4BYTES"
+        assert transfer["headers"]["Authorization"] == "OAuth t"
+        assert transfer["headers"]["offset"] == "0"
+        assert transfer["headers"]["file_size"] == str(len(b"MP4BYTES"))
+
+        assert result.external_post_id == "v9"
+        assert "reel" in (result.external_post_url or "")
+
+    def test_facebook_keeps_the_album_when_there_is_no_track(self, monkeypatch, rendered):
+        calls: list[str] = []
+        monkeypatch.setattr(
+            FacebookPublisher, "_post",
+            lambda self, url, **kw: calls.append(url) or http_response(200, {"id": "1"}),
+        )
+        FacebookPublisher().publish(
+            {"pageId": "p1", "pageAccessToken": "t"},
+            PostPayload(text="hi", media_urls=self.PHOTOS, org_id="org1"),
+        )
+        assert not any("video_reels" in u for u in calls), calls
+
+    def test_facebook_leaves_an_attached_video_in_the_feed(self, monkeypatch, rendered):
+        """A video the user attached goes where they put it, not to Reels."""
+        calls: list[str] = []
+        monkeypatch.setattr(
+            FacebookPublisher, "_post",
+            lambda self, url, **kw: calls.append(url) or http_response(200, {"id": "1"}),
+        )
+        FacebookPublisher().publish(
+            {"pageId": "p1", "pageAccessToken": "t"},
+            PostPayload(text="hi", video_urls=["https://cdn/v.mp4"], org_id="org1"),
+        )
+        assert any(u.endswith("/videos") for u in calls), calls
+        assert not any("video_reels" in u for u in calls)
+
+    def test_facebook_reel_start_without_an_upload_target_fails_clearly(
+        self, monkeypatch, rendered
+    ):
+        monkeypatch.setattr(
+            FacebookPublisher, "_post",
+            lambda self, url, **kw: http_response(200, {"video_id": "v9"}),
+        )
+        with pytest.raises(PublishError, match="no upload target"):
+            FacebookPublisher().publish(
+                {"pageId": "p1", "pageAccessToken": "t"}, self._with_track()
+            )
+
+
 class TestTikTokSlideshow:
     """TikTok's API cannot add music to a post and its library only exists in
     the app, so a direct photo post is silent and a draft needs a person. For an
@@ -827,8 +1013,10 @@ class TestTikTokSlideshow:
     def _publisher(self, monkeypatch, built: bytes | None = b"MP4BYTES"):
         import godeye_engine.media.slideshow as ss
 
+        # The render is shared by every publisher that turns photos into video,
+        # so the fetch it uses lives in base rather than in this adapter.
         monkeypatch.setattr(
-            tiktok_mod, "download_media", lambda url: (b"raw", "image/jpeg")
+            base_mod, "download_media", lambda url: (b"raw", "image/jpeg")
         )
         if built is None:
             monkeypatch.setattr(
@@ -895,7 +1083,7 @@ class TestTikTokSlideshow:
         for broken, expected in [("https://cdn/a.jpg", "image"), ("https://cdn/track.mp3", "track")]:
             self._publisher(monkeypatch)
             monkeypatch.setattr(
-                tiktok_mod,
+                base_mod,
                 "download_media",
                 lambda url, _b=broken: None if url == _b else (b"raw", "image/jpeg"),
             )

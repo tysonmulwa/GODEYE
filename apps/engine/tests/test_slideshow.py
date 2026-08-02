@@ -72,6 +72,62 @@ def test_no_images_is_rejected_before_touching_ffmpeg(calls):
     assert calls == []
 
 
+class TestChosenLength:
+    """The user picks 30, 45 or 60 seconds. Two photos held once came to six
+    seconds, which is what prompted this."""
+
+    def test_the_finished_video_is_exactly_the_length_asked_for(self, calls):
+        for target in slideshow.ALLOWED_LENGTHS:
+            calls.clear()
+            slides, each = slideshow.plan_slides(2, target)
+            assert slides * each == pytest.approx(target)
+
+    def test_images_repeat_to_fill_a_long_target(self, calls, monkeypatch):
+        # Captured as the list is built — the temp directory is gone by the
+        # time the call returns.
+        joined: list[list[str]] = []
+        real = video.concat_list_content
+        monkeypatch.setattr(
+            video, "concat_list_content", lambda paths: joined.append(paths) or real(paths)
+        )
+        slideshow.build_slideshow([b"a", b"b"], music=b"mp3", target_sec=60)
+        assert len(joined[0]) == slideshow.plan_slides(2, 60)[0]
+
+    def test_a_repeated_image_is_encoded_once_not_once_per_slide(self, calls):
+        """Filling a minute from two photos is otherwise a dozen encodes of the
+        same few frames, on a worker already killed once for memory."""
+        slideshow.build_slideshow([b"a", b"b"], music=b"mp3", target_sec=60)
+        encodes = [a for a in calls if "-loop" in a]
+        assert len(encodes) == 2
+
+    def test_every_attached_image_is_shown_at_least_once(self, calls):
+        slides, _ = slideshow.plan_slides(5, 30)
+        assert slides >= 5
+
+    def test_slide_count_is_capped_so_a_post_is_not_twenty_encodes(self):
+        assert slideshow.plan_slides(40, 60)[0] <= slideshow.MAX_SLIDES
+
+    def test_no_target_keeps_the_old_single_pass_behaviour(self, calls):
+        slideshow.build_slideshow([b"a", b"b"], music=b"mp3")
+        assert len([a for a in calls if "-loop" in a]) == 2
+
+    def test_an_unrecognised_length_falls_back_to_the_default(self):
+        assert slideshow.normalise_length(None) == slideshow.DEFAULT_LENGTH_SEC
+        assert slideshow.normalise_length(0) == slideshow.DEFAULT_LENGTH_SEC
+        # Nearest offered length, so a stored value from an older build is
+        # still honoured rather than silently reset.
+        assert slideshow.normalise_length(44) == 45
+        assert slideshow.normalise_length(1000) == 60
+
+    def test_the_track_loops_so_a_short_one_cannot_truncate_the_video(self):
+        cmd = video.attach_music_cmd("v.mp4", "m.mp3", "o.mp4")
+        assert "-stream_loop" in cmd, "a 20s track would cut a 60s post short"
+        assert cmd[cmd.index("-stream_loop") + 1] == "-1"
+        # The loop must apply to the music input, not the video.
+        assert cmd.index("-stream_loop") > cmd.index("v.mp4")
+        assert "-shortest" in cmd
+
+
 class TestEncodeFitsASmallContainer:
     """x264 was SIGKILLed one second into the first clip on the deployed
     worker. It reserves frame buffers per thread plus a lookahead queue before

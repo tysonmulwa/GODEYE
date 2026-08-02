@@ -200,6 +200,12 @@ export const brandKitSchema = z.object({
   secondaryColor: z.string().regex(/^#[0-9a-fA-F]{6}$/).default("#0EA5E9"),
   fontFamily: z.string().max(120).optional().or(z.literal("")),
   watermarkEnabled: z.boolean().default(false),
+  // How long a photo post runs once it is rendered to video. Two photos held
+  // once came to six seconds, which is not a post.
+  slideshowSeconds: z.union([z.literal(30), z.literal(45), z.literal(60)]).default(30),
+  // Photos become a Reel carrying the track rather than a still carousel.
+  // Only ever applies when a track is set.
+  photosAsReels: z.boolean().default(true),
 });
 export type BrandKitInput = z.infer<typeof brandKitSchema>;
 

@@ -37,6 +37,41 @@ SECONDS_PER_IMAGE = 3.2
 # the limit.
 MIN_TOTAL_SEC = 5.0
 
+# Lengths offered to the user. Short-form on every network comfortably accepts
+# all three, and they are the lengths people actually think in.
+ALLOWED_LENGTHS = (30, 45, 60)
+DEFAULT_LENGTH_SEC = 30
+
+# Filling a minute from two photos means showing them more than once. About
+# four seconds is long enough to look deliberate and short enough to keep
+# moving, but the slide count is capped as well: every slide is its own encode,
+# and a worker that has already been killed once for memory should not be asked
+# to run twenty of them for a single post.
+TARGET_HOLD_SEC = 4.0
+MAX_SLIDES = 12
+
+
+def normalise_length(seconds: int | None) -> int:
+    """Nearest offered length. Anything unrecognised becomes the default."""
+    if not seconds:
+        return DEFAULT_LENGTH_SEC
+    return min(ALLOWED_LENGTHS, key=lambda choice: abs(choice - seconds))
+
+
+def plan_slides(image_count: int, target_sec: float) -> tuple[int, float]:
+    """How many slides to show, and how long each is held.
+
+    Returns (slides, seconds_each) whose product is exactly ``target_sec``, so
+    the finished video lands on the length that was asked for rather than near
+    it. Images repeat in order when there are fewer of them than slides.
+    """
+    if image_count < 1:
+        raise ValueError("A slideshow needs at least one image")
+    wanted = round(target_sec / TARGET_HOLD_SEC)
+    # Never drop an image the user attached, and never exceed the encode cap.
+    slides = max(1, min(MAX_SLIDES, max(wanted, min(image_count, MAX_SLIDES))))
+    return slides, target_sec / slides
+
 
 def build_slideshow(
     images: list[bytes],
@@ -44,8 +79,13 @@ def build_slideshow(
     width: int = 1080,
     height: int = 1920,
     seconds_each: float = SECONDS_PER_IMAGE,
+    target_sec: float | None = None,
 ) -> bytes:
     """Render images into an mp4, with ``music`` underneath when given.
+
+    ``target_sec`` sets the finished length; images repeat in order to fill it.
+    Without it each image is held once, which is what a post looks like when
+    nobody has chosen a length.
 
     Raises RuntimeError if ffmpeg is missing or fails, so the caller can fall
     back to whatever it would have done otherwise rather than lose the post.
@@ -54,19 +94,32 @@ def build_slideshow(
         raise ValueError("A slideshow needs at least one image")
 
     video.locate_ffmpeg()  # fail before spending time on temp files
-    # One image would still be shorter than TikTok accepts, so hold it longer.
-    per_image = max(seconds_each, MIN_TOTAL_SEC if len(images) == 1 else 0.0)
+    if target_sec:
+        slides, per_image = plan_slides(len(images), target_sec)
+        sequence = [images[index % len(images)] for index in range(slides)]
+    else:
+        # One image would still be shorter than TikTok accepts, so hold it longer.
+        sequence = images
+        per_image = max(seconds_each, MIN_TOTAL_SEC if len(images) == 1 else 0.0)
 
     with tempfile.TemporaryDirectory(prefix="godeye-slideshow-") as tmp:
         tmpdir = Path(tmp)
         clips: list[str] = []
-        for index, data in enumerate(images):
-            source = tmpdir / f"img{index}.jpg"
+        # Identical repeats are encoded once and reused: filling a minute from
+        # two photos is otherwise a dozen encodes of the same few frames.
+        encoded: dict[int, str] = {}
+        for index, data in enumerate(sequence):
+            source_index = index % len(images) if target_sec else index
+            if source_index in encoded:
+                clips.append(encoded[source_index])
+                continue
+            source = tmpdir / f"img{source_index}.jpg"
             source.write_bytes(data)
-            clip = tmpdir / f"clip{index}.mp4"
+            clip = tmpdir / f"clip{source_index}.mp4"
             video.run(
                 video.still_clip_cmd(str(source), str(clip), width, height, per_image)
             )
+            encoded[source_index] = str(clip)
             clips.append(str(clip))
 
         joined = tmpdir / "joined.mp4"

@@ -40,6 +40,88 @@ def download_media(url: str) -> tuple[bytes, str] | None:
     return response.content, response.headers.get("content-type", "application/octet-stream")
 
 
+def slideshow_from_payload(
+    payload: PostPayload, platform: str, limit: int = 10
+) -> bytes | None:
+    """Render a photo post into a video carrying the workspace's track.
+
+    None of these APIs can add music to a post after the fact, and each
+    network's own catalogue is reachable only from inside its app — so a photo
+    post published by an automation is silent unless the audio is already in
+    the file. Rendering it here is what makes an unattended post arrive with
+    sound.
+
+    Returns None when it cannot be done, so the caller falls back to whatever
+    still-image post it would otherwise have made rather than dropping the
+    post. Every one of those paths says why: a post that goes out silent is
+    otherwise indistinguishable from one that was never meant to have sound.
+    """
+    from ..media import slideshow
+
+    urls = payload.media_urls or []
+    if not payload.music_url:
+        logger.info(
+            "%s: no brand track set, posting %d photo(s) without sound", platform, len(urls)
+        )
+        return None
+    try:
+        images = []
+        for url in urls[:limit]:
+            fetched = download_media(url)
+            if fetched is None:
+                logger.warning(
+                    "%s: could not fetch image %s, posting photos without sound", platform, url
+                )
+                return None
+            images.append(fetched[0])
+        music = download_media(payload.music_url)
+        if music is None:
+            logger.warning(
+                "%s: could not fetch the brand track %s, posting photos without sound",
+                platform, payload.music_url,
+            )
+            return None
+        if not images:
+            logger.warning("%s: no images to build a slideshow from", platform)
+            return None
+        length = slideshow.normalise_length(payload.slideshow_seconds)
+        logger.info(
+            "%s: building a %ds slideshow from %d image(s) and %.1f MB of audio",
+            platform, length, len(images), len(music[0]) / 1_048_576,
+        )
+        return slideshow.build_slideshow(images, music[0], target_sec=length)
+    except Exception as e:  # noqa: BLE001 — a silent post beats no post
+        logger.warning(
+            "%s slideshow build failed, posting photos instead: %s: %s",
+            platform, type(e).__name__, e,
+        )
+        return None
+
+
+def store_rendered_reel(video_bytes: bytes, org_id: str | None, platform: str) -> str | None:
+    """Put a rendered Reel somewhere the network can fetch it.
+
+    Only Instagram needs this — Facebook and TikTok both accept the bytes —
+    and it is why a render alone is not enough there.
+
+    Returns None rather than raising, so a storage problem costs the sound
+    rather than the post.
+    """
+    from ..db import new_id
+    from ..storage import upload_bytes
+
+    try:
+        key = f"{org_id or 'shared'}/reels/{new_id()}.mp4"
+        return upload_bytes(key, video_bytes, "video/mp4")
+    except Exception as e:  # noqa: BLE001
+        logger.warning(
+            "%s: rendered the Reel but could not store it for fetching (%s: %s), "
+            "falling back to a still post",
+            platform, type(e).__name__, e,
+        )
+        return None
+
+
 class PublishError(Exception):
     """Permanent failure — do not retry (bad credentials, invalid content...)."""
 
@@ -62,10 +144,21 @@ class PostPayload:
     title: str | None = None
     media_urls: list[str] | None = None  # images
     video_urls: list[str] | None = None  # videos (adapters that can't post video ignore these)
-    # The workspace's licensed background track, when it has one. Only TikTok
-    # uses it today, to build a slideshow with sound instead of publishing a
-    # silent photo post, since its API offers no way to add music afterwards.
+    # The workspace's licensed background track, when it has one. Photos are
+    # rendered into a slideshow carrying it, rather than published as a silent
+    # still post — none of these APIs offer a way to add music afterwards, and
+    # each network's own catalogue is reachable only from inside its app.
     music_url: str | None = None
+    # Owning workspace. Instagram will not accept an upload — it fetches the
+    # video from a URL — so a rendered Reel has to be stored somewhere public
+    # first, under this workspace's prefix.
+    org_id: str | None = None
+    # How long that slideshow runs. None means the workspace default.
+    slideshow_seconds: int | None = None
+    # Whether photo posts become a Reel on the networks that have them. Always
+    # subject to a track existing: a silent Reel is worse than the carousel it
+    # would replace.
+    photos_as_reels: bool = True
 
 
 class BasePublisher(ABC):

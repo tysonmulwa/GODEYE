@@ -11,15 +11,25 @@ from .base import (
     PublishResult,
     TransientPublishError,
     download_media,
+    slideshow_from_payload,
+    store_rendered_reel,
 )
 
 GRAPH = "https://graph.facebook.com/v21.0"
+
+# A Reel is short-form: more slides than this is a different kind of post, and
+# every slide is its own encode on a worker that has limited memory.
+REEL_IMAGE_LIMIT = 10
 
 
 class FacebookPublisher(BasePublisher):
     def _publish(self, credentials: dict[str, Any], payload: PostPayload) -> PublishResult:
         page_id = credentials["pageId"]
         token = credentials["pageAccessToken"]
+
+        reel = self._reel_bytes(payload)
+        if reel is not None:
+            return self._publish_reel(page_id, token, payload, reel)
 
         if payload.video_urls:
             response = self._post(
@@ -93,6 +103,72 @@ class FacebookPublisher(BasePublisher):
             return PublishError(f"{stage}: {self._PAGE_PERMISSION_HELP}")
         return error
 
+    def _reel_bytes(self, payload: PostPayload) -> bytes | None:
+        """Photos rendered into a Reel with the workspace's track, or None.
+
+        A photo album stays an album unless a track exists — a silent Reel is
+        worse than the carousel it would replace, and it reaches a different
+        audience. An already-attached video keeps going to the feed, where the
+        user put it deliberately.
+        """
+        if payload.video_urls or not payload.photos_as_reels or not payload.media_urls:
+            return None
+        return slideshow_from_payload(payload, "Facebook", REEL_IMAGE_LIMIT)
+
+    def _publish_reel(
+        self, page_id: str, token: str, payload: PostPayload, video: bytes
+    ) -> PublishResult:
+        """Publish a Reel through the three-phase upload.
+
+        Reels are not /videos with a flag: they have their own endpoint and a
+        start/transfer/finish handshake. Facebook takes the bytes directly,
+        which is why this one needs no public URL.
+        """
+        start = self._post(
+            f"{GRAPH}/{page_id}/video_reels",
+            data={"upload_phase": "start", "access_token": token},
+        )
+        body = start.json()
+        if start.status_code >= 400 or "error" in body:
+            raise self._fail_page(start, "Facebook (reel start)")
+        video_id = body.get("video_id")
+        upload_url = body.get("upload_url")
+        if not video_id or not upload_url:
+            raise PublishError(f"Facebook (reel start): no upload target in {str(body)[:200]}")
+
+        # The transfer is a raw body with the offset in the headers, not a
+        # multipart form, and it authenticates with OAuth rather than a query
+        # parameter like every other call here.
+        transfer = self._post(
+            upload_url,
+            headers={
+                "Authorization": f"OAuth {token}",
+                "offset": "0",
+                "file_size": str(len(video)),
+            },
+            content=video,
+        )
+        if transfer.status_code >= 400:
+            raise self._fail(transfer, "Facebook (reel upload)")
+
+        finish = self._post(
+            f"{GRAPH}/{page_id}/video_reels",
+            data={
+                "upload_phase": "finish",
+                "video_id": video_id,
+                "video_state": "PUBLISHED",
+                "description": payload.text[:2200],
+                "access_token": token,
+            },
+        )
+        finish_body = finish.json()
+        if finish.status_code >= 400 or "error" in finish_body:
+            raise self._fail_page(finish, "Facebook (reel publish)")
+        return PublishResult(
+            external_post_id=str(video_id),
+            external_post_url=f"https://www.facebook.com/reel/{video_id}",
+        )
+
     def _post_photo_album(self, page_id: str, token: str, payload: PostPayload):
         """Publish several photos as one feed post.
 
@@ -149,8 +225,11 @@ class FacebookPublisher(BasePublisher):
 IG_GRAPH = "https://graph.instagram.com/v21.0"
 
 # How long to wait for Instagram to ingest the media before giving up, and how
-# often to ask. Images usually finish in a few seconds; video takes longer.
+# often to ask. Images usually finish in a few seconds. A Reel is a minute of
+# 1080x1920 that Instagram downloads and transcodes itself, and sixty seconds
+# was chosen when nothing here published video — too short to survive one.
 CONTAINER_TIMEOUT_SEC = 60
+REEL_CONTAINER_TIMEOUT_SEC = 300
 CONTAINER_POLL_SEC = 3
 
 # Instagram allows 2-10 images in a carousel; GODEYE caps posts at 4.
@@ -196,7 +275,8 @@ class InstagramPublisher(BasePublisher):
         return error
 
     def _publish(self, credentials: dict[str, Any], payload: PostPayload) -> PublishResult:
-        if not payload.media_urls:
+        # The message always said "image or video"; only images were accepted.
+        if not payload.media_urls and not payload.video_urls:
             raise PublishError(
                 "Instagram requires an image or video — attach media to this post"
             )
@@ -207,7 +287,18 @@ class InstagramPublisher(BasePublisher):
         else:
             base, token = IG_GRAPH, credentials["accessToken"]
 
-        if len(payload.media_urls) > 1:
+        reel_url = self._reel_video_url(payload)
+        if reel_url:
+            container = self._post(
+                f"{base}/{ig_user_id}/media",
+                data={
+                    "media_type": "REELS",
+                    "video_url": reel_url,
+                    "caption": payload.text[:2200],
+                    "access_token": token,
+                },
+            )
+        elif len(payload.media_urls) > 1:
             container = self._create_carousel(base, ig_user_id, token, payload)
         else:
             container = self._post(
@@ -223,7 +314,10 @@ class InstagramPublisher(BasePublisher):
             raise self._fail_ig(container, "Instagram (container)", legacy)
 
         creation_id = container_body["id"]
-        self._await_container(base, creation_id, token)
+        self._await_container(
+            base, creation_id, token,
+            timeout=REEL_CONTAINER_TIMEOUT_SEC if reel_url else CONTAINER_TIMEOUT_SEC,
+        )
 
         publish = self._post(
             f"{base}/{ig_user_id}/media_publish",
@@ -235,6 +329,27 @@ class InstagramPublisher(BasePublisher):
 
         media_id = str(publish_body.get("id") or "")
         return PublishResult(external_post_id=media_id, external_post_url=None)
+
+    def _reel_video_url(self, payload: PostPayload) -> str | None:
+        """A publicly fetchable Reel, or None to post stills as before.
+
+        An already-attached video is used directly. Otherwise photos are
+        rendered into one carrying the workspace's track, the same way TikTok
+        posts are — a still carousel cannot have sound, and Instagram's own
+        audio library is reachable only from inside the app.
+
+        Instagram will not accept an upload for Reels; it fetches video_url
+        itself. So a render has to be stored somewhere public before it can be
+        published, unlike Facebook and TikTok which both take the bytes.
+        """
+        if payload.video_urls:
+            return payload.video_urls[0]
+        if not payload.photos_as_reels or not payload.media_urls:
+            return None
+        rendered = slideshow_from_payload(payload, "Instagram", CAROUSEL_LIMIT)
+        if rendered is None:
+            return None
+        return store_rendered_reel(rendered, payload.org_id, "Instagram")
 
     def _create_carousel(self, base: str, ig_user_id: str, token: str, payload: PostPayload):
         """Build a multi-image carousel container.
@@ -267,7 +382,9 @@ class InstagramPublisher(BasePublisher):
             },
         )
 
-    def _await_container(self, base: str, creation_id: str, token: str) -> None:
+    def _await_container(
+        self, base: str, creation_id: str, token: str, timeout: float = CONTAINER_TIMEOUT_SEC
+    ) -> None:
         """Block until Instagram has finished ingesting the media.
 
         Container creation is asynchronous: Instagram downloads and processes the
@@ -275,12 +392,15 @@ class InstagramPublisher(BasePublisher):
         "Media ID is not available" (code 9007) — flagged is_transient: false
         even though it resolves on its own, so it must be waited out rather than
         retried as a whole post.
+
+        A Reel needs far longer than an image: Instagram fetches a minute of
+        1080x1920 and transcodes it.
         """
         import time
 
         import httpx
 
-        deadline = time.monotonic() + CONTAINER_TIMEOUT_SEC
+        deadline = time.monotonic() + timeout
         last_status = "UNKNOWN"
         while time.monotonic() < deadline:
             try:
@@ -306,5 +426,5 @@ class InstagramPublisher(BasePublisher):
 
         # Still processing — worth another attempt rather than failing the post.
         raise TransientPublishError(
-            f"Instagram media still {last_status} after {CONTAINER_TIMEOUT_SEC}s"
+            f"Instagram media still {last_status} after {timeout:.0f}s"
         )

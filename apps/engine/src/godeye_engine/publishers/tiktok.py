@@ -24,6 +24,7 @@ from .base import (
     PublishResult,
     TransientPublishError,
     download_media,
+    slideshow_from_payload,
 )
 
 logger = logging.getLogger(__name__)
@@ -179,57 +180,10 @@ class TikTokPublisher(BasePublisher):
     def _slideshow_from_photos(self, payload: PostPayload) -> bytes | None:
         """Render the attached images into a video with the workspace's track.
 
-        TikTok's API has no way to add music to a post, and its own library only
-        exists inside the app, so a directly published photo post is silent and
-        the alternative is asking a person to finish every post by hand. That is
-        not automation. Building the slideshow ourselves gives a post that
-        publishes unattended and arrives with sound.
-
-        Returns None when it cannot be done, so the caller falls back to the
-        photo carousel rather than dropping the post.
+        Shared with the Reels publishers — the reason is the same everywhere,
+        and TikTok is only the network where it was needed first.
         """
-        from ..media import slideshow
-
-        if not payload.music_url:
-            logger.info(
-                "TikTok: no brand track set, posting %d photo(s) without sound",
-                len(payload.media_urls),
-            )
-            return None
-        try:
-            images = []
-            for url in payload.media_urls[:PHOTO_LIMIT]:
-                fetched = download_media(url)
-                if fetched is None:
-                    # Every abandon path says why. A post that goes out silent
-                    # looks exactly like one that was never meant to have sound,
-                    # and these two returned nothing at all to the log.
-                    logger.warning(
-                        "TikTok: could not fetch image %s, posting photos without sound", url
-                    )
-                    return None
-                images.append(fetched[0])
-            music = download_media(payload.music_url)
-            if music is None:
-                logger.warning(
-                    "TikTok: could not fetch the brand track %s, posting photos without sound",
-                    payload.music_url,
-                )
-                return None
-            if not images:
-                logger.warning("TikTok: no images to build a slideshow from")
-                return None
-            logger.info(
-                "TikTok: building a slideshow from %d image(s) and %.1f MB of audio",
-                len(images), len(music[0]) / 1_048_576,
-            )
-            return slideshow.build_slideshow(images, music[0])
-        except Exception as e:  # noqa: BLE001 — a silent post beats no post
-            logger.warning(
-                "TikTok slideshow build failed, posting photos instead: %s: %s",
-                type(e).__name__, e,
-            )
-            return None
+        return slideshow_from_payload(payload, "TikTok", PHOTO_LIMIT)
 
     def _publish_photos(self, headers: dict[str, str], payload: PostPayload) -> PublishResult:
         """Post images as a TikTok photo carousel.
