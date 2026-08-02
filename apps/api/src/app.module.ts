@@ -8,6 +8,7 @@ import { CommonModule } from "./common/common.module";
 import { ConnectionsModule } from "./connections/connections.module";
 import { ContentModule } from "./content/content.module";
 import { EngineModule } from "./engine/engine.module";
+import { HealthController } from "./health.controller";
 import { MediaModule } from "./media/media.module";
 import { MembersModule } from "./members/members.module";
 import { RealtimeModule } from "./realtime/realtime.module";
@@ -33,7 +34,7 @@ import { WebhooksModule } from "./webhooks/webhooks.module";
     RealtimeModule,
     WebhooksModule,
   ],
-  controllers: [SiteVerificationController],
+  controllers: [SiteVerificationController, HealthController],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
 })
 export class AppModule {}

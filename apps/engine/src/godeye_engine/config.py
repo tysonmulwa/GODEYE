@@ -99,6 +99,11 @@ class Settings(BaseSettings):
 
     engine_port: int = 8000
 
+    # Railway sets this on every deploy. Reported by /health so "which build is
+    # actually running" is one request rather than an inference from the shape
+    # of the data it produced.
+    railway_git_commit_sha: str = ""
+
     @property
     def sqlalchemy_url(self) -> str:
         # SQLAlchemy + psycopg3 needs the postgresql+psycopg:// scheme; strip

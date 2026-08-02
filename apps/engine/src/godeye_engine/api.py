@@ -73,6 +73,10 @@ class GenerateVideoRequest(BaseModel):
 
 @app.get("/health")
 def health() -> dict:
+    # The build marker matters as much as the checks. Working out whether a
+    # change had reached the worker meant reading the shape of the rows it
+    # produced, which is slow and easy to get wrong.
+    sha = get_settings().railway_git_commit_sha
     checks = {"engine": "ok"}
     try:
         with get_engine().connect() as conn:
@@ -88,7 +92,7 @@ def health() -> dict:
     except Exception as e:  # noqa: BLE001
         checks["redis"] = f"error: {e}"
     status = "ok" if all(v == "ok" for v in checks.values()) else "degraded"
-    return {"status": status, "checks": checks}
+    return {"status": status, "checks": checks, "build": sha[:8] if sha else "unknown"}
 
 
 @app.post("/tasks/generate-content", dependencies=[Depends(verify_internal_secret)])
