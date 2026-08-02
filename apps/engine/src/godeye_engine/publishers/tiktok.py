@@ -128,7 +128,9 @@ class TikTokPublisher(BasePublisher):
             "chunk_size": size,
             "total_chunk_count": 1,
         }
-        def video_target(drafts: bool) -> tuple[str, dict[str, Any]]:
+        def video_target(
+            drafts: bool, privacy: str | None = None
+        ) -> tuple[str, dict[str, Any]]:
             if drafts:
                 # The inbox has its own endpoint and takes no post_info at all:
                 # the caption and privacy are chosen in the app when publishing.
@@ -136,7 +138,7 @@ class TikTokPublisher(BasePublisher):
             return f"{API}/post/publish/video/init/", {
                 "post_info": {
                     "title": payload.text[:CAPTION_LIMIT],
-                    "privacy_level": self._privacy_level(headers),
+                    "privacy_level": privacy or self._privacy_level(headers),
                 },
                 "source_info": source_info,
             }
@@ -150,7 +152,14 @@ class TikTokPublisher(BasePublisher):
         # one of them.
         if drafts and self._scope_denied(init):
             logger.info("TikTok drafts unavailable (video.upload not granted); posting directly")
+            drafts = False
             endpoint, init_json = video_target(False)
+            init = self._post(endpoint, headers=headers, json=init_json)
+
+        # TIKTOK_AUDITED is a claim TikTok is free to contradict, and here it has.
+        if not drafts and self._unaudited(init):
+            logger.info("TikTok reports the app is unaudited; retrying at SELF_ONLY")
+            endpoint, init_json = video_target(False, SELF_ONLY)
             init = self._post(endpoint, headers=headers, json=init_json)
         body = init.json()
         if init.status_code >= 400 or (body.get("error") or {}).get("code") not in (None, "ok"):
@@ -216,7 +225,7 @@ class TikTokPublisher(BasePublisher):
                 "Regenerate the image, or attach a JPEG."
             )
 
-        def photo_body(drafts: bool) -> dict[str, Any]:
+        def photo_body(drafts: bool, privacy: str | None = None) -> dict[str, Any]:
             body: dict[str, Any] = {
                 "source_info": {
                     "source": "PULL_FROM_URL",
@@ -234,7 +243,7 @@ class TikTokPublisher(BasePublisher):
                 else {
                     "title": (payload.title or payload.text)[:TITLE_LIMIT],
                     "description": payload.text[:CAPTION_LIMIT],
-                    "privacy_level": self._privacy_level(headers),
+                    "privacy_level": privacy or self._privacy_level(headers),
                 }
             )
             return body
@@ -250,7 +259,15 @@ class TikTokPublisher(BasePublisher):
         # reconnecting whenever they get round to it.
         if drafts and self._scope_denied(init):
             logger.info("TikTok drafts unavailable (video.upload not granted); posting directly")
+            drafts = False
             init = self._post(endpoint, headers=headers, json=photo_body(False))
+
+        # TIKTOK_AUDITED said approved and TikTok says otherwise. TikTok is the
+        # one that decides, so take it at its word and post privately rather
+        # than lose the post to a setting nobody can verify from here.
+        if not drafts and self._unaudited(init):
+            logger.info("TikTok reports the app is unaudited; retrying at SELF_ONLY")
+            init = self._post(endpoint, headers=headers, json=photo_body(False, SELF_ONLY))
         body = init.json()
         if init.status_code >= 400 or (body.get("error") or {}).get("code") not in (None, "ok"):
             raise self._fail_tiktok(init, "TikTok (photo init)")
@@ -280,6 +297,23 @@ class TikTokPublisher(BasePublisher):
         if mode == "auto":
             return not get_settings().tiktok_audited
         return False
+
+    @staticmethod
+    def _unaudited(response) -> bool:
+        """Did TikTok refuse because the app has not passed its audit?
+
+        TIKTOK_AUDITED is a claim about the outside world that nothing verifies.
+        Set to true before approval actually lands, every post fails, and the
+        only clue is an error naming the account. Reading the refusal is more
+        reliable than trusting the setting, so the flag decides what to try
+        first and TikTok decides what is allowed.
+        """
+        if response.status_code not in (401, 403):
+            return False
+        try:
+            return (response.json().get("error") or {}).get("code") == UNAUDITED_CODE
+        except ValueError:
+            return False
 
     @staticmethod
     def _scope_denied(response) -> bool:

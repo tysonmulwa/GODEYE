@@ -891,3 +891,73 @@ class TestTikTokSlideshow:
             assert TikTokPublisher()._to_drafts() is False
         finally:
             get_settings.cache_clear()
+
+
+class TestTikTokUnauditedRetry:
+    """TIKTOK_AUDITED is a claim about the outside world that nothing here can
+    verify. Set to true before approval lands, every post failed, and the error
+    blamed the account. TikTok is the one that decides, so its refusal is
+    treated as the answer."""
+
+    CREDS = {"accessToken": "t"}
+    UNAUDITED = {
+        "error": {"code": "unaudited_client_can_only_post_to_private_accounts"}
+    }
+
+    def _run(self, monkeypatch, responses, audited="true"):
+        monkeypatch.setenv("TIKTOK_POST_MODE", "direct")
+        monkeypatch.setenv("TIKTOK_AUDITED", audited)
+        get_settings.cache_clear()
+        sent = []
+
+        def fake_post(self, url, **kw):
+            sent.append(kw.get("json") or {})
+            return responses[min(len(sent) - 1, len(responses) - 1)]
+
+        monkeypatch.setattr(TikTokPublisher, "_post", fake_post)
+        monkeypatch.setattr(
+            TikTokPublisher, "_privacy_level", lambda self, h: "PUBLIC_TO_EVERYONE"
+        )
+        monkeypatch.setattr(TikTokPublisher, "_await_publish", lambda *a, **kw: None)
+        try:
+            TikTokPublisher().publish(
+                self.CREDS, PostPayload(text="hi", media_urls=["https://cdn/x.jpg"])
+            )
+        finally:
+            get_settings.cache_clear()
+        return sent
+
+    def test_a_refused_public_post_is_retried_privately(self, monkeypatch):
+        sent = self._run(
+            monkeypatch,
+            [
+                http_response(403, self.UNAUDITED),
+                http_response(200, {"data": {"publish_id": "p1"}}),
+            ],
+        )
+        assert len(sent) == 2, "expected a retry"
+        assert sent[0]["post_info"]["privacy_level"] == "PUBLIC_TO_EVERYONE"
+        assert sent[1]["post_info"]["privacy_level"] == "SELF_ONLY"
+
+    def test_a_post_that_is_accepted_is_not_retried(self, monkeypatch):
+        sent = self._run(monkeypatch, [http_response(200, {"data": {"publish_id": "p1"}})])
+        assert len(sent) == 1
+
+    def test_other_refusals_do_not_trigger_it(self, monkeypatch):
+        """Downgrading privacy would not fix a bad image, and would quietly make
+        a post private for the wrong reason."""
+        monkeypatch.setenv("TIKTOK_POST_MODE", "direct")
+        get_settings.cache_clear()
+        sent = []
+        monkeypatch.setattr(
+            TikTokPublisher, "_post",
+            lambda self, url, **kw: sent.append(1)
+            or http_response(400, {"error": {"code": "invalid_param"}}),
+        )
+        monkeypatch.setattr(TikTokPublisher, "_privacy_level", lambda self, h: "SELF_ONLY")
+        with pytest.raises(PublishError):
+            TikTokPublisher().publish(
+                self.CREDS, PostPayload(text="hi", media_urls=["https://cdn/x.jpg"])
+            )
+        assert len(sent) == 1
+        get_settings.cache_clear()
