@@ -62,6 +62,10 @@ app.conf.update(
             "task": "godeye_engine.tasks.scheduler.reap_stale_runs",
             "schedule": 120.0,  # 2 minutes
         },
+        "reap-stuck-posts": {
+            "task": "godeye_engine.tasks.scheduler.reap_stuck_posts",
+            "schedule": 120.0,  # 2 minutes
+        },
         "recycle-evergreen": {
             "task": "godeye_engine.tasks.planner.recycle_evergreen",
             "schedule": 6 * 3600.0,  # every 6 hours

@@ -30,6 +30,18 @@ MAX_ATTEMPTS = 3
 RETRY_DELAY_MINUTES = 2
 LOCK_TIMEOUT_MINUTES = 5
 
+# Publishing is bounded far tighter than the 25 minute ceiling every task gets.
+# The slowest legitimate path is an Instagram Reel: render the slideshow, store
+# it, then wait up to five minutes while Instagram fetches and transcodes it.
+# Ten minutes covers that with room; past it the task is not slow, it is gone.
+PUBLISH_SOFT_LIMIT_SEC = 8 * 60
+PUBLISH_HARD_LIMIT_SEC = 10 * 60
+
+# How long a claimed post may sit before it is treated as abandoned. Must be
+# comfortably past the hard limit, so a task that is merely slow is never
+# re-queued underneath itself.
+STUCK_POST_MINUTES = 12
+
 # When an org requires approval, a due post only dispatches once its content
 # cleared review. SCHEDULED/PUBLISHED imply approval happened earlier (manual
 # scheduling is gated in the API; PUBLISHED appears when a sibling post ran first).
@@ -86,7 +98,11 @@ def dispatch_due_posts() -> int:
     return len(ids)
 
 
-@app.task(name="godeye_engine.tasks.scheduler.publish_post")
+@app.task(
+    name="godeye_engine.tasks.scheduler.publish_post",
+    soft_time_limit=PUBLISH_SOFT_LIMIT_SEC,
+    time_limit=PUBLISH_HARD_LIMIT_SEC,
+)
 def publish_post(scheduled_post_id: str) -> dict:
     with get_session() as session:
         post = session.execute(
@@ -343,6 +359,54 @@ def is_stale_run(agent: str, created_at, now) -> bool:
         return False
     limit = STALE_RUN_MINUTES.get(agent, DEFAULT_STALE_RUN_MINUTES)
     return now - created_at > timedelta(minutes=limit)
+
+
+@app.task(name="godeye_engine.tasks.scheduler.reap_stuck_posts")
+def reap_stuck_posts() -> dict:
+    """Re-queue posts whose worker died between claiming them and publishing.
+
+    dispatch_due_posts flips a post to PROCESSING before handing it to a worker.
+    If that worker goes away mid-publish — a deploy is the ordinary way — the
+    row stays PROCESSING and nothing brings it back. The stale-lock check in
+    due_posts_query was meant to, but it is AND-ed with status == PENDING, and
+    an abandoned post is never PENDING, so it could not fire. Three posts sat
+    for half an hour looking like they were still working.
+
+    Safe to re-queue rather than fail: publish_post refuses to act on anything
+    that is not PROCESSING, so when Redis eventually redelivers the abandoned
+    message it finds the post PUBLISHED and skips instead of posting twice.
+    That ordering is why the window here is comfortably past the task's own
+    hard limit — a task still running would otherwise be re-queued underneath
+    itself, and then both copies really would publish.
+    """
+    now = utcnow()
+    cutoff = now - timedelta(minutes=STUCK_POST_MINUTES)
+
+    with get_session() as session:
+        rows = session.execute(
+            select(ScheduledPost.c.id, ScheduledPost.c.orgId).where(
+                and_(
+                    ScheduledPost.c.status == "PROCESSING",
+                    ScheduledPost.c.lockedAt.isnot(None),
+                    ScheduledPost.c.lockedAt < cutoff,
+                )
+            )
+        ).mappings().all()
+
+        if rows:
+            session.execute(
+                update(ScheduledPost)
+                .where(ScheduledPost.c.id.in_([r["id"] for r in rows]))
+                .values(status="PENDING", lockedAt=None, updatedAt=now)
+            )
+            session.commit()
+
+    if rows:
+        logger.warning(
+            "Re-queued %d post(s) abandoned mid-publish: %s",
+            len(rows), ", ".join(r["id"] for r in rows),
+        )
+    return {"requeued": len(rows)}
 
 
 @app.task(name="godeye_engine.tasks.scheduler.reap_stale_runs")
