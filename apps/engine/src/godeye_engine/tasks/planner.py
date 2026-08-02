@@ -255,6 +255,11 @@ def autopilot_generate(plan_id: str, slot_iso: str, slot_index: int = 0) -> dict
                 variants=result.variants,
                 abVariants=result.ab_variants,
                 evergreen=False,
+                # Autopilot posts inherit how the plan says they should look.
+                # Nobody sees these before they publish, so the plan is the
+                # only place the choice can be made.
+                slideshowSeconds=plan["slideshowSeconds"],
+                renderAsVideo=plan["renderAsVideo"],
                 aiGenerated=True,
                 agentRunId=run_id,
                 submittedAt=now if require_approval else None,

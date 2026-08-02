@@ -200,14 +200,24 @@ export const brandKitSchema = z.object({
   secondaryColor: z.string().regex(/^#[0-9a-fA-F]{6}$/).default("#0EA5E9"),
   fontFamily: z.string().max(120).optional().or(z.literal("")),
   watermarkEnabled: z.boolean().default(false),
-  // How long a photo post runs once it is rendered to video. Two photos held
-  // once came to six seconds, which is not a post.
-  slideshowSeconds: z.union([z.literal(30), z.literal(45), z.literal(60)]).default(30),
-  // Photos become a Reel carrying the track rather than a still carousel.
-  // Only ever applies when a track is set.
-  photosAsReels: z.boolean().default(true),
 });
 export type BrandKitInput = z.infer<typeof brandKitSchema>;
+
+// ---------- How a photo post is rendered ----------
+
+// Shared by the composer and by autopilot plans, which inherit it into every
+// post they generate. It lives on the post rather than the workspace: length
+// is a creative choice that changes with the content.
+export const slideshowLengthSchema = z
+  .union([z.literal(30), z.literal(45), z.literal(60)])
+  .default(30);
+
+export const renderOptionsSchema = z.object({
+  slideshowSeconds: slideshowLengthSchema,
+  // TikTok ignores this — its API takes no still post that can carry audio.
+  // Everywhere else it picks between a still carousel and a Reel.
+  renderAsVideo: z.boolean().default(true),
+});
 
 // ---------- Scheduling ----------
 
@@ -216,6 +226,11 @@ export const schedulePostSchema = z.object({
   connectionIds: z.array(z.string().min(1)).min(1),
   scheduledAt: z.string().datetime({ offset: true }),
   timezone: z.string().min(1).default("UTC"),
+  // Carried on the content item, but chosen here: the composer offers it once
+  // the media is attached, which is the first moment the choice means
+  // anything. Optional so a caller that does not care keeps what is stored.
+  slideshowSeconds: slideshowLengthSchema.optional(),
+  renderAsVideo: z.boolean().optional(),
 });
 export type SchedulePostInput = z.infer<typeof schedulePostSchema>;
 
@@ -232,6 +247,8 @@ export const postingPlanSchema = z.object({
   abTesting: z.boolean().default(false),
   recycleEvergreen: z.boolean().default(false),
   generateImages: z.boolean().default(false),
+  // Inherited by every post this plan generates.
+  ...renderOptionsSchema.shape,
 });
 export type PostingPlanInput = z.infer<typeof postingPlanSchema>;
 

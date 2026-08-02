@@ -68,7 +68,15 @@ export class SchedulingService {
       ),
       this.prisma.contentItem.update({
         where: { id: content.id },
-        data: { status: "SCHEDULED" },
+        data: {
+          status: "SCHEDULED",
+          // Only overwrite what the caller actually chose, so scheduling from
+          // somewhere that does not offer these does not silently reset them.
+          ...(input.slideshowSeconds !== undefined
+            ? { slideshowSeconds: input.slideshowSeconds }
+            : {}),
+          ...(input.renderAsVideo !== undefined ? { renderAsVideo: input.renderAsVideo } : {}),
+        },
       }),
     ]);
 
@@ -242,6 +250,9 @@ export class SchedulingService {
         abTesting: input.abTesting,
         recycleEvergreen: input.recycleEvergreen,
         generateImages: input.generateImages,
+        // Inherited by every post this plan generates.
+        slideshowSeconds: input.slideshowSeconds,
+        renderAsVideo: input.renderAsVideo,
       },
     });
     this.audit.log({
@@ -288,6 +299,8 @@ export class SchedulingService {
         abTesting: input.abTesting,
         recycleEvergreen: input.recycleEvergreen,
         generateImages: input.generateImages,
+        slideshowSeconds: input.slideshowSeconds,
+        renderAsVideo: input.renderAsVideo,
         active: input.active,
         // Clearing the high-water mark makes the planner re-plan from now.
         ...(timingChanged ? { lastPlannedAt: null } : {}),

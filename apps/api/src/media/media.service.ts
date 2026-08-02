@@ -212,8 +212,6 @@ export class MediaService {
         watermarkEnabled: false,
         musicUrl: null,
         musicName: null,
-        slideshowSeconds: 30,
-        photosAsReels: true,
       };
     }
     return {
@@ -224,8 +222,6 @@ export class MediaService {
       watermarkEnabled: kit.watermarkEnabled,
       musicUrl: kit.musicUrl,
       musicName: kit.musicName,
-      slideshowSeconds: kit.slideshowSeconds,
-      photosAsReels: kit.photosAsReels,
     };
   }
 
@@ -235,8 +231,6 @@ export class MediaService {
       secondaryColor: input.secondaryColor,
       fontFamily: input.fontFamily || null,
       watermarkEnabled: input.watermarkEnabled,
-      slideshowSeconds: input.slideshowSeconds,
-      photosAsReels: input.photosAsReels,
     };
     const kit = await this.prisma.brandKit.upsert({
       where: { orgId },

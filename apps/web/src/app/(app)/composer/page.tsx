@@ -71,6 +71,8 @@ export default function ComposerPage() {
   const [content, setContent] = useState<ContentItem | null>(null);
   const [mediaTab, setMediaTab] = useState<"image" | "video">("image");
   const [scheduledAt, setScheduledAt] = useState("");
+  const [slideshowSeconds, setSlideshowSeconds] = useState<30 | 45 | 60>(30);
+  const [renderAsVideo, setRenderAsVideo] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [scheduled, setScheduled] = useState(false);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -158,6 +160,8 @@ export default function ComposerPage() {
           connectionIds: selectedConnections,
           scheduledAt: new Date(scheduledAt).toISOString(),
           timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+          slideshowSeconds,
+          renderAsVideo,
         },
       }),
     onSuccess: () => {
@@ -571,6 +575,51 @@ export default function ComposerPage() {
                       )}
                     </div>
                   )}
+                  <div className="mb-4 rounded-lg border border-line p-3">
+                    <Label>Photo posts</Label>
+                    <p className="mb-2.5 text-xs text-ink-3">
+                      Photos become a video carrying your brand track, so the post
+                      arrives with sound. They repeat in order to fill the length.
+                    </p>
+                    <div className="flex gap-2">
+                      {([30, 45, 60] as const).map((seconds) => (
+                        <button
+                          key={seconds}
+                          type="button"
+                          onClick={() => setSlideshowSeconds(seconds)}
+                          disabled={!renderAsVideo && !selectedPlatforms.includes("TIKTOK")}
+                          className={cx(
+                            "flex-1 rounded-lg border px-3 py-2 font-mono text-sm transition-colors",
+                            "disabled:cursor-not-allowed disabled:opacity-40",
+                            slideshowSeconds === seconds
+                              ? "border-accent bg-accent-soft text-ink-1"
+                              : "border-line text-ink-2 hover:border-ink-3",
+                          )}
+                        >
+                          {seconds === 60 ? "1:00" : `0:${seconds}`}
+                        </button>
+                      ))}
+                    </div>
+
+                    {/* TikTok's API has no still post that can carry audio, so
+                        there is nothing to choose there — offering the toggle
+                        would only suggest an option that does not exist. */}
+                    {selectedPlatforms.some((p) => p !== "TIKTOK") && (
+                      <div className="mt-3">
+                        <Switch
+                          checked={renderAsVideo}
+                          onChange={setRenderAsVideo}
+                          label="Post as video"
+                          hint={
+                            selectedPlatforms.includes("TIKTOK")
+                              ? "Applies to your other destinations — TikTok is always video. Off posts still photos there instead."
+                              : "Off posts the photos as they are, with no sound."
+                          }
+                        />
+                      </div>
+                    )}
+                  </div>
+
                   <Label>Publish time (your timezone)</Label>
                   <div className="flex gap-2">
                     <Input

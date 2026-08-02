@@ -153,12 +153,14 @@ class PostPayload:
     # video from a URL — so a rendered Reel has to be stored somewhere public
     # first, under this workspace's prefix.
     org_id: str | None = None
-    # How long that slideshow runs. None means the workspace default.
+    # How long that slideshow runs, chosen when the post was written.
     slideshow_seconds: int | None = None
-    # Whether photo posts become a Reel on the networks that have them. Always
-    # subject to a track existing: a silent Reel is worse than the carousel it
-    # would replace.
-    photos_as_reels: bool = True
+    # Whether photos are rendered to video at all. TikTok ignores it: its API
+    # takes no still post that can carry audio, so there is nothing to choose.
+    # Everywhere else a carousel is a real format, and this is the choice
+    # between it and a Reel. Always subject to a track existing — a silent
+    # Reel is worse than the carousel it would replace.
+    render_as_video: bool = True
 
 
 class BasePublisher(ABC):

@@ -47,6 +47,8 @@ interface PostingPlan {
   abTesting: boolean;
   recycleEvergreen: boolean;
   generateImages: boolean;
+  slideshowSeconds: 30 | 45 | 60;
+  renderAsVideo: boolean;
   lastPlannedAt: string | null;
 }
 
@@ -89,6 +91,8 @@ export default function AutopilotPage() {
     abTesting: false,
     recycleEvergreen: false,
     generateImages: false,
+    slideshowSeconds: 30,
+    renderAsVideo: true,
   };
   const [form, setForm] = useState(emptyForm);
 
@@ -177,6 +181,8 @@ export default function AutopilotPage() {
       abTesting: plan.abTesting,
       recycleEvergreen: plan.recycleEvergreen,
       generateImages: plan.generateImages,
+      slideshowSeconds: plan.slideshowSeconds,
+      renderAsVideo: plan.renderAsVideo,
     });
     setEditingId(plan.id);
     setCreating(true);
@@ -371,6 +377,47 @@ export default function AutopilotPage() {
                 label="Generate an image per post"
                 hint="The Image Agent creates an on-brand image for every autopilot post."
               />
+            </div>
+
+            <div className="mt-4 rounded-lg border border-line p-3">
+              <Label>Photo posts</Label>
+              <p className="mb-2.5 text-xs text-ink-3">
+                Nobody sees these before they publish, so the length is chosen here
+                and every post this plan generates inherits it.
+              </p>
+              <div className="flex gap-2">
+                {([30, 45, 60] as const).map((seconds) => (
+                  <button
+                    key={seconds}
+                    type="button"
+                    onClick={() => setForm((f) => ({ ...f, slideshowSeconds: seconds }))}
+                    className={cx(
+                      "flex-1 rounded-lg border px-3 py-2 font-mono text-sm transition-colors",
+                      form.slideshowSeconds === seconds
+                        ? "border-accent bg-accent-soft text-ink-1"
+                        : "border-line text-ink-2 hover:border-ink-3",
+                    )}
+                  >
+                    {seconds === 60 ? "1:00" : `0:${seconds}`}
+                  </button>
+                ))}
+              </div>
+              {/* TikTok's API has no still post that can carry audio, so there
+                  is nothing to choose there. */}
+              {form.platforms.some((p) => p !== "TIKTOK") && (
+                <div className="mt-3">
+                  <Switch
+                    checked={form.renderAsVideo}
+                    onChange={(v) => setForm((f) => ({ ...f, renderAsVideo: v }))}
+                    label="Post as video"
+                    hint={
+                      form.platforms.includes("TIKTOK")
+                        ? "Applies to your other destinations — TikTok is always video."
+                        : "Off posts the photos as they are, with no sound."
+                    }
+                  />
+                </div>
+              )}
             </div>
 
             <ErrorNote message={error} />

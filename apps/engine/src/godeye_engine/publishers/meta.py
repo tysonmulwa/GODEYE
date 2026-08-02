@@ -111,7 +111,7 @@ class FacebookPublisher(BasePublisher):
         audience. An already-attached video keeps going to the feed, where the
         user put it deliberately.
         """
-        if payload.video_urls or not payload.photos_as_reels or not payload.media_urls:
+        if payload.video_urls or not payload.render_as_video or not payload.media_urls:
             return None
         return slideshow_from_payload(payload, "Facebook", REEL_IMAGE_LIMIT)
 
@@ -344,7 +344,7 @@ class InstagramPublisher(BasePublisher):
         """
         if payload.video_urls:
             return payload.video_urls[0]
-        if not payload.photos_as_reels or not payload.media_urls:
+        if not payload.render_as_video or not payload.media_urls:
             return None
         rendered = slideshow_from_payload(payload, "Instagram", CAROUSEL_LIMIT)
         if rendered is None:

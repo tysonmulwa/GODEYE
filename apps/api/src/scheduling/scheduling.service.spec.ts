@@ -71,6 +71,48 @@ describe("SchedulingService", () => {
     );
   });
 
+  it("stores the render choices made in the composer", async () => {
+    prisma.contentItem.findFirst.mockResolvedValue({ id: "content1" });
+    prisma.socialConnection.findMany.mockResolvedValue([{ id: "conn1" }]);
+    prisma.scheduledPost.create.mockResolvedValue({ id: "sp" });
+    prisma.contentItem.update.mockResolvedValue({});
+
+    await service.schedule("org1", "user1", {
+      contentItemId: "content1",
+      connectionIds: ["conn1"],
+      scheduledAt: future,
+      timezone: "UTC",
+      slideshowSeconds: 60,
+      renderAsVideo: false,
+    });
+
+    expect(prisma.contentItem.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: { status: "SCHEDULED", slideshowSeconds: 60, renderAsVideo: false },
+      }),
+    );
+  });
+
+  it("leaves the render choices alone when the caller does not send them", async () => {
+    // Scheduling happens from more than one place. Writing defaults here would
+    // silently undo a choice the composer had already stored.
+    prisma.contentItem.findFirst.mockResolvedValue({ id: "content1" });
+    prisma.socialConnection.findMany.mockResolvedValue([{ id: "conn1" }]);
+    prisma.scheduledPost.create.mockResolvedValue({ id: "sp" });
+    prisma.contentItem.update.mockResolvedValue({});
+
+    await service.schedule("org1", "user1", {
+      contentItemId: "content1",
+      connectionIds: ["conn1"],
+      scheduledAt: future,
+      timezone: "UTC",
+    });
+
+    expect(prisma.contentItem.update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: { status: "SCHEDULED" } }),
+    );
+  });
+
   it("rejects scheduling in the past", async () => {
     prisma.contentItem.findFirst.mockResolvedValue({ id: "content1" });
     await expect(

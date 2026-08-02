@@ -89,6 +89,11 @@ class TikTokPublisher(BasePublisher):
             # one, because a photo post published through the API has no sound
             # and no way to gain any. Posting it as video also drops the domain
             # verification that PULL_FROM_URL demands.
+            #
+            # render_as_video is deliberately not consulted. Elsewhere it picks
+            # between a carousel and a Reel, both of which are real formats.
+            # Here the alternative is a silent post, so there is nothing to
+            # choose and the setting is not offered for TikTok either.
             slideshow_bytes = self._slideshow_from_photos(payload)
             if slideshow_bytes is not None:
                 logger.info("TikTok: publishing %d photo(s) as a slideshow with audio",

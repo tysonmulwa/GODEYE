@@ -130,10 +130,6 @@ describe("MediaService", () => {
       watermarkEnabled: false,
       musicUrl: null,
       musicName: null,
-      // A workspace that has never opened Settings still publishes, so these
-      // defaults are what most posts actually use.
-      slideshowSeconds: 30,
-      photosAsReels: true,
     });
   });
 

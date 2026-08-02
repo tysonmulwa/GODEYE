@@ -888,7 +888,7 @@ class TestReels:
         monkeypatch.setattr(InstagramPublisher, "_await_container", lambda *a, **kw: None)
         InstagramPublisher().publish(
             {"igUserId": "1", "accessToken": "t", "authMethod": "instagram_login"},
-            self._with_track(photos_as_reels=False),
+            self._with_track(render_as_video=False),
         )
         assert not any(d.get("media_type") == "REELS" for d in sent)
 
@@ -1102,6 +1102,26 @@ class TestTikTokSlideshow:
             assert any(expected in r.getMessage() for r in caplog.records), (
                 f"a failed {expected} fetch fell back to a silent post without saying so"
             )
+
+    def test_tiktok_renders_even_when_the_post_asked_for_stills(self, monkeypatch):
+        """Elsewhere the toggle picks between a carousel and a Reel, both real
+        formats. On TikTok the alternative is a silent post, so there is
+        nothing to choose — and the setting is not offered for it either."""
+        self._publisher(monkeypatch)
+        seen = []
+        monkeypatch.setattr(
+            TikTokPublisher, "_post",
+            lambda self, url, **kw: seen.append(url)
+            or http_response(200, {"data": {"publish_id": "p1", "upload_url": "https://up"}}),
+        )
+        TikTokPublisher().publish(
+            self.CREDS,
+            PostPayload(
+                text="hi", media_urls=self.PHOTOS, music_url="https://cdn/track.mp3",
+                render_as_video=False,
+            ),
+        )
+        assert any("video/init" in u for u in seen), seen
 
     def test_direct_is_the_default_so_posts_go_out_unattended(self, monkeypatch):
         monkeypatch.delenv("TIKTOK_POST_MODE", raising=False)

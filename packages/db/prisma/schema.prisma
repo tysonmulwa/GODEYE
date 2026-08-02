@@ -280,6 +280,13 @@ model ContentItem {
   abVariants  Json?
   evergreen   Boolean       @default(false)
   lastRecycledAt DateTime?
+  // How long this post runs once photos are rendered to video, and whether
+  // they are. Per post rather than per workspace: length is a creative choice
+  // that changes with the content, not a setting you fix once.
+  slideshowSeconds Int      @default(30)
+  // TikTok ignores this — its API takes no still post that can carry audio.
+  // Everywhere else a still carousel is a legitimate format worth keeping.
+  renderAsVideo    Boolean  @default(true)
   aiGenerated Boolean       @default(false)
   agentRunId  String?
   // Approval workflow (Phase 6)
@@ -357,13 +364,6 @@ model BrandKit {
   musicStorageKey  String?
   musicUrl         String?
   musicName        String?
-  // How long a photo post runs once it is rendered to video. Two photos held
-  // once came to six seconds, which is not a post. 30, 45 or 60.
-  slideshowSeconds Int      @default(30)
-  // Photos become a Reel carrying the track, rather than a still carousel.
-  // Only ever applies when a track is set — without one there is nothing to
-  // carry, and a silent Reel is worse than the carousel it replaced.
-  photosAsReels    Boolean  @default(true)
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 
@@ -423,6 +423,9 @@ model PostingPlan {
   abTesting        Boolean   @default(false)
   recycleEvergreen Boolean   @default(false)
   generateImages   Boolean   @default(false) // autopilot also generates an image per post
+  // Inherited by every post this plan generates.
+  slideshowSeconds Int       @default(30)
+  renderAsVideo    Boolean   @default(true)
   lastPlannedAt    DateTime? // planner high-water mark (avoid double planning)
   createdAt      DateTime    @default(now())
   updatedAt      DateTime    @updatedAt
