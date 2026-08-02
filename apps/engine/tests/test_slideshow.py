@@ -70,3 +70,51 @@ def test_no_images_is_rejected_before_touching_ffmpeg(calls):
     with pytest.raises(ValueError):
         slideshow.build_slideshow([], music=b"mp3")
     assert calls == []
+
+
+class TestRenderSelfTest:
+    """Proving the worker can encode, by making it encode. The whole value is
+    in what it reports when the render fails, so it must never raise."""
+
+    def test_a_failed_render_is_reported_not_raised(self, monkeypatch):
+        from godeye_engine.media import selftest
+
+        monkeypatch.setattr(selftest, "_test_audio", lambda *a, **kw: b"mp3")
+        monkeypatch.setattr(
+            selftest.slideshow, "build_slideshow",
+            lambda *a, **kw: (_ for _ in ()).throw(RuntimeError("ffmpeg failed (137): Killed")),
+        )
+        result = selftest.render_selftest()
+        assert result["ok"] is False
+        assert result["stage"] == "render"
+        # 137 is a kernel OOM kill, and that is the difference between a
+        # container that can render and one that cannot.
+        assert "137" in result["error"]
+
+    def test_missing_ffmpeg_is_reported_against_the_input_stage(self, monkeypatch):
+        from godeye_engine.media import selftest
+
+        monkeypatch.setattr(
+            selftest.video, "locate_ffmpeg",
+            lambda: (_ for _ in ()).throw(RuntimeError("ffmpeg not found")),
+        )
+        result = selftest.render_selftest()
+        assert result["ok"] is False
+        assert "ffmpeg not found" in result["error"]
+
+    def test_a_video_without_audio_is_not_a_pass(self, monkeypatch):
+        """The symptom being chased is a post that publishes with no sound, so
+        a render that produces a silent file has reproduced the bug, not
+        disproved it."""
+        from godeye_engine.media import selftest
+
+        monkeypatch.setattr(selftest, "_test_audio", lambda *a, **kw: b"mp3")
+        monkeypatch.setattr(selftest, "_test_image", lambda *a, **kw: b"jpg")
+        monkeypatch.setattr(selftest.slideshow, "build_slideshow", lambda *a, **kw: b"MP4")
+        monkeypatch.setattr(selftest.video, "probe_duration", lambda p: 6.4)
+        monkeypatch.setattr(selftest.video, "locate_ffprobe", lambda: "ffprobe")
+        monkeypatch.setattr(
+            selftest.subprocess, "run",
+            lambda *a, **kw: type("R", (), {"stdout": "h264,video", "returncode": 0})(),
+        )
+        assert selftest.render_selftest()["ok"] is False

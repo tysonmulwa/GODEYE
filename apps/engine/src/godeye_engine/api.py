@@ -7,7 +7,7 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import text
 
-from .celery_app import worker_builds
+from .celery_app import render_checks, worker_builds
 from .config import get_settings
 from .db import get_engine
 
@@ -73,7 +73,7 @@ class GenerateVideoRequest(BaseModel):
 
 
 @app.get("/health")
-def health() -> dict:
+def health(render: bool = False) -> dict:
     # The build marker matters as much as the checks. Working out whether a
     # change had reached the worker meant reading the shape of the rows it
     # produced, which is slow and easy to get wrong.
@@ -128,8 +128,25 @@ def health() -> dict:
             else "error: " + ", ".join(f"{w['node']}: {w.get('ffmpeg')}" for w in cannot_render)
         )
 
-    status = "ok" if all(v.startswith("ok") for v in checks.values()) else "degraded"
-    return {"status": status, "checks": checks, "build": build, "workers": workers}
+    result = {"status": "", "checks": checks, "build": build, "workers": workers}
+
+    # Opt-in: this encodes video, so it is far too expensive to run on every
+    # health poll. Worth having because a working ffmpeg binary and a container
+    # that can finish an encode are different things, and only the second one
+    # decides whether a post arrives with sound.
+    if render and workers and not errors:
+        renders = render_checks()
+        result["render"] = renders
+        failed = [r for r in renders if not r.get("ok")]
+        checks["render"] = (
+            "ok"
+            if not failed
+            else "error: "
+            + ", ".join(f"{r.get('node')}: {r.get('error', 'no audio in output')}" for r in failed)
+        )
+
+    result["status"] = "ok" if all(v.startswith("ok") for v in checks.values()) else "degraded"
+    return result
 
 
 @app.post("/tasks/generate-content", dependencies=[Depends(verify_internal_secret)])

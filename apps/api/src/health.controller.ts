@@ -1,4 +1,4 @@
-import { Controller, Get } from "@nestjs/common";
+import { Controller, Get, Query } from "@nestjs/common";
 import { ApiOperation, ApiTags } from "@nestjs/swagger";
 import { EngineService } from "./engine/engine.service";
 
@@ -21,12 +21,15 @@ export class HealthController {
 
   @Get()
   @ApiOperation({ summary: "Deployed build of the API and the engine" })
-  async health() {
+  async health(@Query("render") render?: string) {
     const sha = process.env.RAILWAY_GIT_COMMIT_SHA ?? "";
     const api = { status: "ok", build: sha ? sha.slice(0, 8) : "unknown" };
 
     try {
-      const engine = await this.engine.health();
+      // ?render=1 makes the worker encode a throwaway slideshow. Opt-in: it
+      // costs real CPU, and it is the only way to tell a container that has
+      // ffmpeg from one that can finish a render.
+      const engine = await this.engine.health(render === "1" || render === "true");
       return { status: engine.status === "ok" ? "ok" : "degraded", api, engine };
     } catch (e) {
       // The API being up while the engine is not is a normal state worth
