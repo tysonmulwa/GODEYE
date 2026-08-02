@@ -26,6 +26,7 @@ from sqlalchemy import (
     create_engine,
     types,
 )
+from sqlalchemy.dialects.postgresql import ARRAY as PgArray
 from sqlalchemy.dialects.postgresql import ENUM as PgNativeEnum
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.engine import Engine
@@ -57,6 +58,76 @@ class PgEnum(types.TypeDecorator):
 
     def bind_expression(self, bindvalue):  # type: ignore[override]
         return cast(bindvalue, self._pg_enum)
+
+
+def parse_pg_array(literal: str) -> list[str]:
+    """Postgres array literal -> list. '{A,B}' becomes ['A', 'B']."""
+    text = literal.strip()
+    if not (text.startswith("{") and text.endswith("}")):
+        return [text] if text else []
+    body = text[1:-1]
+    if not body:
+        return []
+    out: list[str] = []
+    current: list[str] = []
+    quoted = False
+    escaped = False
+    for char in body:
+        if escaped:
+            current.append(char)
+            escaped = False
+        elif char == "\\":
+            escaped = True
+        elif char == '"':
+            quoted = not quoted
+        elif char == "," and not quoted:
+            out.append("".join(current))
+            current = []
+        else:
+            current.append(char)
+    out.append("".join(current))
+    return out
+
+
+class PgEnumArray(types.TypeDecorator):
+    """An array of a Prisma-owned native enum, e.g. ``"Platform"[]``.
+
+    PgEnum above fixed the scalar case. Arrays of those enums have their own
+    version of the same problem and are worse, because they fail quietly:
+    psycopg does not know the element type, so the driver returns the literal
+    ``'{FACEBOOK,TIKTOK}'`` as a plain string. Mapped as ARRAY(String),
+    SQLAlchemy then treats that string as the sequence itself and every index
+    yields one character, so ``plan["platforms"][0]`` is ``'{'``.
+
+    Nothing raises at that point. The bad value travels until something uses it,
+    which for the autopilot planner was a query casting ``'{'`` to Platform,
+    where it finally failed and took the whole run with it.
+    """
+
+    impl = String
+    cache_ok = True
+
+    def __init__(self, name: str) -> None:
+        self._name = name
+        super().__init__()
+
+    def bind_expression(self, bindvalue):  # type: ignore[override]
+        return cast(bindvalue, PgArray(PgNativeEnum(name=self._name, create_type=False)))
+
+    def process_bind_param(self, value, dialect):  # type: ignore[override]
+        if value is None:
+            return None
+        if isinstance(value, str):
+            return value
+        return "{" + ",".join(str(v) for v in value) + "}"
+
+    def process_result_value(self, value, dialect):  # type: ignore[override]
+        if value is None:
+            return None
+        # A driver that does understand the type hands back a list already.
+        if isinstance(value, (list, tuple)):
+            return list(value)
+        return parse_pg_array(value)
 
 Organization = Table(
     "Organization",
@@ -267,7 +338,8 @@ PostingPlan = Table(
     Column("cadence", PgEnum("CadenceType"), nullable=False),
     Column("customCron", String),
     Column("timezone", String, nullable=False),
-    Column("platforms", ARRAY(String), nullable=False),
+    # "Platform"[] — a Prisma enum array, not a text array. See PgEnumArray.
+    Column("platforms", PgEnumArray("Platform"), nullable=False),
     Column("preferredTimes", ARRAY(String), nullable=False),
     Column("active", Boolean, nullable=False),
     Column("autoGenerate", Boolean, nullable=False),

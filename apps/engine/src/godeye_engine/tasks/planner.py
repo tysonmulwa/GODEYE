@@ -40,6 +40,14 @@ MAX_SLOTS_PER_RUN = 6
 PLAN_HORIZON_HOURS = 24
 RECYCLE_AFTER_DAYS = 7
 
+# Beat wakes the planner every 5 minutes, so a plan saved at 10:33 with a 10:35
+# slot is first looked at once that slot has already gone, and the first post
+# someone expects never happens. On a plan's first run only, reach back far
+# enough to catch it; the post then goes out at the next dispatch, which is what
+# was wanted. Applied only on the first run, because afterwards lastPlannedAt is
+# the high-water mark and reaching behind it would book the same slot twice.
+FIRST_RUN_GRACE_MINUTES = 12
+
 CADENCE_TIMES_PER_DAY = {"DAILY_1": 1, "DAILY_2": 2, "DAILY_3": 3}
 
 
@@ -117,7 +125,10 @@ def plan_autopilot() -> int:
 
     planned = 0
     for plan in plans:
+        first_run = plan["lastPlannedAt"] is None
         start = max(plan["lastPlannedAt"] or now, now)
+        if first_run:
+            start = start - timedelta(minutes=FIRST_RUN_GRACE_MINUTES)
         fallback = intel.best_hours(
             plan["orgId"],
             plan["platforms"][0] if plan["platforms"] else "FACEBOOK",
