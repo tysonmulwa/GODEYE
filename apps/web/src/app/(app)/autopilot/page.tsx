@@ -89,6 +89,16 @@ export default function AutopilotPage() {
     connections.filter((c) => c.status === "ACTIVE").map((c) => c.platform),
   );
 
+  // Why Launch is unavailable, in the order someone hits them. Null means go.
+  const blockedReason =
+    connectedPlatforms.size === 0
+      ? "Connect at least one account first — Autopilot publishes to your connected channels, and there are none yet."
+      : form.name.trim().length < 1
+        ? "Give the plan a name."
+        : form.platforms.length === 0
+          ? "Pick at least one platform to publish to."
+          : null;
+
   const createMutation = useMutation({
     mutationFn: () =>
       api("/posting-plans", {
@@ -273,10 +283,19 @@ export default function AutopilotPage() {
             </div>
 
             <ErrorNote message={error} />
+            {/* A disabled button that says nothing is indistinguishable from a
+                broken one. No plan had ever been created, and this is why:
+                pressing Launch without a platform selected did nothing at all
+                and offered no reason. */}
+            {blockedReason && (
+              <p className="rounded-lg border border-line bg-surface-3 px-3 py-2 text-xs text-ink-2">
+                {blockedReason}
+              </p>
+            )}
             <Button
               className="w-full"
               loading={createMutation.isPending}
-              disabled={form.name.trim().length < 1 || form.platforms.length === 0}
+              disabled={!!blockedReason}
               onClick={() => createMutation.mutate()}
             >
               <Rocket className="h-4 w-4" /> Launch plan

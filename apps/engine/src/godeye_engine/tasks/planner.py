@@ -176,7 +176,18 @@ def autopilot_generate(plan_id: str, slot_iso: str, slot_index: int = 0) -> dict
 
     require_approval = bool(org and org["requireApproval"])
     if profile is None or not connections:
-        return {"status": "skipped", "reason": "no profile or matching connections"}
+        # Silence here looks exactly like autopilot being broken: the slot is
+        # consumed, nothing is produced, and nothing anywhere says why. Both
+        # causes are fixable by the user once they know which one it is.
+        reason = (
+            "the workspace has no business profile"
+            if profile is None
+            else f"no ACTIVE connection matches the plan's platforms {list(plan['platforms'])}"
+        )
+        logger.warning(
+            "Autopilot skipped a slot for plan %r: %s", plan["name"], reason
+        )
+        return {"status": "skipped", "reason": reason}
 
     topics = plan["topics"] or []
     topic = topics[slot_index % len(topics)] if topics else None
