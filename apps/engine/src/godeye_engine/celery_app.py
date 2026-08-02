@@ -83,7 +83,33 @@ app.conf.update(
 @control_command()
 def build_info(state) -> dict:  # noqa: ANN001 — Celery hands in its worker state
     sha = get_settings().railway_git_commit_sha
-    return {"build": sha[:8] if sha else "unknown"}
+    # Whether the worker can render is a separate question from which build it
+    # is on, and it is the one that decides if a TikTok post gets sound. The
+    # slideshow falls back to a silent photo carousel when ffmpeg is missing,
+    # so from the outside that failure is invisible.
+    return {"build": sha[:8] if sha else "unknown", "ffmpeg": _ffmpeg_status()}
+
+
+def _ffmpeg_status() -> str:
+    """Where ffmpeg is, or why rendering is impossible here."""
+    import subprocess
+
+    from .media import video
+
+    try:
+        path = video.locate_ffmpeg()
+    except Exception as e:  # noqa: BLE001
+        return f"missing: {e}"
+    try:
+        # Present on PATH is not the same as runnable — a wrong architecture or
+        # a missing shared library only shows up on exec.
+        proc = subprocess.run([path, "-version"], capture_output=True, text=True, timeout=15)
+    except Exception as e:  # noqa: BLE001
+        return f"not runnable: {type(e).__name__}: {e}"
+    if proc.returncode != 0:
+        return f"exited {proc.returncode}"
+    first = (proc.stdout or "").splitlines()
+    return first[0][:60] if first else "ok"
 
 
 def worker_builds(timeout: float = 2.0) -> list[dict]:
@@ -110,6 +136,10 @@ def worker_builds(timeout: float = 2.0) -> list[dict]:
     nodes: list[dict] = []
     for reply in replies:
         for node, payload in reply.items():
-            build = payload.get("build", "unknown") if isinstance(payload, dict) else "unknown"
-            nodes.append({"node": node, "build": build})
+            ok = isinstance(payload, dict)
+            nodes.append({
+                "node": node,
+                "build": payload.get("build", "unknown") if ok else "unknown",
+                "ffmpeg": payload.get("ffmpeg", "unknown") if ok else "unknown",
+            })
     return sorted(nodes, key=lambda n: n["node"])

@@ -28,10 +28,13 @@ def _broadcast(replies=None, connect_error: Exception | None = None):
 
 
 def test_flattens_one_reply_per_node():
-    with _broadcast([{"celery@aaa": {"build": "07eda6d4"}}, {"celery@bbb": {"build": "83ecc241"}}]):
+    with _broadcast([
+        {"celery@aaa": {"build": "07eda6d4", "ffmpeg": "ffmpeg version 6.1"}},
+        {"celery@bbb": {"build": "83ecc241", "ffmpeg": "ffmpeg version 6.1"}},
+    ]):
         assert worker_builds() == [
-            {"node": "celery@aaa", "build": "07eda6d4"},
-            {"node": "celery@bbb", "build": "83ecc241"},
+            {"node": "celery@aaa", "build": "07eda6d4", "ffmpeg": "ffmpeg version 6.1"},
+            {"node": "celery@bbb", "build": "83ecc241", "ffmpeg": "ffmpeg version 6.1"},
         ]
 
 
@@ -73,9 +76,27 @@ def _health(workers, sha):
         return health()
 
 
+FFMPEG_OK = "ffmpeg version 6.1.1"
+
+
 def test_health_is_green_only_when_workers_match_this_build():
-    result = _health([{"node": "celery@aaa", "build": "07eda6d4"}], "07eda6d4ff")
+    result = _health(
+        [{"node": "celery@aaa", "build": "07eda6d4", "ffmpeg": FFMPEG_OK}], "07eda6d4ff"
+    )
     assert result["checks"]["workers"].startswith("ok")
+    assert result["checks"]["ffmpeg"] == "ok"
+
+
+def test_health_flags_a_worker_that_cannot_render():
+    """A current worker with no ffmpeg still publishes — it drops the sound and
+    falls back to a silent photo carousel without saying anything."""
+    result = _health(
+        [{"node": "celery@aaa", "build": "07eda6d4", "ffmpeg": "missing: not found on PATH"}],
+        "07eda6d4ff",
+    )
+    assert result["status"] == "degraded"
+    assert result["checks"]["workers"].startswith("ok"), "the build itself is fine"
+    assert "not found on PATH" in result["checks"]["ffmpeg"]
 
 
 def test_health_flags_a_worker_left_on_an_older_build():
@@ -115,4 +136,6 @@ def test_worker_without_the_env_var_says_unknown():
     """A worker on an older image has no build_info command and replies with an
     error payload. That must not be mistaken for a matching build."""
     with _broadcast([{"celery@old": {"error": "Unknown command: 'build_info'"}}]):
-        assert worker_builds() == [{"node": "celery@old", "build": "unknown"}]
+        assert worker_builds() == [
+            {"node": "celery@old", "build": "unknown", "ffmpeg": "unknown"}
+        ]

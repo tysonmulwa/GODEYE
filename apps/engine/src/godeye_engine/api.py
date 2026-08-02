@@ -118,6 +118,16 @@ def health() -> dict:
     else:
         checks["workers"] = f"ok ({len(workers)} on {build})"
 
+    # Reported separately from the build: a current worker that cannot render
+    # still publishes, it just drops the sound and says nothing.
+    cannot_render = [w for w in workers if not w.get("ffmpeg", "").startswith("ffmpeg")]
+    if workers and not errors:
+        checks["ffmpeg"] = (
+            "ok"
+            if not cannot_render
+            else "error: " + ", ".join(f"{w['node']}: {w.get('ffmpeg')}" for w in cannot_render)
+        )
+
     status = "ok" if all(v.startswith("ok") for v in checks.values()) else "degraded"
     return {"status": status, "checks": checks, "build": build, "workers": workers}
 
