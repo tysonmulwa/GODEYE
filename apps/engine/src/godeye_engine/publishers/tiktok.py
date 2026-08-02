@@ -38,16 +38,18 @@ SELF_ONLY = "SELF_ONLY"
 # worth catching before the call.
 UNSUPPORTED_PHOTO_EXT = (".png", ".gif", ".bmp", ".tiff", ".svg", ".heic")
 
-# TikTok's wording blames the account, which is not where the problem is.
+# The wording sounds like it blames the account, and it does: an unaudited
+# app may only post to an account that is itself Private.
 UNAUDITED_CODE = "unaudited_client_can_only_post_to_private_accounts"
 UNAUDITED_HELP = (
-    "TikTok refused because this app has not passed its Content Posting audit. "
-    "Despite the wording, your account's privacy setting is not the cause: an "
-    "unaudited app may only publish at SELF_ONLY. GODEYE asked for more than "
-    "that because TIKTOK_AUDITED is set to true on the worker, and then retried "
-    "privately, which TikTok also refused. Set TIKTOK_AUDITED=false until "
-    "approval actually lands; the worker logs the level it asks for on every "
-    "post."
+    "TikTok has not audited this app yet, and until it does it will only post "
+    "to an account that is itself set to Private. The error name is literal: "
+    "it is about the account, not only the post. GODEYE already sends the "
+    "post as SELF_ONLY, so the remaining requirement is the account setting.\n\n"
+    "TikTok does not allow Business accounts to be private. If this one is a "
+    "Business account, switch it to Personal or Creator in the TikTok app "
+    "(Settings, Account, Switch to Personal Account), then set the account to "
+    "Private. Otherwise the posts have to wait for the audit to be approved."
 )
 
 # Time TikTok spends processing the uploaded video before the post appears.
@@ -163,7 +165,7 @@ class TikTokPublisher(BasePublisher):
             init = self._post(endpoint, headers=headers, json=init_json)
         body = init.json()
         if init.status_code >= 400 or (body.get("error") or {}).get("code") not in (None, "ok"):
-            raise self._fail_tiktok(init, "TikTok (init)")
+            raise self._fail_tiktok(init, "TikTok (init)", headers)
 
         data = body.get("data") or {}
         publish_id, upload_url = data.get("publish_id"), data.get("upload_url")
@@ -270,7 +272,7 @@ class TikTokPublisher(BasePublisher):
             init = self._post(endpoint, headers=headers, json=photo_body(False, SELF_ONLY))
         body = init.json()
         if init.status_code >= 400 or (body.get("error") or {}).get("code") not in (None, "ok"):
-            raise self._fail_tiktok(init, "TikTok (photo init)")
+            raise self._fail_tiktok(init, "TikTok (photo init)", headers)
 
         publish_id = (body.get("data") or {}).get("publish_id")
         if not publish_id:
@@ -325,19 +327,55 @@ class TikTokPublisher(BasePublisher):
         except ValueError:
             return False
 
-    def _fail_tiktok(self, response, stage: str) -> PublishError:
-        """TikTok's own message for the audit error points at the wrong thing.
+    def _creator_snapshot(self, headers: dict[str, str]) -> str:
+        """What TikTok says about this account, for the error to carry.
 
-        Left as-is it sends people to change their account's privacy setting,
-        which cannot fix it, because the account was never what was refused.
+        Diagnosing this twice from the outside produced two wrong answers,
+        because the refusal names neither the account state nor what the app is
+        allowed to do. creator_info knows both, so ask it at the moment of
+        failure rather than reason about it afterwards.
         """
+        import httpx
+
+        try:
+            response = httpx.post(
+                f"{API}/post/publish/creator_info/query/",
+                headers=headers,
+                timeout=self.timeout,
+            )
+            data = (response.json().get("data") or {})
+        except (httpx.HTTPError, ValueError) as e:
+            return f"(could not read creator_info: {type(e).__name__})"
+
+        if not data:
+            return "(creator_info returned nothing)"
+        bits = []
+        options = data.get("privacy_level_options")
+        if options is not None:
+            bits.append(f"privacy levels this account offers: {options or 'none'}")
+        for key in ("creator_username", "creator_nickname"):
+            if data.get(key):
+                bits.append(f"{key}={data[key]}")
+        # Named separately because it is the setting in question.
+        for key in ("is_private_account", "privacy_level"):
+            if key in data:
+                bits.append(f"{key}={data[key]}")
+        return "; ".join(bits) or f"(creator_info: {str(data)[:200]})"
+
+    def _fail_tiktok(
+        self, response, stage: str, headers: dict[str, str] | None = None
+    ) -> PublishError:
+        """Replace TikTok's wording where it does not say enough to act on."""
         error = self._fail(response, stage)
         try:
             code = (response.json().get("error") or {}).get("code")
         except ValueError:
             return error
         if code == UNAUDITED_CODE:
-            return PublishError(f"{stage}: {UNAUDITED_HELP}")
+            detail = f"{stage}: {UNAUDITED_HELP}"
+            if headers:
+                detail += f"\n\nTikTok reports: {self._creator_snapshot(headers)}"
+            return PublishError(detail)
         if code == "scope_not_authorized":
             return PublishError(
                 f"{stage}: this TikTok connection was authorised before GODEYE "

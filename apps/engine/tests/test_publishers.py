@@ -554,9 +554,11 @@ class TestTikTokPrivacyLevel:
             403, {"error": {"code": "unaudited_client_can_only_post_to_private_accounts"}}
         )
         detail = str(TikTokPublisher()._fail_tiktok(response, "TikTok (photo init)"))
-        assert "not passed its Content Posting audit" in detail
-        assert "privacy setting is not the cause" in detail
-        assert "TIKTOK_AUDITED" in detail
+        # The error name is literal: an unaudited app posts only to an account
+        # that is itself Private, and a Business account cannot be one.
+        assert "set to Private" in detail
+        assert "Business accounts" in detail
+        assert "already sends the post as SELF_ONLY" in detail
 
     def test_other_errors_are_left_alone(self):
         response = http_response(400, {"error": {"code": "invalid_param"}})
