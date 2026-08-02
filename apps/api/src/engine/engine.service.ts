@@ -136,7 +136,13 @@ export class EngineService {
     return this.get(`/intel/best-times?${params}`);
   }
 
-  async health(): Promise<{ status: string }> {
+  async health(): Promise<{
+    status: string;
+    build?: string;
+    checks?: Record<string, string>;
+    /** One entry per live Celery worker. Empty means nothing is publishing. */
+    workers?: { node: string; build: string }[];
+  }> {
     return this.get("/health");
   }
 

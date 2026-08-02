@@ -7,6 +7,7 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import text
 
+from .celery_app import worker_builds
 from .config import get_settings
 from .db import get_engine
 
@@ -87,12 +88,38 @@ def health() -> dict:
     try:
         import redis as redis_lib
 
-        redis_lib.Redis.from_url(get_settings().redis_url).ping()
+        # Bounded on purpose: a refused Redis fails fast, but a hung one would
+        # hold this request open with no default timeout to stop it, and a
+        # health check that hangs is one more thing to debug during an outage.
+        redis_lib.Redis.from_url(
+            get_settings().redis_url, socket_connect_timeout=2, socket_timeout=2
+        ).ping()
         checks["redis"] = "ok"
     except Exception as e:  # noqa: BLE001
         checks["redis"] = f"error: {e}"
-    status = "ok" if all(v == "ok" for v in checks.values()) else "degraded"
-    return {"status": status, "checks": checks, "build": sha[:8] if sha else "unknown"}
+
+    # This process does not publish anything — the worker does, from the same
+    # image but its own deploy. Report the workers too, or a green /health can
+    # sit on top of a queue nobody is consuming.
+    build = sha[:8] if sha else "unknown"
+    workers = worker_builds()
+    errors = [w["error"] for w in workers if w.get("error")]
+    # "unknown" is the absence of an answer, so it must never satisfy a
+    # comparison — two unknowns once matched each other and reported ok while
+    # the broker was refusing connections.
+    mismatched = [w for w in workers if w["build"] != build or build == "unknown"]
+    if errors:
+        checks["workers"] = f"error: {'; '.join(errors)}"
+    elif not workers:
+        checks["workers"] = "error: no worker responded — nothing is consuming the queue"
+    elif mismatched:
+        detail = ", ".join(f"{w['node']}={w['build']}" for w in mismatched)
+        checks["workers"] = f"error: cannot confirm workers match this build ({build}): {detail}"
+    else:
+        checks["workers"] = f"ok ({len(workers)} on {build})"
+
+    status = "ok" if all(v.startswith("ok") for v in checks.values()) else "degraded"
+    return {"status": status, "checks": checks, "build": build, "workers": workers}
 
 
 @app.post("/tasks/generate-content", dependencies=[Depends(verify_internal_secret)])

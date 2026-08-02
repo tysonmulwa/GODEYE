@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from celery import Celery
+from celery.worker.control import control_command
 
 from .config import get_settings
 
@@ -66,3 +67,49 @@ app.conf.update(
         },
     },
 )
+
+
+# The worker is the service that actually publishes, and it is the one service
+# that could not be asked what it was running. /health covers the engine web
+# process, but that is a different Railway service off the same image, and the
+# two deploy independently — so a healthy web build says nothing about the code
+# doing the work.
+#
+# A control command answers from inside the worker process itself, and every
+# node replies separately. That matters: a broadcast reveals how many workers
+# are consuming the queue, which a build hash cannot. A container left over from
+# an earlier deploy keeps taking tasks, so publishes land on old code at random
+# and the symptom comes and goes for no visible reason.
+@control_command()
+def build_info(state) -> dict:  # noqa: ANN001 — Celery hands in its worker state
+    sha = get_settings().railway_git_commit_sha
+    return {"build": sha[:8] if sha else "unknown"}
+
+
+def worker_builds(timeout: float = 2.0) -> list[dict]:
+    """Ask every live worker which build it is running.
+
+    Returns one entry per node. An empty list means nothing is consuming the
+    queue — scheduled posts would sit unpublished forever, and until now that
+    looked identical to a healthy system with nothing due.
+    """
+    try:
+        # Own the connection rather than letting broadcast open one. Kombu
+        # retries a refused broker with a backoff, which turned a health check
+        # into a 13 second request — and a health check that hangs is one more
+        # thing to debug during an outage. One attempt, then report.
+        with app.connection_for_write(connect_timeout=timeout) as conn:
+            conn.ensure_connection(max_retries=0, timeout=timeout)
+            replies = (
+                app.control.broadcast("build_info", reply=True, timeout=timeout, connection=conn)
+                or []
+            )
+    except Exception as e:  # noqa: BLE001 — an unreachable broker is a report, not a crash
+        return [{"node": "unknown", "build": "unknown", "error": str(e)}]
+
+    nodes: list[dict] = []
+    for reply in replies:
+        for node, payload in reply.items():
+            build = payload.get("build", "unknown") if isinstance(payload, dict) else "unknown"
+            nodes.append({"node": node, "build": build})
+    return sorted(nodes, key=lambda n: n["node"])
