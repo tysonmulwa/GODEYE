@@ -26,10 +26,12 @@ export class HealthController {
     const api = { status: "ok", build: sha ? sha.slice(0, 8) : "unknown" };
 
     try {
-      // ?render=1 makes the worker encode a throwaway slideshow. Opt-in: it
-      // costs real CPU, and it is the only way to tell a container that has
-      // ffmpeg from one that can finish a render.
-      const engine = await this.engine.health(render === "1" || render === "true");
+      // ?render=1 queues a throwaway encode on a worker and reads the result
+      // on a later call — the encode outlives the request, so it cannot be
+      // answered inline. ?render=refresh discards a cached result first.
+      // Opt-in: it costs real CPU, and it is the only way to tell a container
+      // that has ffmpeg from one that can finish a render.
+      const engine = await this.engine.health(render ?? "");
       return { status: engine.status === "ok" ? "ok" : "degraded", api, engine };
     } catch (e) {
       // The API being up while the engine is not is a normal state worth

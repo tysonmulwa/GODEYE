@@ -7,7 +7,7 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import text
 
-from .celery_app import render_checks, worker_builds
+from .celery_app import worker_builds
 from .config import get_settings
 from .db import get_engine
 
@@ -73,7 +73,7 @@ class GenerateVideoRequest(BaseModel):
 
 
 @app.get("/health")
-def health(render: bool = False) -> dict:
+def health(render: str = "") -> dict:
     # The build marker matters as much as the checks. Working out whether a
     # change had reached the worker meant reading the shape of the rows it
     # produced, which is slow and easy to get wrong.
@@ -134,16 +134,29 @@ def health(render: bool = False) -> dict:
     # health poll. Worth having because a working ffmpeg binary and a container
     # that can finish an encode are different things, and only the second one
     # decides whether a post arrives with sound.
-    if render and workers and not errors:
-        renders = render_checks()
-        result["render"] = renders
-        failed = [r for r in renders if not r.get("ok")]
-        checks["render"] = (
-            "ok"
-            if not failed
-            else "error: "
-            + ", ".join(f"{r.get('node')}: {r.get('error', 'no audio in output')}" for r in failed)
-        )
+    #
+    # Asked for and read separately, because the encode outlives the request:
+    # the edge closes a connection at 100 seconds, and answering inline lost a
+    # result the worker had already produced.
+    if render:
+        from .tasks.diagnostics import read_render_result, start_render_selftest
+
+        # A pass cached from before a change is worse than no answer at all.
+        stored = None if render == "refresh" else read_render_result()
+        if stored is None:
+            queued = start_render_selftest()
+            result["render"] = {
+                "status": "running" if queued else "could not queue — is a worker up?",
+                "hint": "ask again in a minute for the result",
+            }
+            checks["render"] = "ok (pending)" if queued else "error: could not queue"
+        else:
+            result["render"] = stored
+            checks["render"] = (
+                "ok"
+                if stored.get("ok")
+                else f"error: {stored.get('error') or 'render produced no audio'}"
+            )
 
     result["status"] = "ok" if all(v.startswith("ok") for v in checks.values()) else "degraded"
     return result

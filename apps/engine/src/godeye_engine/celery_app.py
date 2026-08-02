@@ -21,6 +21,7 @@ app = Celery(
         "godeye_engine.tasks.image",
         "godeye_engine.tasks.video",
         "godeye_engine.tasks.seo",
+        "godeye_engine.tasks.diagnostics",
     ],
 )
 
@@ -88,41 +89,6 @@ def build_info(state) -> dict:  # noqa: ANN001 — Celery hands in its worker st
     # slideshow falls back to a silent photo carousel when ffmpeg is missing,
     # so from the outside that failure is invisible.
     return {"build": sha[:8] if sha else "unknown", "ffmpeg": _ffmpeg_status()}
-
-
-@control_command()
-def render_check(state) -> dict:  # noqa: ANN001 — Celery hands in its worker state
-    """Prove this worker can encode, by making it encode.
-
-    A working ffmpeg binary is not the same as a container with the memory and
-    time to run it. Publishing already exercised this, but reported success
-    either way.
-    """
-    from .media.selftest import render_selftest
-
-    return render_selftest()
-
-
-def render_checks(timeout: float = 180.0) -> list[dict]:
-    """Run the render self-test on every worker. Slow by nature — it encodes."""
-    try:
-        with app.connection_for_write(connect_timeout=5.0) as conn:
-            conn.ensure_connection(max_retries=0, timeout=5.0)
-            replies = (
-                app.control.broadcast("render_check", reply=True, timeout=timeout, connection=conn)
-                or []
-            )
-    except Exception as e:  # noqa: BLE001
-        return [{"node": "unknown", "ok": False, "error": str(e)}]
-
-    nodes: list[dict] = []
-    for reply in replies:
-        for node, payload in reply.items():
-            entry = dict(payload) if isinstance(payload, dict) else {"error": str(payload)}
-            entry["node"] = node
-            entry.setdefault("ok", False)
-            nodes.append(entry)
-    return sorted(nodes, key=lambda n: n["node"])
 
 
 def _ffmpeg_status() -> str:

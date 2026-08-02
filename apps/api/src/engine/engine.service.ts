@@ -136,16 +136,16 @@ export class EngineService {
     return this.get(`/intel/best-times?${params}`);
   }
 
-  async health(render = false): Promise<{
+  async health(render = ""): Promise<{
     status: string;
     build?: string;
     checks?: Record<string, string>;
     /** One entry per live Celery worker. Empty means nothing is publishing. */
     workers?: { node: string; build: string; ffmpeg?: string }[];
     /** Only present when asked for — it encodes video to get the answer. */
-    render?: Record<string, unknown>[];
+    render?: Record<string, unknown>;
   }> {
-    return this.get(`/health${render ? "?render=true" : ""}`);
+    return this.get(`/health${render ? `?render=${encodeURIComponent(render)}` : ""}`);
   }
 
   private async post<T>(path: string, body: unknown): Promise<T> {
