@@ -195,6 +195,22 @@ def enqueue_generate_image(request: GenerateImageRequest) -> dict:
     return {"taskId": task.id}
 
 
+class ImportProductsRequest(BaseModel):
+    orgId: str
+    url: str | None = None
+    limit: int = Field(default=40, ge=1, le=200)
+
+
+@app.post("/tasks/import-products", dependencies=[Depends(verify_internal_secret)])
+def enqueue_import_products(request: ImportProductsRequest) -> dict:
+    from .tasks.products import import_products
+
+    task = import_products.delay(
+        org_id=request.orgId, url=request.url, limit=request.limit
+    )
+    return {"taskId": task.id}
+
+
 class RunSeoAuditRequest(BaseModel):
     agentRunId: str
     orgId: str

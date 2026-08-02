@@ -237,6 +237,16 @@ model BusinessProfile {
   productImportConsentAt DateTime?
   productImportConsentBy String?
   lastProductImportAt    DateTime?
+  /// Re-read the shop on a schedule, so a new product does not wait for
+  /// someone to remember to press import.
+  productAutoImport      Boolean    @default(false)
+  /// Post what the import finds. Separate from importing on purpose: reading
+  /// your own catalogue and publishing from it are different decisions, and
+  /// one is far easier to undo than the other.
+  productAutoPost        Boolean    @default(false)
+  /// Where those posts go. Empty means nowhere, which is why auto-post cannot
+  /// be switched on without choosing.
+  productPostPlatforms   Platform[] @default([])
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 

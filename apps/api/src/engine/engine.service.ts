@@ -63,6 +63,15 @@ export class EngineService {
     return this.post("/tasks/run-seo-audit", payload);
   }
 
+  /** Read a workspace's shop. The engine re-checks consent before fetching. */
+  async enqueueImportProducts(payload: {
+    orgId: string;
+    url?: string;
+    limit: number;
+  }): Promise<{ taskId: string }> {
+    return this.post("/tasks/import-products", payload);
+  }
+
   /** Re-crawl the pages an audit's applied fixes touched and record the verdict. */
   async enqueueVerifySeoFixes(payload: {
     orgId: string;

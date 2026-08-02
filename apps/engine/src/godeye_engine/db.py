@@ -245,6 +245,10 @@ BusinessProfile = Table(
     Column("productImportConsentAt", DateTime(timezone=False)),
     Column("productImportConsentBy", String),
     Column("lastProductImportAt", DateTime(timezone=False)),
+    Column("productAutoImport", Boolean),
+    Column("productAutoPost", Boolean),
+    # Prisma owns this as a native enum array; see PgEnumArray.
+    Column("productPostPlatforms", PgEnumArray("Platform")),
 )
 
 Product = Table(

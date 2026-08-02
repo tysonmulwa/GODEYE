@@ -212,6 +212,36 @@ export const slideshowLengthSchema = z
   .union([z.literal(30), z.literal(45), z.literal(60)])
   .default(30);
 
+// ---------- Product catalogue ----------
+
+export const productSettingsSchema = z
+  .object({
+    // Reading a shop's own website is opt-in. Sending false withdraws it.
+    importConsent: z.boolean(),
+    autoImport: z.boolean().default(false),
+    autoPost: z.boolean().default(false),
+    postPlatforms: z.array(platformSchema).max(10).default([]),
+  })
+  .refine((value) => !value.autoPost || value.postPlatforms.length > 0, {
+    // Posting to nowhere looks identical to a feature that silently does not
+    // work, and this one publishes on its own.
+    message: "Choose where product posts should go before turning auto-post on",
+    path: ["postPlatforms"],
+  })
+  .refine((value) => value.importConsent || (!value.autoImport && !value.autoPost), {
+    message: "Product import has to be allowed before it can run on a schedule",
+    path: ["importConsent"],
+  });
+export type ProductSettingsInput = z.infer<typeof productSettingsSchema>;
+
+export const importProductsSchema = z.object({
+  // Defaults to the workspace's own website; a different URL still has to sit
+  // under the consent the workspace gave.
+  url: z.string().url().optional(),
+  limit: z.number().int().min(1).max(200).default(40),
+});
+export type ImportProductsInput = z.infer<typeof importProductsSchema>;
+
 export const renderOptionsSchema = z.object({
   slideshowSeconds: slideshowLengthSchema,
   // TikTok ignores this — its API takes no still post that can carry audio.

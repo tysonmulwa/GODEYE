@@ -14,6 +14,7 @@ import { MembersModule } from "./members/members.module";
 import { RealtimeModule } from "./realtime/realtime.module";
 import { SchedulingModule } from "./scheduling/scheduling.module";
 import { SiteVerificationController } from "./common/site-verification.controller";
+import { ProductsModule } from "./products/products.module";
 import { SeoModule } from "./seo/seo.module";
 import { WebhooksModule } from "./webhooks/webhooks.module";
 
@@ -30,6 +31,7 @@ import { WebhooksModule } from "./webhooks/webhooks.module";
     MediaModule,
     MembersModule,
     SchedulingModule,
+    ProductsModule,
     SeoModule,
     RealtimeModule,
     WebhooksModule,
