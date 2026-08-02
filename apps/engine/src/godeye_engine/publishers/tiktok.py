@@ -201,14 +201,34 @@ class TikTokPublisher(BasePublisher):
             for url in payload.media_urls[:PHOTO_LIMIT]:
                 fetched = download_media(url)
                 if fetched is None:
+                    # Every abandon path says why. A post that goes out silent
+                    # looks exactly like one that was never meant to have sound,
+                    # and these two returned nothing at all to the log.
+                    logger.warning(
+                        "TikTok: could not fetch image %s, posting photos without sound", url
+                    )
                     return None
                 images.append(fetched[0])
             music = download_media(payload.music_url)
-            if music is None or not images:
+            if music is None:
+                logger.warning(
+                    "TikTok: could not fetch the brand track %s, posting photos without sound",
+                    payload.music_url,
+                )
                 return None
+            if not images:
+                logger.warning("TikTok: no images to build a slideshow from")
+                return None
+            logger.info(
+                "TikTok: building a slideshow from %d image(s) and %.1f MB of audio",
+                len(images), len(music[0]) / 1_048_576,
+            )
             return slideshow.build_slideshow(images, music[0])
         except Exception as e:  # noqa: BLE001 — a silent post beats no post
-            logger.warning("TikTok slideshow build failed, posting photos instead: %s", e)
+            logger.warning(
+                "TikTok slideshow build failed, posting photos instead: %s: %s",
+                type(e).__name__, e,
+            )
             return None
 
     def _publish_photos(self, headers: dict[str, str], payload: PostPayload) -> PublishResult:

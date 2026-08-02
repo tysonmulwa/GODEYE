@@ -885,6 +885,36 @@ class TestTikTokSlideshow:
         )
         assert any("content/init" in u for u in seen), "expected the photo fallback"
 
+    def test_every_fallback_to_silence_says_why(self, monkeypatch, caplog):
+        """A post that goes out silent is indistinguishable from one that was
+        never meant to have sound. Two paths — a failed image fetch and a failed
+        track fetch — abandoned the slideshow without logging anything, which is
+        what made this take hours to see."""
+        import logging
+
+        for broken, expected in [("https://cdn/a.jpg", "image"), ("https://cdn/track.mp3", "track")]:
+            self._publisher(monkeypatch)
+            monkeypatch.setattr(
+                tiktok_mod,
+                "download_media",
+                lambda url, _b=broken: None if url == _b else (b"raw", "image/jpeg"),
+            )
+            monkeypatch.setattr(
+                TikTokPublisher, "_post",
+                lambda self, url, **kw: http_response(200, {"data": {"publish_id": "p1"}}),
+            )
+            caplog.clear()
+            with caplog.at_level(logging.WARNING):
+                TikTokPublisher().publish(
+                    self.CREDS,
+                    PostPayload(
+                        text="hi", media_urls=self.PHOTOS, music_url="https://cdn/track.mp3"
+                    ),
+                )
+            assert any(expected in r.getMessage() for r in caplog.records), (
+                f"a failed {expected} fetch fell back to a silent post without saying so"
+            )
+
     def test_direct_is_the_default_so_posts_go_out_unattended(self, monkeypatch):
         monkeypatch.delenv("TIKTOK_POST_MODE", raising=False)
         monkeypatch.delenv("TIKTOK_AUDITED", raising=False)

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Any
@@ -14,6 +15,8 @@ from tenacity import (
     wait_exponential,
 )
 
+logger = logging.getLogger(__name__)
+
 
 def download_media(url: str) -> tuple[bytes, str] | None:
     """Fetch media bytes + content-type so a publisher can upload them directly.
@@ -25,9 +28,14 @@ def download_media(url: str) -> tuple[bytes, str] | None:
     """
     try:
         response = httpx.get(url, timeout=30, follow_redirects=True)
-    except httpx.HTTPError:
+    except httpx.HTTPError as e:
+        # None is the caller's signal to fall back, but on its own it says
+        # nothing about why — which left a failed fetch indistinguishable from
+        # media that was never there.
+        logger.warning("Media fetch failed for %s: %s: %s", url, type(e).__name__, e)
         return None
     if response.status_code != 200:
+        logger.warning("Media fetch for %s returned HTTP %d", url, response.status_code)
         return None
     return response.content, response.headers.get("content-type", "application/octet-stream")
 
