@@ -198,6 +198,27 @@ export function GodeyeSpinner({
   );
 }
 
+/**
+ * The whole screen while the app works out who you are.
+ *
+ * This is the first thing anyone sees on the URL, before any page has decided
+ * what to render — so it was a generic grey spinner on white, which belongs to
+ * no product in particular. The crest costs the same and says whose app is
+ * loading.
+ *
+ * Deliberately not the accent colour: on a bare screen a large purple mark
+ * reads as an alert rather than as a wait, and this appears before anything is
+ * wrong. Ink keeps it calm and works in both themes.
+ */
+export function GodeyeBootScreen() {
+  return (
+    <div className="flex h-svh items-center justify-center bg-surface">
+      <GodeyeSpinner size={56} className="text-ink-2" />
+      <span className="sr-only">Loading GODEYE</span>
+    </div>
+  );
+}
+
 /** Stacked crest + wordmark for hero placements (auth pages). */
 export function GodeyeCrest({
   size = 112,

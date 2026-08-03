@@ -2,8 +2,8 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
+import { GodeyeBootScreen } from "@/components/logo";
 import { useAuthStore } from "@/lib/auth-store";
-import { Loader2 } from "lucide-react";
 
 export default function Home() {
   const router = useRouter();
@@ -16,8 +16,6 @@ export default function Home() {
   }, [status, org, router]);
 
   return (
-    <div className="flex h-svh items-center justify-center">
-      <Loader2 className="h-6 w-6 animate-spin text-ink-3" />
-    </div>
+    <GodeyeBootScreen />
   );
 }

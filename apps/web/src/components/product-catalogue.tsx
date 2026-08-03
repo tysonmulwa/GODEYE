@@ -205,7 +205,7 @@ export function ProductCatalogueCard() {
                     className={cx(
                       "rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors",
                       settings.postPlatforms.includes(platform)
-                        ? "border-accent bg-accent-soft text-ink-1"
+                        ? "border-accent bg-accent-soft text-ink"
                         : "border-line text-ink-2 hover:border-ink-3",
                     )}
                   >
@@ -256,7 +256,7 @@ export function ProductCatalogueCard() {
                       clearAll.mutate();
                     }
                   }}
-                  className="text-[12px] text-ink-3 underline hover:text-ink-1"
+                  className="text-[12px] text-ink-3 underline hover:text-ink"
                 >
                   Remove all
                 </button>
@@ -279,7 +279,10 @@ export function ProductCatalogueCard() {
                         e.preventDefault();
                         removeProduct.mutate(product.id);
                       }}
-                      className="absolute right-1 top-1 z-10 rounded-full bg-surface-1/90 p-1 text-ink-3 shadow-sm hover:text-red-500"
+                      // surface-2 is the card colour; surface-1 does not exist,
+                      // so this chip was transparent and the control nearly
+                      // invisible against a photograph.
+                      className="absolute right-1 top-1 z-10 rounded-full bg-surface-2/90 p-1 text-ink-2 shadow-sm hover:text-red-500"
                     >
                       <X className="h-3.5 w-3.5" />
                     </button>

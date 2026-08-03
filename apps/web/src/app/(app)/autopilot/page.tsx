@@ -394,7 +394,7 @@ export default function AutopilotPage() {
                     className={cx(
                       "flex-1 rounded-lg border px-3 py-2 font-mono text-sm transition-colors",
                       form.slideshowSeconds === seconds
-                        ? "border-accent bg-accent-soft text-ink-1"
+                        ? "border-accent bg-accent-soft text-ink"
                         : "border-line text-ink-2 hover:border-ink-3",
                     )}
                   >

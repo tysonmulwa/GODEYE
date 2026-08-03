@@ -1,8 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { Loader2 } from "lucide-react";
-import { GodeyeEmblem } from "@/components/logo";
+import { GodeyeBootScreen, GodeyeEmblem } from "@/components/logo";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { businessProfileSchema } from "@godeye/shared";
@@ -60,9 +59,7 @@ export default function OnboardingPage() {
 
   if (status !== "authed") {
     return (
-      <div className="flex h-svh items-center justify-center">
-        <Loader2 className="h-6 w-6 animate-spin text-ink-3" />
-      </div>
+      <GodeyeBootScreen />
     );
   }
 

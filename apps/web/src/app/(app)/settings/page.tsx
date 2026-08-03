@@ -368,7 +368,7 @@ function BrandKitCard() {
              TikTok in silence without anything having warned it would. The
              brand kit is per workspace, so a track on one says nothing here. */
           <div className="mt-2 rounded-lg border border-line bg-surface-2 p-3">
-            <p className="text-xs font-medium text-ink-1">
+            <p className="text-xs font-medium text-ink">
               No track, so TikTok posts from this workspace go out silent.
             </p>
             <p className="mt-1 text-xs leading-relaxed text-ink-3">

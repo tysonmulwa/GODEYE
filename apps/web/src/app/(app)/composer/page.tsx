@@ -328,7 +328,7 @@ export default function ComposerPage() {
                     Photos are published as a slideshow carrying your background
                     track. Without one there is nothing to carry, and TikTok&rsquo;s
                     own music library is only reachable from inside their app.{" "}
-                    <Link href="/settings" className="underline hover:text-ink-1">
+                    <Link href="/settings" className="underline hover:text-ink">
                       Add a track in Settings
                     </Link>
                     .
@@ -592,7 +592,7 @@ export default function ComposerPage() {
                             "flex-1 rounded-lg border px-3 py-2 font-mono text-sm transition-colors",
                             "disabled:cursor-not-allowed disabled:opacity-40",
                             slideshowSeconds === seconds
-                              ? "border-accent bg-accent-soft text-ink-1"
+                              ? "border-accent bg-accent-soft text-ink"
                               : "border-line text-ink-2 hover:border-ink-3",
                           )}
                         >

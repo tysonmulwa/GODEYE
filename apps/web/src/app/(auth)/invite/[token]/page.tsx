@@ -1,10 +1,10 @@
 "use client";
 
-import { Loader2 } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { AUTH_URL, ApiError } from "@/lib/api";
 import { useAuthStore } from "@/lib/auth-store";
+import { GodeyeSpinner } from "@/components/logo";
 import { Badge, Button, Card, ErrorNote, Input, Label, PasswordInput } from "@/components/ui";
 
 interface InvitePreview {
@@ -96,7 +96,7 @@ export default function InvitePage() {
   if (!preview) {
     return (
       <div className="flex justify-center py-16">
-        <Loader2 className="h-6 w-6 animate-spin text-ink-3" />
+        <GodeyeSpinner size={34} className="text-ink-2" />
       </div>
     );
   }

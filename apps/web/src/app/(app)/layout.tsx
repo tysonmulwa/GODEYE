@@ -7,7 +7,6 @@ import {
   Gauge,
   LayoutDashboard,
   Link2,
-  Loader2,
   LogOut,
   Menu,
   PenSquare,
@@ -21,7 +20,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { CommandPalette } from "@/components/command-palette";
-import { GodeyeLockup } from "@/components/logo";
+import { GodeyeBootScreen, GodeyeLockup } from "@/components/logo";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { cx } from "@/components/ui";
 import { api, AUTH_URL } from "@/lib/api";
@@ -122,9 +121,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   if (status !== "authed") {
     return (
-      <div className="flex h-svh items-center justify-center">
-        <Loader2 className="h-6 w-6 animate-spin text-ink-3" />
-      </div>
+      <GodeyeBootScreen />
     );
   }
 
