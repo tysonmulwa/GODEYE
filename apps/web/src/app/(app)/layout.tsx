@@ -231,9 +231,12 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           whole page to scroll sideways on a phone. */}
       <main className="flex min-w-0 flex-1 flex-col lg:overflow-y-auto">
         {/* Phone-only top bar — the only way to reach the nav below lg.
-            Opaque, not translucent: a backdrop-blur on a sticky bar is
-            re-composited on every scroll frame, which is visible stutter on a
-            mid-range phone and buys nothing the solid fill doesn't. */}
+            This was deliberately opaque, because a backdrop-blur on a sticky
+            bar is re-composited on every scroll frame and that stutters on a
+            mid-range phone. It is glass now because content passing under it
+            is the clearest place the effect reads, and it is one short bar
+            rather than a full-height panel. Worth re-checking on a real phone;
+            if it stutters, this is the first thing to make solid again. */}
         <header className="glass-strong sticky top-0 z-30 flex items-center gap-2 rounded-none border-x-0 border-t-0 px-4 py-3 lg:hidden">
           <button
             type="button"

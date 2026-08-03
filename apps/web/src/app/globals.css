@@ -51,9 +51,9 @@
      translucent rather than tinted-opaque, and the canvas carries the colour
      they pick up. The top edge is lit and the bottom is not, which is what
      reads as a pane standing slightly off the page rather than printed on it. */
-  --glass: rgb(255 255 255 / 0.62);
-  --glass-strong: rgb(255 255 255 / 0.82);
-  --glass-edge: rgb(255 255 255 / 0.85);
+  --glass: rgb(255 255 255 / 0.42);
+  --glass-strong: rgb(255 255 255 / 0.58);
+  --glass-edge: rgb(255 255 255 / 0.9);
   --glass-line: rgb(16 19 25 / 0.07);
   --glass-shadow: 0 1px 2px rgb(16 19 25 / 0.04), 0 8px 24px -6px rgb(16 19 25 / 0.10);
   --glass-shadow-lifted: 0 2px 4px rgb(16 19 25 / 0.05), 0 18px 44px -10px rgb(16 19 25 / 0.16);
@@ -61,9 +61,9 @@
   /* The colour a pane of glass actually samples. Three washes rather than one
      so the tint changes across the page — a single flat gradient blurs back to
      something indistinguishable from a solid fill. */
-  --wash-1: rgb(99 102 241 / 0.20);
-  --wash-2: rgb(56 189 248 / 0.14);
-  --wash-3: rgb(168 85 247 / 0.11);
+  --wash-1: rgb(99 102 241 / 0.28);
+  --wash-2: rgb(56 189 248 / 0.20);
+  --wash-3: rgb(168 85 247 / 0.16);
 }
 
 .dark {
@@ -87,18 +87,18 @@
   /* On black, glass is a lift rather than a wash: a lighter pane, a hairline
      of light along its top edge, and a shadow that mostly does not read. The
      white edge is what stops a translucent panel dissolving into the canvas. */
-  --glass: rgb(28 31 38 / 0.58);
-  --glass-strong: rgb(20 22 28 / 0.86);
-  --glass-edge: rgb(255 255 255 / 0.10);
-  --glass-line: rgb(255 255 255 / 0.07);
+  --glass: rgb(30 34 42 / 0.38);
+  --glass-strong: rgb(22 25 32 / 0.55);
+  --glass-edge: rgb(255 255 255 / 0.14);
+  --glass-line: rgb(255 255 255 / 0.10);
   --glass-shadow: 0 1px 2px rgb(0 0 0 / 0.5), 0 10px 30px -8px rgb(0 0 0 / 0.7);
   --glass-shadow-lifted: 0 2px 6px rgb(0 0 0 / 0.55), 0 22px 50px -12px rgb(0 0 0 / 0.85);
 
   /* On true black these are the only colour on the page, so they carry more
      weight than their light counterparts without ever competing with text. */
-  --wash-1: rgb(99 102 241 / 0.26);
-  --wash-2: rgb(56 189 248 / 0.15);
-  --wash-3: rgb(168 85 247 / 0.16);
+  --wash-1: rgb(99 102 241 / 0.34);
+  --wash-2: rgb(56 189 248 / 0.20);
+  --wash-3: rgb(168 85 247 / 0.22);
 }
 
 html,
@@ -164,8 +164,8 @@ body {
    saturate lifts the colour the blur would otherwise wash out. */
 .glass {
   background: var(--glass);
-  backdrop-filter: blur(20px) saturate(180%);
-  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  backdrop-filter: blur(30px) saturate(190%);
+  -webkit-backdrop-filter: blur(30px) saturate(190%);
   border: 1px solid var(--glass-line);
   box-shadow:
     inset 0 1px 0 0 var(--glass-edge),
@@ -176,8 +176,8 @@ body {
    anything with text on the far side of it. */
 .glass-strong {
   background: var(--glass-strong);
-  backdrop-filter: blur(28px) saturate(180%);
-  -webkit-backdrop-filter: blur(28px) saturate(180%);
+  backdrop-filter: blur(40px) saturate(190%);
+  -webkit-backdrop-filter: blur(40px) saturate(190%);
   border: 1px solid var(--glass-line);
   box-shadow:
     inset 0 1px 0 0 var(--glass-edge),
