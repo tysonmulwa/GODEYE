@@ -75,6 +75,37 @@ def _post(locked_at):
     }
 
 
+class TestTheClaimSurvivesTheDatabase:
+    """The check has to hold for values the database can actually return.
+
+    lockedAt is TIMESTAMP(3) and utcnow() carries microseconds, so a claim
+    dispatched at .885898 comes back as .885000. Compared with ==, that is
+    every task deciding it had been superseded by itself — publishing stopped
+    entirely, and the first version of these tests missed it because they used
+    a whole-second timestamp Postgres would never have altered.
+    """
+
+    def test_a_claim_truncated_to_milliseconds_still_matches(self, monkeypatch):
+        dispatched = datetime(2026, 8, 3, 15, 47, 46, 885898)
+        stored = dispatched.replace(microsecond=885000)  # what Postgres keeps
+        monkeypatch.setattr(scheduler, "get_session", lambda: FakeSession(_post(stored)))
+        result = publish_post("sp1", claimed_at=dispatched.isoformat())
+        assert result.get("status") != "superseded"
+
+    def test_a_genuinely_newer_claim_is_still_caught(self, monkeypatch):
+        """The tolerance must not be so loose it stops catching the thing it
+        is for. A re-claim is minutes away."""
+        dispatched = datetime(2026, 8, 3, 15, 47, 46, 885898)
+        requeued = dispatched + timedelta(minutes=30)
+        monkeypatch.setattr(scheduler, "get_session", lambda: FakeSession(_post(requeued)))
+        assert publish_post("sp1", claimed_at=dispatched.isoformat()) == {"status": "superseded"}
+
+    def test_the_tolerance_is_far_below_the_reap_window(self):
+        from godeye_engine.tasks.scheduler import CLAIM_TOLERANCE_SEC
+
+        assert CLAIM_TOLERANCE_SEC < STUCK_POST_MINUTES * 60 / 100
+
+
 class TestAStaleTaskStandsDown:
     def test_a_task_from_a_superseded_claim_does_not_publish(self, monkeypatch):
         """The post was re-queued and re-claimed while this copy waited. Its

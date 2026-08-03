@@ -52,6 +52,11 @@ PUBLISH_HARD_LIMIT_SEC = 10 * 60
 # long a genuinely lost post waits.
 STUCK_POST_MINUTES = 30
 
+# How far a claim time may drift and still be the same claim. This exists
+# because the database keeps milliseconds and Python hands it microseconds;
+# a re-claim is minutes away, so a second is unambiguous.
+CLAIM_TOLERANCE_SEC = 1.0
+
 # Networks whose API refuses a post with no media. Everywhere else text alone
 # is a legitimate post, so nothing is borrowed for them.
 MEDIA_REQUIRED_PLATFORMS = ("TIKTOK", "INSTAGRAM")
@@ -139,10 +144,19 @@ def publish_post(scheduled_post_id: str, claimed_at: str | None = None) -> dict:
         # The claim time makes the copies distinguishable: re-queuing moves
         # lockedAt, so only the task dispatched by the most recent claim
         # matches, and the rest stand down.
+        #
+        # Compared with a tolerance, not for equality. utcnow() carries
+        # microseconds and lockedAt is TIMESTAMP(3), so Postgres truncates the
+        # value on the way in: a claim dispatched at .885898 reads back as
+        # .885000 and never matches itself. Written as == this refused every
+        # task, which stopped publishing altogether. Re-claims are minutes
+        # apart, so a second of slack tells them apart with room to spare.
         if claimed_at and post["lockedAt"] is not None:
-            if post["lockedAt"] != datetime.fromisoformat(claimed_at):
+            drift = abs((post["lockedAt"] - datetime.fromisoformat(claimed_at)).total_seconds())
+            if drift > CLAIM_TOLERANCE_SEC:
                 logger.info(
-                    "Publish %s superseded by a newer claim; standing down", scheduled_post_id
+                    "Publish %s superseded by a newer claim (%.1fs newer); standing down",
+                    scheduled_post_id, drift,
                 )
                 return {"status": "superseded"}
 
