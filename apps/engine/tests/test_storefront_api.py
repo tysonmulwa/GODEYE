@@ -120,15 +120,26 @@ class TestReading:
         assert product.image_url == "https://cdn/perfume.jpg"
         assert product.source == "storefront_api"
 
-    def test_the_shops_own_sale_columns_are_never_read(self, monkeypatch):
-        """The table carries on_sale and original_price for its own pages.
-        Announcing a reduction lawfully requires the lowest price of the last
-        30 days, and a "was" price is not that — so these are left alone."""
+    def test_the_former_price_is_captured_as_evidence(self, monkeypatch):
+        """The table carries original_price for the shop's own pages. It is
+        read but never automatically published: whether a post may say it
+        depends on where the shop sells, which is decided per post rather than
+        by whether the number happens to be here."""
         serving(monkeypatch, {"/products": httpx.Response(200, json=[ROW])})
         [product] = fetch_products(self._backend(), "https://shop.example")
-        serialised = str(product.as_dict())
-        assert "12000" not in serialised, "leaked a former price into the catalogue"
         assert product.price == Decimal("8500")
+        assert product.compare_at_price == Decimal("12000")
+
+    def test_capturing_it_does_not_by_itself_permit_saying_it(self, monkeypatch):
+        """The evidence existing and the claim being lawful are two different
+        questions, and holding the number must not answer the second."""
+        from godeye_engine.products.compliance import price_comparison_allowed
+
+        serving(monkeypatch, {"/products": httpx.Response(200, json=[ROW])})
+        [product] = fetch_products(self._backend(), "https://shop.example")
+        assert not price_comparison_allowed(
+            "Munich, Germany", product.compare_at_price, product.price
+        )
 
     def test_stock_is_only_reported_when_the_row_says(self, monkeypatch):
         """Guessing "in stock" would put a claim in a post nothing supports."""

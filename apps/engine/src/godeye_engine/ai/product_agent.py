@@ -39,16 +39,18 @@ ANGLES = [
 ]
 
 SYSTEM_PROMPT = """You write short social posts about individual products for
-real shops, most of them selling into the EU and UK.
+real shops, selling in many different countries.
 
 Never write any of the following. They are not stylistic preferences; each is
-prohibited by consumer law in every EU member state, and the shop carries the
-consequence.
+prohibited by consumer law somewhere these posts will be read, and the shop
+carries the consequence.
 
-1. Any price reduction, discount, saving or sale claim — "20% off", "was
-   £99", "now only", "save €30", "sale now on", "RRP". Announcing a reduction
-   legally requires stating the lowest price of the previous 30 days, and that
-   history does not exist here.
+1. Any price reduction, discount, saving or sale claim — "20% off", "now
+   only", "save €30", "sale now on", "RRP". Announcing a reduction legally
+   requires stating the lowest price of the previous 30 days in the EU and UK,
+   and that history does not exist here. If you are given a recorded former
+   price you may state it once as a plain fact, and only in the words allowed
+   there; you are given it precisely when that is lawful for this shop.
 2. Any claim of limited stock or limited time — "only 3 left", "almost gone",
    "selling fast", "hurry", "ends tonight", "while stocks last", "act now".
    Falsely stating limited availability is blacklisted outright. You are not
@@ -83,11 +85,19 @@ class ProductPost:
 
 
 def build_prompt(product: dict[str, Any], profile: dict[str, Any], angle: str,
-                 price_text: str | None) -> str:
+                 price_text: str | None, was_text: str | None = None) -> str:
     lines = [
         f"Product: {product['title']}",
         f"Price: {price_text}" if price_text else "Price: not shown in this post",
     ]
+    if was_text:
+        # Only ever present when both the market and the shop's own record
+        # allow it, so the model may state it plainly.
+        lines.append(
+            f"This shop's recorded former price: {was_text}. You may say it was "
+            f"this before, exactly once, as a plain fact. Do not call it a sale, "
+            f"a deal, or a limited offer, and do not compute a percentage."
+        )
     if product.get("description"):
         lines.append(f"The shop's own description: {product['description'][:600]}")
     if product.get("availability"):
@@ -120,7 +130,8 @@ def build_prompt(product: dict[str, Any], profile: dict[str, Any], angle: str,
     return "\n".join(lines)
 
 
-def fallback_post(product: dict[str, Any], price_text: str | None) -> ProductPost:
+def fallback_post(product: dict[str, Any], price_text: str | None,
+                  was_text: str | None = None) -> ProductPost:
     """A caption built from the product's own facts, with nothing added.
 
     Used when the model will not stay inside the rules. Dull beats unlawful,
@@ -129,7 +140,6 @@ def fallback_post(product: dict[str, Any], price_text: str | None) -> ProductPos
     """
     # The title is a name, not a sentence, so it needs closing before the next
     # one starts: "Premium Perfume Luxurious fragrance" reads as one phrase.
-    title = product["title"].strip()
     title = product["title"].strip()
     lines = [title if title.endswith((".", "!", "?")) else f"{title}."]
     description = (product.get("description") or "").strip()
@@ -142,7 +152,9 @@ def fallback_post(product: dict[str, Any], price_text: str | None) -> ProductPos
     # the facts a reader scans for, and the shop already knows every one.
     details = []
     if price_text:
-        details.append(f"Price: {price_text}")
+        details.append(
+            f"Price: {price_text} (was {was_text})" if was_text else f"Price: {price_text}"
+        )
     variants = product.get("variants") or {}
     if variants.get("sizes"):
         details.append(f"Sizes: {', '.join(variants['sizes'])}")
@@ -184,7 +196,21 @@ def generate(product: dict[str, Any], profile: dict[str, Any], angle_index: int 
             locale,
         )
 
-    prompt = build_prompt(product, profile, angle, price_text)
+    # Saying what a thing used to cost needs both a market where that is
+    # lawful and a former price the shop actually recorded. Neither alone is
+    # enough, and the default when either is unknown is not to say it.
+    was_text = None
+    allow_comparison = price_text is not None and compliance.price_comparison_allowed(
+        profile.get("location"), product.get("compareAtPrice"), product.get("price")
+    )
+    if allow_comparison:
+        was_text = compliance.format_price(
+            product["compareAtPrice"],
+            product.get("currency") or compliance.currency_for_location(profile.get("location")),
+            locale,
+        )
+
+    prompt = build_prompt(product, profile, angle, price_text, was_text)
     last_violations: list[compliance.Violation] = []
 
     for attempt in range(MAX_ATTEMPTS):
@@ -202,7 +228,9 @@ def generate(product: dict[str, Any], profile: dict[str, Any], angle_index: int 
 
         # The whole post is checked, hashtags included: #SaleNowOn carries the
         # same claim as the sentence would.
-        last_violations = compliance.check(" ".join([body, *hashtags]))
+        last_violations = compliance.check(
+            " ".join([body, *hashtags]), allow_price_comparison=allow_comparison
+        )
         if not last_violations:
             return ProductPost(body=body, hashtags=hashtags, angle=angle, compliant=True)
 
@@ -223,7 +251,7 @@ def generate(product: dict[str, Any], profile: dict[str, Any], angle_index: int 
         "Falling back to the product's own words for %r after %d attempt(s): %s",
         product.get("title"), MAX_ATTEMPTS, compliance.describe(last_violations),
     )
-    return fallback_post(product, price_text)
+    return fallback_post(product, price_text, was_text)
 
 
 def _parse(text: str) -> dict[str, Any]:

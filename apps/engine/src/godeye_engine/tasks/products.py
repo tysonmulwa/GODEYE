@@ -43,6 +43,7 @@ def content_hash(product) -> str:
         product.title,
         product.description or "",
         str(product.price if product.price is not None else ""),
+        str(product.compare_at_price if product.compare_at_price is not None else ""),
         product.currency or "",
         product.image_url or "",
         product.availability or "",
@@ -229,6 +230,11 @@ def _store(org_id: str, products: list, now) -> tuple[int, int, int]:
                 "title": product.title[:500],
                 "description": product.description,
                 "price": Decimal(product.price) if product.price is not None else None,
+                "compareAtPrice": (
+                    Decimal(product.compare_at_price)
+                    if product.compare_at_price is not None
+                    else None
+                ),
                 "currency": product.currency,
                 "imageUrl": product.image_url,
                 "availability": product.availability,

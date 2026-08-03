@@ -41,6 +41,9 @@ class Product:
     url: str
     description: str | None = None
     price: Decimal | None = None
+    # What the shop says it used to cost. Evidence, not copy: stating it is
+    # lawful in some markets and not in others.
+    compare_at_price: Decimal | None = None
     currency: str | None = None
     image_url: str | None = None
     availability: str | None = None
@@ -58,6 +61,9 @@ class Product:
             "url": self.url,
             "description": self.description,
             "price": str(self.price) if self.price is not None else None,
+            "compareAtPrice": (
+                str(self.compare_at_price) if self.compare_at_price is not None else None
+            ),
             "currency": self.currency,
             "imageUrl": self.image_url,
             "availability": self.availability,

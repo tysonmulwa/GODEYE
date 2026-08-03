@@ -119,6 +119,9 @@ def shopify_feed(base_url: str, client: httpx.Client, limit: int = 250) -> list[
                 # Shopify sorts variants by position; the first is the one the
                 # product page shows by default.
                 price=parse_price(variants[0].get("price")) if variants else None,
+                compare_at_price=(
+                    parse_price(variants[0].get("compare_at_price")) if variants else None
+                ),
                 currency=None,  # products.json omits it; the shop's own pages carry it
                 image_url=images[0] if images else None,
                 availability=(

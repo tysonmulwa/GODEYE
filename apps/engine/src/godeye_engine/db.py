@@ -260,6 +260,7 @@ Product = Table(
     Column("title", String, nullable=False),
     Column("description", Text),
     Column("price", Numeric(14, 2)),
+    Column("compareAtPrice", Numeric(14, 2)),
     Column("currency", String),
     Column("imageUrl", String),
     Column("availability", String),

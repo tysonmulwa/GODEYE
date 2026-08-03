@@ -102,14 +102,72 @@ def expand_hashtags(text: str) -> str:
     return _CAMEL_BOUNDARY.sub(" ", text.replace("#", " ").replace("_", " "))
 
 
-def check(text: str) -> list[Violation]:
-    """Every rule the finished text breaks. Empty means it may be published."""
+# Where Article 6a binds the shop. Everywhere on this list, announcing a price
+# reduction requires stating the lowest price of the previous 30 days, and an
+# imported catalogue cannot supply that history.
+_STRICT_PRICING_MARKETS = (
+    "united kingdom", "britain", "england", "scotland", "wales", " uk",
+    "ireland", "germany", "france", "spain", "italy", "netherlands", "belgium",
+    "austria", "portugal", "finland", "sweden", "denmark", "poland", "czech",
+    "greece", "hungary", "romania", "bulgaria", "croatia", "slovakia",
+    "slovenia", "estonia", "latvia", "lithuania", "luxembourg", "malta",
+    "cyprus", "norway", "iceland",
+)
+
+
+def price_comparison_allowed(location: str | None, prior_price=None, price=None) -> bool:
+    """Whether this shop may say what a thing used to cost.
+
+    Two conditions, and both have to hold.
+
+    The shop must not sell into a market where Article 6a applies. There,
+    announcing a reduction requires the lowest price of the previous 30 days,
+    and a catalogue carries today's price and a "was" figure — which is not
+    the same thing and does not satisfy it.
+
+    And the shop must actually have recorded a former price that is higher
+    than the current one. Everywhere else in the world a "was" price still has
+    to be true; several jurisdictions require it to have really been charged.
+    The shop's own record is the best evidence available, and without it the
+    claim would be invented, which is the thing never permitted anywhere.
+
+    Unknown location is treated as strict. A shop that has not said where it
+    is could be in Berlin.
+    """
+    if location is None or not str(location).strip():
+        return False
+    text = f" {location.lower()}, "
+    if any(needle in text for needle in _STRICT_PRICING_MARKETS):
+        return False
+    if prior_price is None or price is None:
+        return False
+    try:
+        return Decimal(str(prior_price)) > Decimal(str(price))
+    except (InvalidOperation, TypeError, ValueError):
+        return False
+
+
+def check(text: str, allow_price_comparison: bool = False) -> list[Violation]:
+    """Every rule the finished text breaks. Empty means it may be published.
+
+    ``allow_price_comparison`` is off by default and deliberately so: the safe
+    answer is the one a caller gets by forgetting to think about it. It is only
+    ever turned on by price_comparison_allowed, which needs both a permissive
+    market and a real former price on record.
+
+    Invented scarcity is refused regardless. That is not a jurisdiction
+    question — we are not given a stock count or a deadline anywhere, so the
+    claim would be made up whoever is reading it.
+    """
     # Checked as written and as read: a claim does not stop being a claim for
     # having been packed into a hashtag.
     candidates = {text, expand_hashtags(text)}
     found: list[Violation] = []
     seen: set[str] = set()
-    for patterns, rule in ((SCARCITY_PATTERNS, SCARCITY_RULE), (DISCOUNT_PATTERNS, DISCOUNT_RULE)):
+    rules = [(SCARCITY_PATTERNS, SCARCITY_RULE)]
+    if not allow_price_comparison:
+        rules.append((DISCOUNT_PATTERNS, DISCOUNT_RULE))
+    for patterns, rule in rules:
         for pattern, explanation in patterns:
             for candidate in candidates:
                 match = pattern.search(candidate)
@@ -122,8 +180,8 @@ def check(text: str) -> list[Violation]:
     return found
 
 
-def is_publishable(text: str) -> bool:
-    return not check(text)
+def is_publishable(text: str, allow_price_comparison: bool = False) -> bool:
+    return not check(text, allow_price_comparison)
 
 
 # ------------------------------------------------------------------- pricing

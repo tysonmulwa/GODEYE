@@ -17,6 +17,7 @@ from godeye_engine.products.compliance import (
     check,
     format_price,
     is_publishable,
+    price_comparison_allowed,
     price_is_confirmable,
 )
 
@@ -77,6 +78,53 @@ class TestDiscountClaims:
 
     def test_stating_the_price_plainly_is_fine(self):
         assert is_publishable("Handmade leather boots, £129. Link in bio.")
+
+
+class TestWhoMaySayWhatAThingUsedToCost:
+    """Stating a former price is lawful in some markets and not others, and it
+    is only ever honest when the shop actually recorded one. Both conditions
+    have to hold, and the default when either is unknown is no."""
+
+    @pytest.mark.parametrize(
+        "location",
+        ["Berlin, Germany", "London, United Kingdom", "Dublin, Ireland", "Paris, France"],
+    )
+    def test_never_where_article_6a_applies(self, location):
+        """A "was" price is not the lowest price of the previous 30 days, so it
+        does not satisfy the rule there however true it is."""
+        assert not price_comparison_allowed(location, Decimal("2300"), Decimal("1999"))
+
+    def test_allowed_outside_those_markets_when_the_shop_recorded_one(self):
+        assert price_comparison_allowed("Nairobi, Kenya", Decimal("2300"), Decimal("1999"))
+
+    def test_never_without_a_recorded_former_price(self):
+        """Otherwise the claim is invented, which is not permitted anywhere."""
+        assert not price_comparison_allowed("Nairobi, Kenya", None, Decimal("1999"))
+
+    def test_never_when_the_former_price_is_not_higher(self):
+        """"Was 1,999, now 1,999" is not a reduction; it is a lie about one."""
+        assert not price_comparison_allowed("Nairobi, Kenya", Decimal("1999"), Decimal("1999"))
+        assert not price_comparison_allowed("Nairobi, Kenya", Decimal("500"), Decimal("1999"))
+
+    def test_an_unstated_location_is_treated_as_strict(self):
+        """A shop that has not said where it is could be in Berlin."""
+        assert not price_comparison_allowed(None, Decimal("2300"), Decimal("1999"))
+        assert not price_comparison_allowed("", Decimal("2300"), Decimal("1999"))
+
+
+class TestThePermissionIsOffByDefault:
+    """The safe answer has to be the one a caller gets by forgetting."""
+
+    def test_a_discount_claim_is_refused_unless_asked_otherwise(self):
+        assert check("Was £99, now £59")
+
+    def test_and_accepted_only_when_explicitly_permitted(self):
+        assert not check("Was KSh 2,300, now KSh 1,999", allow_price_comparison=True)
+
+    def test_invented_scarcity_is_refused_either_way(self):
+        """Not a jurisdiction question: we are given no stock count and no
+        deadline, so the claim is made up wherever it is read."""
+        assert check("Only 3 left, hurry", allow_price_comparison=True)
 
 
 class TestHashtags:

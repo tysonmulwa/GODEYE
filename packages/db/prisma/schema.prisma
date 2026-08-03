@@ -264,6 +264,10 @@ model Product {
   title        String
   description  String?   @db.Text
   price        Decimal?  @db.Decimal(14, 2)
+  /// The shop's own recorded former price. Whether it may be stated in a post
+  /// depends on where the shop sells, so it is kept as evidence rather than
+  /// as something to publish.
+  compareAtPrice Decimal? @db.Decimal(14, 2)
   currency     String?
   imageUrl     String?
   availability String?

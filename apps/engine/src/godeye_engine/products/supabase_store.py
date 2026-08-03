@@ -51,6 +51,9 @@ TIMEOUT = 20.0
 _TITLE = ("name", "title", "product_name", "productName")
 _DESCRIPTION = ("description", "details", "summary", "body", "long_description")
 _PRICE = ("price", "selling_price", "unit_price", "amount", "cost")
+# What the shop says it used to cost. Kept as evidence; whether a post may
+# state it depends on where the shop sells.
+_WAS_PRICE = ("original_price", "compare_at_price", "was_price", "list_price", "msrp")
 _CURRENCY = ("currency", "currency_code", "currencyCode")
 _IMAGE = ("image_url", "imageUrl", "image", "thumbnail", "photo", "cover_image", "images")
 _SKU = ("sku", "code", "product_code", "barcode")
@@ -193,6 +196,7 @@ def _to_product(row, origin: str) -> Product | None:
         url=urljoin(origin + "/", f"product/{slug}") if slug else origin,
         description=str(_pick(row, _DESCRIPTION))[:2000] if _pick(row, _DESCRIPTION) else None,
         price=parse_price(_pick(row, _PRICE)),
+        compare_at_price=parse_price(_pick(row, _WAS_PRICE)),
         currency=(str(_pick(row, _CURRENCY)).upper() if _pick(row, _CURRENCY) else None),
         image_url=_image_of(row, origin),
         availability=_availability_of(row),
