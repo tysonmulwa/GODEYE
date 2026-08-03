@@ -11,6 +11,7 @@ process.env.JWT_ACCESS_SECRET = "test-access-secret";
 process.env.JWT_REFRESH_SECRET = "test-refresh-secret";
 
 type MockPrisma = {
+  $transaction: jest.Mock;
   user: Record<string, jest.Mock>;
   organization: Record<string, jest.Mock>;
   refreshToken: Record<string, jest.Mock>;
@@ -33,6 +34,7 @@ function makePrisma(): MockPrisma {
       updateMany: jest.fn().mockResolvedValue({}),
     },
     businessProfile: { findUnique: jest.fn().mockResolvedValue(null) },
+    $transaction: jest.fn((ops: unknown[]) => Promise.all(ops)),
   };
 }
 
@@ -261,6 +263,106 @@ describe("AuthService", () => {
       await expect(
         service.disableMfa("user1", "correct-horse-9X", "123456"),
       ).rejects.toThrow(BadRequestException);
+    });
+  });
+
+  describe("changing your own password", () => {
+    const CURRENT = "correct-horse-9X";
+
+    async function existing() {
+      return {
+        ...baseUser,
+        passwordHash: await argon2.hash(CURRENT, { type: argon2.argon2id }),
+      };
+    }
+
+    const auth = { sub: "user1", orgId: "org1", role: "OWNER" } as never;
+
+    it("refuses without the current password", async () => {
+      prisma.user.findUniqueOrThrow.mockResolvedValue(await existing());
+      await expect(
+        service.changePassword(auth, { currentPassword: "wrong", newPassword: "Brand-New-42x" }),
+      ).rejects.toBeInstanceOf(UnauthorizedException);
+      expect(prisma.user.update).not.toHaveBeenCalled();
+    });
+
+    it("ends the other sessions", async () => {
+      // Someone changing their password often thinks another person has it.
+      // Leaving those tokens alive keeps that person signed in, which is the
+      // one thing this action is for.
+      prisma.user.findUniqueOrThrow.mockResolvedValue(await existing());
+      prisma.refreshToken.updateMany.mockResolvedValue({ count: 3 });
+      const result = await service.changePassword(auth, {
+        currentPassword: CURRENT,
+        newPassword: "Brand-New-42x",
+      });
+      expect(result.sessionsEnded).toBe(3);
+      expect(prisma.refreshToken.updateMany).toHaveBeenCalled();
+    });
+
+    it("keeps the session doing it", async () => {
+      // Signing the user out of the tab they are working in would be its own
+      // small betrayal, and they have just proved they know the password.
+      prisma.user.findUniqueOrThrow.mockResolvedValue(await existing());
+      prisma.refreshToken.updateMany.mockResolvedValue({ count: 1 });
+      await service.changePassword(
+        auth,
+        { currentPassword: CURRENT, newPassword: "Brand-New-42x" },
+        "this-sessions-refresh-token",
+      );
+      const where = prisma.refreshToken.updateMany.mock.calls[0][0].where;
+      expect(where.tokenHash).toEqual({ not: expect.any(String) });
+    });
+
+    it("stores a hash, never the password", async () => {
+      prisma.user.findUniqueOrThrow.mockResolvedValue(await existing());
+      prisma.refreshToken.updateMany.mockResolvedValue({ count: 0 });
+      await service.changePassword(auth, {
+        currentPassword: CURRENT,
+        newPassword: "Brand-New-42x",
+      });
+      const data = prisma.user.update.mock.calls[0][0].data;
+      expect(data.passwordHash).toMatch(/^\$argon2id\$/);
+      expect(JSON.stringify(data)).not.toContain("Brand-New-42x");
+    });
+  });
+
+  describe("changing your own email", () => {
+    const PASSWORD = "correct-horse-9X";
+    const auth = { sub: "user1", orgId: "org1", role: "OWNER" } as never;
+
+    async function existing() {
+      return {
+        ...baseUser,
+        passwordHash: await argon2.hash(PASSWORD, { type: argon2.argon2id }),
+      };
+    }
+
+    it("requires the password", async () => {
+      prisma.user.findUniqueOrThrow.mockResolvedValue(await existing());
+      await expect(
+        service.changeEmail(auth, { email: "new@acme.com", password: "wrong" }),
+      ).rejects.toBeInstanceOf(UnauthorizedException);
+      expect(prisma.user.update).not.toHaveBeenCalled();
+    });
+
+    it("refuses an address someone else already uses", async () => {
+      prisma.user.findUniqueOrThrow.mockResolvedValue(await existing());
+      prisma.user.findUnique.mockResolvedValue({ id: "someone-else" });
+      await expect(
+        service.changeEmail(auth, { email: "taken@acme.com", password: PASSWORD }),
+      ).rejects.toBeInstanceOf(ConflictException);
+    });
+
+    it("drops the verification, because the new address has proved nothing", async () => {
+      prisma.user.findUniqueOrThrow.mockResolvedValue(await existing());
+      prisma.user.findUnique.mockResolvedValue(null);
+      prisma.user.update.mockResolvedValue({ ...baseUser, email: "new@acme.com" });
+      await service.changeEmail(auth, { email: "New@Acme.com", password: PASSWORD });
+      const data = prisma.user.update.mock.calls[0][0].data;
+      expect(data.emailVerifiedAt).toBeNull();
+      // Stored lowercase, or the same person could hold two accounts.
+      expect(data.email).toBe("new@acme.com");
     });
   });
 });

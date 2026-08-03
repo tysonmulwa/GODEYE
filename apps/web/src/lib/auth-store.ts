@@ -34,6 +34,9 @@ interface AuthState {
   setSession: (session: SessionPayload) => void;
   markProfileComplete: () => void;
   setRequireApproval: (v: boolean) => void;
+  // Editing your own name or email has to show immediately. Without this the
+  // only way to refresh the cached user was to sign out and back in.
+  patchUser: (patch: Partial<SessionUser>) => void;
   clear: () => void;
 }
 
@@ -57,5 +60,6 @@ export const useAuthStore = create<AuthState>((set) => ({
     set((s) => ({
       organization: s.organization ? { ...s.organization, requireApproval: v } : s.organization,
     })),
+  patchUser: (patch) => set((s) => ({ user: s.user ? { ...s.user, ...patch } : s.user })),
   clear: () => set({ status: "guest", user: null, organization: null, accessToken: null }),
 }));

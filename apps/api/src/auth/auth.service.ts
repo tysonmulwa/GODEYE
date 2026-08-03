@@ -6,7 +6,15 @@ import {
   UnauthorizedException,
 } from "@nestjs/common";
 import { JwtService } from "@nestjs/jwt";
-import { passwordSchema, type AcceptInvitationInput, type LoginInput, type RegisterInput } from "@godeye/shared";
+import {
+  passwordSchema,
+  type AcceptInvitationInput,
+  type ChangeEmailInput,
+  type ChangePasswordInput,
+  type LoginInput,
+  type RegisterInput,
+  type UpdateProfileInput,
+} from "@godeye/shared";
 import * as argon2 from "argon2";
 import { randomBytes } from "crypto";
 import { authenticator } from "otplib";
@@ -172,6 +180,99 @@ export class AuthService {
         requireApproval: org.requireApproval,
       },
     };
+  }
+
+  // ---------- Your own account ----------
+
+  async updateProfile(auth: AccessTokenPayload, input: UpdateProfileInput) {
+    const user = await this.prisma.user.update({
+      where: { id: auth.sub },
+      data: { name: input.name, avatarUrl: input.avatarUrl || null },
+    });
+    this.audit.log({
+      orgId: auth.orgId,
+      userId: auth.sub,
+      action: "account.profile_updated",
+      targetType: "User",
+      targetId: auth.sub,
+    });
+    return this.publicUser(user);
+  }
+
+  /**
+   * Change the password, and end every other session while doing it.
+   *
+   * Someone changing their password is often doing it because they think
+   * somebody else has it. Leaving the other refresh tokens alive would keep
+   * that person signed in, which is the one outcome the action is meant to
+   * prevent. The caller's own session survives, so they are not signed out of
+   * the tab they just did this in.
+   */
+  async changePassword(
+    auth: AccessTokenPayload,
+    input: ChangePasswordInput,
+    keepRefreshToken?: string,
+  ) {
+    const user = await this.prisma.user.findUniqueOrThrow({ where: { id: auth.sub } });
+    if (!(await argon2.verify(user.passwordHash, input.currentPassword))) {
+      throw new UnauthorizedException("That is not your current password");
+    }
+
+    const passwordHash = await argon2.hash(input.newPassword, { type: argon2.argon2id });
+    // Everything except the session doing this. Signing the user out of the
+    // tab they are working in would be its own small betrayal, and they have
+    // just proved they know the password.
+    const keepHash = keepRefreshToken ? this.crypto.sha256(keepRefreshToken) : null;
+    const [, revoked] = await this.prisma.$transaction([
+      this.prisma.user.update({ where: { id: auth.sub }, data: { passwordHash } }),
+      this.prisma.refreshToken.updateMany({
+        where: {
+          userId: auth.sub,
+          revokedAt: null,
+          ...(keepHash ? { tokenHash: { not: keepHash } } : {}),
+        },
+        data: { revokedAt: new Date() },
+      }),
+    ]);
+
+    this.audit.log({
+      orgId: auth.orgId,
+      userId: auth.sub,
+      action: "account.password_changed",
+      targetType: "User",
+      targetId: auth.sub,
+      metadata: { sessionsEnded: revoked.count },
+    });
+    return { ok: true, sessionsEnded: revoked.count };
+  }
+
+  async changeEmail(auth: AccessTokenPayload, input: ChangeEmailInput) {
+    const user = await this.prisma.user.findUniqueOrThrow({ where: { id: auth.sub } });
+    if (!(await argon2.verify(user.passwordHash, input.password))) {
+      throw new UnauthorizedException("That password is not correct");
+    }
+
+    const email = input.email.toLowerCase().trim();
+    if (email === user.email) return this.publicUser(user);
+
+    const taken = await this.prisma.user.findUnique({ where: { email } });
+    if (taken) throw new ConflictException("That email is already in use");
+
+    const updated = await this.prisma.user.update({
+      where: { id: auth.sub },
+      // The new address has not been proven to belong to anyone yet, so the
+      // verification does not carry over from the old one.
+      data: { email, emailVerifiedAt: null },
+    });
+    this.audit.log({
+      orgId: auth.orgId,
+      userId: auth.sub,
+      action: "account.email_changed",
+      targetType: "User",
+      targetId: auth.sub,
+      metadata: { from: user.email, to: email },
+    });
+    return this.publicUser(updated);
   }
 
   // ---------- Invitations ----------

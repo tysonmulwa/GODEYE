@@ -4,6 +4,7 @@ import {
   Get,
   HttpCode,
   Param,
+  Patch,
   Post,
   Req,
   Res,
@@ -13,9 +14,15 @@ import { ApiBearerAuth, ApiOperation, ApiTags } from "@nestjs/swagger";
 import { Throttle } from "@nestjs/throttler";
 import {
   acceptInvitationSchema,
+  changeEmailSchema,
+  changePasswordSchema,
   loginSchema,
   registerSchema,
   switchOrgSchema,
+  updateProfileSchema,
+  type ChangeEmailInput,
+  type ChangePasswordInput,
+  type UpdateProfileInput,
 } from "@godeye/shared";
 import type { Request, Response } from "express";
 import { z } from "zod";
@@ -108,6 +115,50 @@ export class AuthController {
   @ApiBearerAuth()
   me(@CurrentAuth() auth: AccessTokenPayload) {
     return this.auth.me(auth);
+  }
+
+  @Patch("me")
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: "Change your own name or avatar" })
+  updateProfile(
+    @CurrentAuth() auth: AccessTokenPayload,
+    @Body(new ZodPipe(updateProfileSchema)) body: UpdateProfileInput,
+  ) {
+    return this.auth.updateProfile(auth, body);
+  }
+
+  @Post("change-password")
+  @HttpCode(200)
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  // Guessing the current password is the attack this endpoint invites.
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  @ApiOperation({ summary: "Change your password and end your other sessions" })
+  changePassword(
+    @CurrentAuth() auth: AccessTokenPayload,
+    @Body(new ZodPipe(changePasswordSchema)) body: ChangePasswordInput,
+    @Req() req: Request,
+  ) {
+    // Hand the current session's token through so it is the one kept alive.
+    return this.auth.changePassword(
+      auth,
+      body,
+      req.cookies?.[REFRESH_COOKIE] as string | undefined,
+    );
+  }
+
+  @Post("change-email")
+  @HttpCode(200)
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  @ApiOperation({ summary: "Change the address your account signs in with" })
+  changeEmail(
+    @CurrentAuth() auth: AccessTokenPayload,
+    @Body(new ZodPipe(changeEmailSchema)) body: ChangeEmailInput,
+  ) {
+    return this.auth.changeEmail(auth, body);
   }
 
   @Get("invitations/:token")

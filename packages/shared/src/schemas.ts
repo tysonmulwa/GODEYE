@@ -36,6 +36,35 @@ export const registerSchema = z
   });
 export type RegisterInput = z.infer<typeof registerSchema>;
 
+// ---------- Your own account ----------
+
+export const updateProfileSchema = z.object({
+  name: z.string().min(2).max(80),
+  avatarUrl: z.string().url().max(500).optional().or(z.literal("")),
+});
+export type UpdateProfileInput = z.infer<typeof updateProfileSchema>;
+
+export const changePasswordSchema = z
+  .object({
+    // Proving you know the old one is what stops a borrowed session from
+    // locking the real owner out of their account.
+    currentPassword: z.string().min(1),
+    newPassword: passwordSchema,
+  })
+  .refine((v) => v.currentPassword !== v.newPassword, {
+    message: "The new password is the same as the current one",
+    path: ["newPassword"],
+  });
+export type ChangePasswordInput = z.infer<typeof changePasswordSchema>;
+
+export const changeEmailSchema = z.object({
+  email: z.string().email(),
+  // An email address is how an account is recovered, so changing it is a
+  // password-gated action rather than a profile edit.
+  password: z.string().min(1),
+});
+export type ChangeEmailInput = z.infer<typeof changeEmailSchema>;
+
 export const loginSchema = z.object({
   email: z.string().email(),
   password: z.string().min(1),
