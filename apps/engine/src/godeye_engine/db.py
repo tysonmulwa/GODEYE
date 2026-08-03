@@ -221,8 +221,14 @@ SocialConnection = Table(
     Column("displayName", String, nullable=False),
     Column("externalId", String),
     Column("encryptedCredentials", Text, nullable=False),
+    # These exist in the database and were simply never mapped here. Naming an
+    # unmapped column in .values() is not a silent no-op — SQLAlchemy raises
+    # CompileError, which in _finish meant a post published and then failed to
+    # record it, so the message was redelivered and published again.
+    Column("lastCheckedAt", DateTime(timezone=False)),
     Column("lastErrorAt", DateTime(timezone=False)),
     Column("lastError", String),
+    Column("updatedAt", DateTime(timezone=False)),
 )
 
 BusinessProfile = Table(

@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from datetime import datetime, timedelta
 
-from sqlalchemy import and_, case, or_, select, update
+from sqlalchemy import and_, or_, select, update
 
 from ..celery_app import app
 from ..db import (
@@ -399,19 +399,24 @@ def _finish(
             # whatever the objection was, it no longer holds. EXPIRED and
             # DISCONNECTED are left alone — those say something about the
             # account rather than about this attempt.
+            # Two plain statements rather than one with a CASE. status is a
+            # Prisma-owned enum, and a bare 'ACTIVE' inside CASE compiles to
+            # varchar, which Postgres refuses to match against
+            # "ConnectionStatus". The WHERE side casts correctly on its own, so
+            # restricting the second update by status says the same thing
+            # without needing the literal to carry a type.
             session.execute(
                 update(SocialConnection)
                 .where(SocialConnection.c.id == connection_id)
-                .values(
-                    lastError=None,
-                    lastErrorAt=None,
-                    lastCheckedAt=now,
-                    status=case(
-                        (SocialConnection.c.status == "ERROR", "ACTIVE"),
-                        else_=SocialConnection.c.status,
-                    ),
-                    updatedAt=now,
+                .values(lastError=None, lastErrorAt=None, lastCheckedAt=now, updatedAt=now)
+            )
+            session.execute(
+                update(SocialConnection)
+                .where(
+                    SocialConnection.c.id == connection_id,
+                    SocialConnection.c.status == "ERROR",
                 )
+                .values(status="ACTIVE", updatedAt=now)
             )
         session.commit()
     publish_event(

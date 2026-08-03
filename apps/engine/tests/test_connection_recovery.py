@@ -43,16 +43,17 @@ class TestSuccessClearsTheError:
         """A post going out is proof the connection works, so whatever the
         objection was, it no longer holds."""
         source = self._finish_source()
-        assert "case(" in source
-        assert '"ERROR"' in source and '"ACTIVE"' in source
+        assert '"ACTIVE"' in source and '"ERROR"' in source
 
-    def test_expired_and_disconnected_are_left_alone(self):
-        """Those say something about the account rather than about this
-        attempt, and a lucky publish should not overwrite them."""
+    def test_only_an_errored_connection_is_touched(self):
+        """EXPIRED and DISCONNECTED say something about the account rather
+        than about this attempt, and a lucky publish must not overwrite them.
+        The WHERE is what protects them, so that is what to check — the first
+        version of this asserted on a comment and passed either way.
+        """
         source = self._finish_source()
-        assert "EXPIRED" not in source and "DISCONNECTED" not in source
-        # An else_ that keeps the current value is what leaves them untouched.
-        assert "else_=SocialConnection.c.status" in source
+        activate = source[source.index('values(status="ACTIVE"') - 300 :]
+        assert 'SocialConnection.c.status == "ERROR"' in activate
 
     def test_publishing_passes_the_connection_through(self):
         """The clearing cannot happen if the caller never says which channel
