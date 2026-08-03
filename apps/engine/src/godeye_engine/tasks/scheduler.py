@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from datetime import timedelta
 
-from sqlalchemy import and_, or_, select, update
+from sqlalchemy import and_, case, or_, select, update
 
 from ..celery_app import app
 from ..db import (
@@ -213,6 +213,7 @@ def publish_post(scheduled_post_id: str) -> dict:
         external_post_id=result.external_post_id,
         external_post_url=result.external_post_url,
         content_item_id=post["contentItemId"],
+        connection_id=connection["id"],
     )
     logger.info("Published %s to %s (%s)", scheduled_post_id, platform, result.external_post_id)
     return {"status": "PUBLISHED", "externalPostId": result.external_post_id}
@@ -319,6 +320,7 @@ def _finish(
     external_post_id: str | None = None,
     external_post_url: str | None = None,
     content_item_id: str | None = None,
+    connection_id: str | None = None,
 ) -> None:
     now = utcnow()
     status = "FAILED" if error else "PUBLISHED"
@@ -341,6 +343,31 @@ def _finish(
                 update(ContentItem)
                 .where(ContentItem.c.id == content_item_id)
                 .values(status="PUBLISHED", updatedAt=now)
+            )
+        if not error and connection_id:
+            # A failure stamps the connection with its reason, and nothing used
+            # to remove it. So a channel that failed once and published fine
+            # ever after still showed the old error on Connections, long after
+            # the calendar had gone quiet — which reads as a broken channel.
+            #
+            # A post going out is proof the connection works, so it is the
+            # right moment to clear it. ERROR is lifted for the same reason:
+            # whatever the objection was, it no longer holds. EXPIRED and
+            # DISCONNECTED are left alone — those say something about the
+            # account rather than about this attempt.
+            session.execute(
+                update(SocialConnection)
+                .where(SocialConnection.c.id == connection_id)
+                .values(
+                    lastError=None,
+                    lastErrorAt=None,
+                    lastCheckedAt=now,
+                    status=case(
+                        (SocialConnection.c.status == "ERROR", "ACTIVE"),
+                        else_=SocialConnection.c.status,
+                    ),
+                    updatedAt=now,
+                )
             )
         session.commit()
     publish_event(
