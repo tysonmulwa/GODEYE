@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle } from "lucide-react";
 import { useState } from "react";
 import { AccountCard } from "@/components/account-card";
+import { BusinessProfileCard } from "@/components/business-profile-card";
 import { ProductCatalogueCard } from "@/components/product-catalogue";
 import { api } from "@/lib/api";
 import { useAuthStore } from "@/lib/auth-store";
@@ -655,6 +656,7 @@ export default function SettingsPage() {
 
         <ApprovalCard />
 
+        <BusinessProfileCard />
         <BrandKitCard />
         <ProductCatalogueCard />
 

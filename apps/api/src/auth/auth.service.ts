@@ -187,7 +187,14 @@ export class AuthService {
   async updateProfile(auth: AccessTokenPayload, input: UpdateProfileInput) {
     const user = await this.prisma.user.update({
       where: { id: auth.sub },
-      data: { name: input.name, avatarUrl: input.avatarUrl || null },
+      data: {
+        name: input.name,
+        // Only touched when the caller sent it. Coalescing an absent field to
+        // null would clear an existing avatar every time somebody corrected a
+        // typo in their name, which is not what saving a name should do. An
+        // explicit "" still clears it, because that is somebody asking.
+        ...(input.avatarUrl === undefined ? {} : { avatarUrl: input.avatarUrl || null }),
+      },
     });
     this.audit.log({
       orgId: auth.orgId,

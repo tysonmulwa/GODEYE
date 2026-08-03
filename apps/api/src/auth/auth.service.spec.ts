@@ -365,4 +365,24 @@ describe("AuthService", () => {
       expect(data.email).toBe("new@acme.com");
     });
   });
+
+  describe("editing your own profile", () => {
+    const auth = { sub: "user1", orgId: "org1", role: "OWNER" } as never;
+
+    it("saving a name does not wipe the avatar", async () => {
+      // The card sends only the name. Coalescing an absent avatar to null
+      // would clear the picture every time someone fixed a typo.
+      prisma.user.update.mockResolvedValue({ ...baseUser, name: "Jane R" });
+      await service.updateProfile(auth, { name: "Jane R" });
+      const data = prisma.user.update.mock.calls[0][0].data;
+      expect(data).not.toHaveProperty("avatarUrl");
+      expect(data.name).toBe("Jane R");
+    });
+
+    it("an explicit blank does clear it, because that is somebody asking", async () => {
+      prisma.user.update.mockResolvedValue(baseUser);
+      await service.updateProfile(auth, { name: "Jane", avatarUrl: "" });
+      expect(prisma.user.update.mock.calls[0][0].data.avatarUrl).toBeNull();
+    });
+  });
 });
