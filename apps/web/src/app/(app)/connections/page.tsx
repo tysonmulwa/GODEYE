@@ -123,10 +123,8 @@ function ConnectionsInner() {
       ],
     },
     x: {
-      hint: "From developer.x.com: create a project + app with Read and Write, then generate the Consumer Keys and Access Token/Secret.",
+      hint: "Generate an Access Token and Secret with Read and Write permission for the account you want to post from. The app keys are held by GODEYE.",
       fields: [
-        { key: "apiKey", label: "API key", placeholder: "Consumer API Key", type: "password" },
-        { key: "apiSecret", label: "API secret", placeholder: "Consumer API Secret", type: "password" },
         { key: "accessToken", label: "Access token", placeholder: "Access Token", type: "password" },
         { key: "accessSecret", label: "Access secret", placeholder: "Access Token Secret", type: "password" },
       ],

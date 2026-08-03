@@ -154,9 +154,9 @@ export const redditConnectSchema = z.object({
 });
 export type RedditConnectInput = z.infer<typeof redditConnectSchema>;
 
+// Only what belongs to the account being connected. The consumer keys are
+// this application's and live on the server.
 export const xConnectSchema = z.object({
-  apiKey: z.string().min(10).describe("Consumer API Key from developer.x.com"),
-  apiSecret: z.string().min(20),
   accessToken: z.string().min(20).describe("Access Token with Read and Write permission"),
   accessSecret: z.string().min(20),
 });

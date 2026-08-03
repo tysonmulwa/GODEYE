@@ -126,17 +126,28 @@ export class ConnectionsService {
   }
 
   async connectX(orgId: string, userId: string, input: XConnectInput) {
-    const account = await this.engine.validateX(input);
+    // The consumer keys identify this application and are the same for every
+    // workspace, so they come from the server rather than from whoever is
+    // connecting. Only the access token and secret name the account.
+    if (!env.x.apiKey || !env.x.apiSecret) {
+      throw new BadRequestException(
+        "X is not configured on this server (X_API_KEY and X_API_SECRET missing)",
+      );
+    }
+    const credentials = {
+      apiKey: env.x.apiKey,
+      apiSecret: env.x.apiSecret,
+      accessToken: input.accessToken,
+      accessSecret: input.accessSecret,
+    };
+    // Validated with the same four values that will be stored, so a connection
+    // cannot pass a check and then fail on its first post.
+    const account = await this.engine.validateX(credentials);
     return this.upsertConnection(orgId, userId, {
       platform: "X",
       externalId: account.id,
       displayName: `@${account.username}`,
-      credentials: {
-        apiKey: input.apiKey,
-        apiSecret: input.apiSecret,
-        accessToken: input.accessToken,
-        accessSecret: input.accessSecret,
-      },
+      credentials,
     });
   }
 

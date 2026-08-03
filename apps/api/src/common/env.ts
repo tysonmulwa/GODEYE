@@ -93,6 +93,17 @@ export const env = {
       "http://localhost:4000/connections/reddit/callback",
     ),
   },
+  /**
+   * X's consumer keys identify this application, exactly as Meta's and
+   * TikTok's do. They were being collected from every customer, which meant
+   * each one needed their own X developer account and approved app, and the
+   * product then ran under their rate limits rather than ours. Only the access
+   * token and secret, which identify one account, come from the customer.
+   */
+  x: {
+    apiKey: process.env.X_API_KEY ?? "",
+    apiSecret: process.env.X_API_SECRET ?? "",
+  },
   linkedin: {
     clientId: process.env.LINKEDIN_CLIENT_ID ?? "",
     clientSecret: process.env.LINKEDIN_CLIENT_SECRET ?? "",
