@@ -1,5 +1,6 @@
 import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
 import { JwtService } from "@nestjs/jwt";
+import Redis from "ioredis";
 import type {
   DiscordConnectInput,
   TelegramConnectInput,
@@ -27,6 +28,9 @@ import {
   tiktokExchangeCode,
   validateDiscord,
   validateTelegram,
+  xAuthorizeUrl,
+  xExchangeVerifier,
+  xRequestToken,
 } from "./platform-clients";
 
 /**
@@ -36,6 +40,8 @@ import {
  * then fails at the callback with an opaque "invalid state".
  */
 const OAUTH_STATE_TTL = "30m";
+/** The same window as OAUTH_STATE_TTL, in the unit Redis expects. */
+const OAUTH_STATE_TTL_SECONDS = 30 * 60;
 
 /**
  * How long a failure stays worth showing on a channel that is otherwise fine.
@@ -149,6 +155,78 @@ export class ConnectionsService {
       displayName: `@${account.username}`,
       credentials,
     });
+  }
+
+  // ---------- X OAuth 1.0a (click-to-connect) ----------
+
+  /**
+   * X's return trip carries only the oauth_token, and signing the exchange
+   * needs the secret that came with it, so the pair has to be parked between
+   * the two requests. Redis rather than a Map because the customer can come
+   * back to a different API instance than the one that sent them out, and an
+   * in-process map would have lost them.
+   *
+   * Created on first use: nobody should need Redis reachable at boot to
+   * connect a Telegram bot.
+   */
+  private xPendingClient?: Redis;
+
+  private xPending(): Redis {
+    if (!this.xPendingClient) {
+      this.xPendingClient = new Redis(env.redisUrl, {
+        lazyConnect: true,
+        maxRetriesPerRequest: 3,
+        retryStrategy: (times) => Math.min(times * 1000, 15_000),
+      });
+      this.xPendingClient.on("error", () => {
+        // Errors surface on the command itself; without a listener ioredis
+        // treats them as unhandled and takes the process down.
+      });
+    }
+    return this.xPendingClient;
+  }
+
+  async xAuthorize(orgId: string, userId: string): Promise<{ url: string }> {
+    const { oauthToken, oauthTokenSecret } = await xRequestToken();
+    await this.xPending().set(
+      `x_oauth:${oauthToken}`,
+      JSON.stringify({ orgId, userId, oauthTokenSecret }),
+      "EX",
+      OAUTH_STATE_TTL_SECONDS,
+    );
+    return { url: xAuthorizeUrl(oauthToken) };
+  }
+
+  async xCallback(oauthToken: string, verifier: string): Promise<{ connected: number }> {
+    const raw = await this.xPending().get(`x_oauth:${oauthToken}`);
+    if (!raw) {
+      throw new NotFoundException(
+        "That X authorization has expired or was already used. Start again from Connections.",
+      );
+    }
+    // Single use: the same oauth_token must never buy a second connection.
+    await this.xPending().del(`x_oauth:${oauthToken}`);
+    const pending = JSON.parse(raw) as {
+      orgId: string;
+      userId: string;
+      oauthTokenSecret: string;
+    };
+
+    const account = await xExchangeVerifier(oauthToken, pending.oauthTokenSecret, verifier);
+    await this.upsertConnection(pending.orgId, pending.userId, {
+      platform: "X",
+      externalId: account.userId,
+      displayName: `@${account.username}`,
+      // The consumer keys ride along because the engine signs every post with
+      // all four values. OAuth 1.0a tokens do not expire, so no expiresAt.
+      credentials: {
+        apiKey: env.x.apiKey,
+        apiSecret: env.x.apiSecret,
+        accessToken: account.accessToken,
+        accessSecret: account.accessSecret,
+      },
+    });
+    return { connected: 1 };
   }
 
   // ---------- Reddit OAuth (click-to-connect) ----------

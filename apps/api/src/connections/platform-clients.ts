@@ -1,3 +1,4 @@
+import { createHmac, randomBytes } from "node:crypto";
 import { BadRequestException, Logger } from "@nestjs/common";
 import { env } from "../common/env";
 
@@ -431,4 +432,199 @@ export async function metaListPages(userToken: string): Promise<MetaPage[]> {
     );
   }
   return pages;
+}
+
+// ---------- X OAuth 1.0a (click-to-connect) ----------
+
+/**
+ * X never adopted OAuth 2.0 for the posting endpoints this product uses, so
+ * connecting an account means the three-legged OAuth 1.0a dance rather than
+ * the redirect-and-exchange every other platform here does.
+ *
+ * It was previously not done at all: the connect card asked the customer to
+ * visit developer.x.com, create a project and an app, and paste an access
+ * token and secret out of it. That is a developer's chore, not a customer's,
+ * and it is the reason the card sat unused.
+ *
+ * The reward for doing it properly is that the token pair this returns is
+ * exactly what the engine's existing OAuth 1.0a signer already posts with, so
+ * nothing downstream changes.
+ */
+
+const X_API = "https://api.twitter.com";
+
+/**
+ * RFC 3986 percent-encoding, which is not what encodeURIComponent does: it
+ * leaves !'()* alone and OAuth requires them escaped. A signature computed
+ * with the wrong escaping fails as a bare 401 with no body, so this is the
+ * single easiest place in the flow to lose an afternoon.
+ */
+function percentEncode(value: string): string {
+  return encodeURIComponent(value).replace(
+    /[!'()*]/g,
+    (c) => `%${c.charCodeAt(0).toString(16).toUpperCase()}`,
+  );
+}
+
+export function oauth1Header(params: {
+  method: "POST" | "GET";
+  url: string;
+  consumerKey: string;
+  consumerSecret: string;
+  /** Absent for the request-token step, which has no token yet. */
+  token?: string;
+  /** Empty string for the request-token step — the & separator is still required. */
+  tokenSecret?: string;
+  /** oauth_callback or oauth_verifier, which are signed like any other parameter. */
+  extra?: Record<string, string>;
+  /** Fixed values for tests; real calls generate them. */
+  nonce?: string;
+  timestamp?: string;
+}): string {
+  const oauth: Record<string, string> = {
+    oauth_consumer_key: params.consumerKey,
+    oauth_nonce: params.nonce ?? randomBytes(16).toString("hex"),
+    oauth_signature_method: "HMAC-SHA1",
+    oauth_timestamp: params.timestamp ?? Math.floor(Date.now() / 1000).toString(),
+    oauth_version: "1.0",
+    ...(params.token ? { oauth_token: params.token } : {}),
+    ...(params.extra ?? {}),
+  };
+
+  // The base string sorts every parameter by encoded key, then by encoded
+  // value, and joins them before the whole collection is encoded again.
+  const normalized = Object.keys(oauth)
+    .map((k) => [percentEncode(k), percentEncode(oauth[k])] as const)
+    .sort((a, b) => (a[0] === b[0] ? a[1].localeCompare(b[1]) : a[0].localeCompare(b[0])))
+    .map(([k, v]) => `${k}=${v}`)
+    .join("&");
+
+  const base = [
+    params.method,
+    percentEncode(params.url),
+    percentEncode(normalized),
+  ].join("&");
+  const key = `${percentEncode(params.consumerSecret)}&${percentEncode(params.tokenSecret ?? "")}`;
+  const signature = createHmac("sha1", key).update(base).digest("base64");
+
+  // oauth_signature joins the header but never the base string it signs.
+  const header: Record<string, string> = { ...oauth, oauth_signature: signature };
+  return `OAuth ${Object.keys(header)
+    .map((k) => `${percentEncode(k)}="${percentEncode(header[k])}"`)
+    .join(", ")}`;
+}
+
+function requireXApp(): { apiKey: string; apiSecret: string } {
+  if (!env.x.apiKey || !env.x.apiSecret) {
+    throw new BadRequestException(
+      "X is not configured on this server (X_API_KEY and X_API_SECRET missing)",
+    );
+  }
+  return { apiKey: env.x.apiKey, apiSecret: env.x.apiSecret };
+}
+
+/** These endpoints answer in form encoding, not JSON. */
+function parseForm(body: string): Record<string, string> {
+  return Object.fromEntries(new URLSearchParams(body).entries());
+}
+
+export interface XRequestToken {
+  oauthToken: string;
+  oauthTokenSecret: string;
+}
+
+/**
+ * Step one: ask X for a temporary token, naming where to send the customer
+ * back afterwards.
+ */
+export async function xRequestToken(): Promise<XRequestToken> {
+  const { apiKey, apiSecret } = requireXApp();
+  const url = `${X_API}/oauth/request_token`;
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {
+      Authorization: oauth1Header({
+        method: "POST",
+        url,
+        consumerKey: apiKey,
+        consumerSecret: apiSecret,
+        extra: { oauth_callback: env.x.redirectUri },
+      }),
+    },
+  });
+  const body = await res.text();
+  if (!res.ok) {
+    // X explains a rejected callback here and nowhere else, and it is the
+    // failure people actually hit: the URL must be listed verbatim under the
+    // app's "Callback URI / Redirect URL" settings.
+    throw new BadRequestException(
+      `X rejected the authorization request (${res.status}). ` +
+        `Check that ${env.x.redirectUri} is listed as a Callback URI on the X app. ${body}`.trim(),
+    );
+  }
+  const form = parseForm(body);
+  if (form.oauth_callback_confirmed !== "true" || !form.oauth_token) {
+    throw new BadRequestException(`X returned an unusable request token: ${body}`);
+  }
+  return { oauthToken: form.oauth_token, oauthTokenSecret: form.oauth_token_secret ?? "" };
+}
+
+/**
+ * Step two. /authorize rather than /authenticate: the latter signs a returning
+ * customer straight back in without showing the consent screen, which hides
+ * from them that they are granting posting rights.
+ */
+export function xAuthorizeUrl(oauthToken: string): string {
+  return `${X_API}/oauth/authorize?oauth_token=${encodeURIComponent(oauthToken)}`;
+}
+
+export interface XAccount {
+  accessToken: string;
+  accessSecret: string;
+  userId: string;
+  username: string;
+}
+
+/**
+ * Step three: trade the verifier the customer came back with for the lasting
+ * token pair. OAuth 1.0a tokens do not expire, so there is no refresh to
+ * schedule — they end only when the account revokes them.
+ */
+export async function xExchangeVerifier(
+  oauthToken: string,
+  oauthTokenSecret: string,
+  verifier: string,
+): Promise<XAccount> {
+  const { apiKey, apiSecret } = requireXApp();
+  const url = `${X_API}/oauth/access_token`;
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {
+      Authorization: oauth1Header({
+        method: "POST",
+        url,
+        consumerKey: apiKey,
+        consumerSecret: apiSecret,
+        token: oauthToken,
+        // Signed with the *request* token's secret. Using the consumer secret
+        // alone here is the classic mistake and returns 401 with no detail.
+        tokenSecret: oauthTokenSecret,
+        extra: { oauth_verifier: verifier },
+      }),
+    },
+  });
+  const body = await res.text();
+  if (!res.ok) {
+    throw new BadRequestException(`X token exchange failed (${res.status}): ${body}`.trim());
+  }
+  const form = parseForm(body);
+  if (!form.oauth_token || !form.oauth_token_secret) {
+    throw new BadRequestException(`X returned an unusable access token: ${body}`);
+  }
+  return {
+    accessToken: form.oauth_token,
+    accessSecret: form.oauth_token_secret,
+    userId: form.user_id ?? "",
+    username: form.screen_name ?? "",
+  };
 }

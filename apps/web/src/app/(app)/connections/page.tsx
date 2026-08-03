@@ -28,7 +28,7 @@ interface Connection {
   createdAt: string;
 }
 
-type FormKind = "telegram" | "discord" | "x" | null;
+type FormKind = "telegram" | "discord" | null;
 
 function ConnectionsInner() {
   const params = useSearchParams();
@@ -104,6 +104,15 @@ function ConnectionsInner() {
     }
   };
 
+  const connectX = async () => {
+    try {
+      const { url } = await api<{ url: string }>("/connections/x/authorize");
+      window.location.href = url;
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "X authorization failed");
+    }
+  };
+
   const set = (key: string) => (e: React.ChangeEvent<HTMLInputElement>) =>
     setFields((f) => ({ ...f, [key]: e.target.value }));
 
@@ -122,19 +131,11 @@ function ConnectionsInner() {
         { key: "channelId", label: "Channel ID", placeholder: "Enable developer mode → right-click channel → Copy ID" },
       ],
     },
-    x: {
-      hint: "Generate an Access Token and Secret with Read and Write permission for the account you want to post from. The app keys are held by GODEYE.",
-      fields: [
-        { key: "accessToken", label: "Access token", placeholder: "Access Token", type: "password" },
-        { key: "accessSecret", label: "Access secret", placeholder: "Access Token Secret", type: "password" },
-      ],
-    },
   };
 
   const providers = [
     { kind: "telegram" as const, name: "Telegram", glyph: "TELEGRAM", desc: "Post to channels & groups" },
     { kind: "discord" as const, name: "Discord", glyph: "DISCORD", desc: "Post to server channels" },
-    { kind: "x" as const, name: "X (Twitter)", glyph: "X", desc: "Publish tweets" },
   ];
 
   const counts = {
@@ -159,7 +160,7 @@ function ConnectionsInner() {
 
       {params.get("connected") && (
         <p className="mb-4 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-600 dark:text-emerald-400">
-          {{ meta: "Meta", linkedin: "LinkedIn", reddit: "Reddit", instagram: "Instagram", tiktok: "TikTok" }[
+          {{ meta: "Meta", linkedin: "LinkedIn", reddit: "Reddit", instagram: "Instagram", tiktok: "TikTok", x: "X" }[
             params.get("connected") as string
           ] ?? "Account"}{" "}
           connected, {params.get("count")} account(s) added.
@@ -283,6 +284,21 @@ function ConnectionsInner() {
               )}
             </Card>
           ))}
+
+          <Card className="!p-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <PlatformGlyph platform="X" size={36} className="!rounded-[9px]" />
+                <div>
+                  <p className="text-sm font-medium">X (Twitter)</p>
+                  <p className="text-xs text-ink-3">One click, sign in and authorize</p>
+                </div>
+              </div>
+              <Button variant="secondary" onClick={connectX}>
+                Connect
+              </Button>
+            </div>
+          </Card>
 
           <Card className="!p-4">
             <div className="flex items-center justify-between">

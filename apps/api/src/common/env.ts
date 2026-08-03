@@ -103,6 +103,15 @@ export const env = {
   x: {
     apiKey: process.env.X_API_KEY ?? "",
     apiSecret: process.env.X_API_SECRET ?? "",
+    // Must be listed verbatim under the X app's "Callback URI / Redirect URL".
+    // X compares it as a string, so a trailing slash is a different URL.
+    // Derived from API_URL rather than defaulting to localhost, because a
+    // deployment that forgets the variable would otherwise send customers to
+    // a callback on their own machine and fail with nothing to point at.
+    redirectUri: url(
+      process.env.X_REDIRECT_URI,
+      `${url(process.env.API_URL, "http://localhost:4000")}/connections/x/callback`,
+    ),
   },
   linkedin: {
     clientId: process.env.LINKEDIN_CLIENT_ID ?? "",
