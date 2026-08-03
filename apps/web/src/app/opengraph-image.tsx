@@ -12,8 +12,18 @@ import { SITE_NAME } from "@/lib/site";
  * Deliberately no web fonts: fetching one at render time is a network call
  * that can fail, and a share image that sometimes fails is worse than a plain
  * one that always works.
+ *
+ * No `runtime = "edge"` export, deliberately. The site is served by a
+ * Cloudflare Worker, so this already runs on the edge and the marker buys
+ * nothing — but it makes Next emit a separate edge function, which the
+ * OpenNext adapter refuses to bundle:
+ *
+ *   app/opengraph-image/route cannot use the edge runtime.
+ *
+ * That aborts the whole build, so adding it took the entire frontend deploy
+ * down for weeks while the backend kept shipping. A share picture is not
+ * worth a site that cannot deploy.
  */
-export const runtime = "edge";
 export const alt = "GODEYE, marketing that runs without you in the room";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";

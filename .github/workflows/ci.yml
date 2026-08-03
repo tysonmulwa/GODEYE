@@ -27,6 +27,18 @@ jobs:
           TOKEN_ENCRYPTION_KEY: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
           JWT_ACCESS_SECRET: ci-access
           JWT_REFRESH_SECRET: ci-refresh
+      # `next build` passing does not mean the site can ship. The Cloudflare
+      # adapter has its own rules, and breaking one of them fails here rather
+      # than at deploy time: an `export const runtime = "edge"` on the
+      # opengraph image built clean under Next and was rejected outright by
+      # OpenNext, which silently stopped every frontend deploy for weeks while
+      # the backend kept going out. Needs no Cloudflare credentials, so it
+      # guards pull requests too.
+      - name: Cloudflare build
+        run: pnpm --filter web cf:build
+        env:
+          NEXT_PUBLIC_API_URL: ${{ vars.NEXT_PUBLIC_API_URL || 'https://api.godeyeautomation.com' }}
+          NEXT_PUBLIC_SITE_URL: ${{ vars.NEXT_PUBLIC_SITE_URL || 'https://godeyeautomation.com' }}
 
   engine:
     runs-on: ubuntu-latest
