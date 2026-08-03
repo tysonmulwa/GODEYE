@@ -212,7 +212,7 @@ export function GodeyeSpinner({
  */
 export function GodeyeBootScreen() {
   return (
-    <div className="flex h-svh items-center justify-center bg-surface">
+    <div className="flex h-svh items-center justify-center">
       <GodeyeSpinner size={56} className="text-ink-2" />
       <span className="sr-only">Loading GODEYE</span>
     </div>

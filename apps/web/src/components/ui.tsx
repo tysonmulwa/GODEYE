@@ -161,7 +161,12 @@ export function Card({
   return (
     <div
       className={cx(
-        "rounded-[11px] border border-line bg-surface-2 p-4 transition-colors duration-150 hover:border-line-hover",
+        // A wider radius than a printed panel would take: glass reads as a
+        // physical pane, and a tight corner makes it look like a rectangle
+        // drawn on the page instead of one resting above it. The hover lift
+        // is a plain CSS rule — a Tailwind arbitrary value cannot hold the
+        // commas a two-part box-shadow needs.
+        "glass glass-hover rounded-2xl p-4",
         className,
       )}
     >

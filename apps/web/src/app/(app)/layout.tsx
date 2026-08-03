@@ -151,7 +151,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       {/* Off-canvas below lg, static column from lg up */}
       <aside
         className={cx(
-          "fixed inset-y-0 left-0 z-50 flex w-[236px] shrink-0 flex-col border-r border-line-soft bg-sidebar transition-transform duration-200 lg:static lg:translate-x-0",
+          "glass-strong fixed inset-y-0 left-0 z-50 flex w-[236px] shrink-0 flex-col rounded-none border-y-0 border-l-0 transition-transform duration-200 lg:static lg:translate-x-0",
           navOpen ? "translate-x-0" : "-translate-x-full",
         )}
       >
@@ -234,7 +234,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             Opaque, not translucent: a backdrop-blur on a sticky bar is
             re-composited on every scroll frame, which is visible stutter on a
             mid-range phone and buys nothing the solid fill doesn't. */}
-        <header className="sticky top-0 z-30 flex items-center gap-2 border-b border-line-soft bg-surface px-4 py-3 lg:hidden">
+        <header className="glass-strong sticky top-0 z-30 flex items-center gap-2 rounded-none border-x-0 border-t-0 px-4 py-3 lg:hidden">
           <button
             type="button"
             onClick={() => setNavOpen(true)}
