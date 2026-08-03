@@ -1,7 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, Download, Package } from "lucide-react";
+import { AlertTriangle, Download, Package, X } from "lucide-react";
 import { useState } from "react";
 import { AVAILABLE_PLATFORMS, PLATFORM_INFO, type Platform } from "@godeye/shared";
 import { api } from "@/lib/api";
@@ -80,6 +80,25 @@ export function ProductCatalogueCard() {
       }, 8000);
     },
     onError: (e) => setError(e instanceof Error ? e.message : "Import failed"),
+  });
+
+  const removeProduct = useMutation({
+    mutationFn: (id: string) => api(`/products/${id}`, { method: "DELETE" }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["products"] });
+      queryClient.invalidateQueries({ queryKey: ["product-settings"] });
+    },
+    onError: (e) => setError(e instanceof Error ? e.message : "Could not remove it"),
+  });
+
+  const clearAll = useMutation({
+    mutationFn: () => api<{ deleted: number }>("/products", { method: "DELETE" }),
+    onSuccess: (result) => {
+      toast.success(`Removed ${result.deleted} product${result.deleted === 1 ? "" : "s"}.`);
+      queryClient.invalidateQueries({ queryKey: ["products"] });
+      queryClient.invalidateQueries({ queryKey: ["product-settings"] });
+    },
+    onError: (e) => setError(e instanceof Error ? e.message : "Could not clear the catalogue"),
   });
 
   if (!settings) return null;
@@ -222,7 +241,26 @@ export function ProductCatalogueCard() {
 
           {products.length > 0 && (
             <div className="mt-4 border-t border-line pt-4">
-              <Label>Newest first</Label>
+              <div className="flex items-center justify-between">
+                <Label>Newest first</Label>
+                <button
+                  type="button"
+                  onClick={() => {
+                    // Deleting a catalogue is not undoable, and the next
+                    // import brings it all back, so the difference matters.
+                    if (
+                      window.confirm(
+                        `Remove all ${settings.productCount} products? Importing again will read them back from your website.`,
+                      )
+                    ) {
+                      clearAll.mutate();
+                    }
+                  }}
+                  className="text-[12px] text-ink-3 underline hover:text-ink-1"
+                >
+                  Remove all
+                </button>
+              </div>
               <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3">
                 {products.map((product) => (
                   <a
@@ -230,8 +268,21 @@ export function ProductCatalogueCard() {
                     href={product.sourceUrl}
                     target="_blank"
                     rel="noreferrer"
-                    className="group rounded-lg border border-line p-2 transition-colors hover:border-ink-3"
+                    className="group relative rounded-lg border border-line p-2 transition-colors hover:border-ink-3"
                   >
+                    {/* Always visible, not on hover: a phone has no hover, and
+                        this was exactly the bug on the media remove button. */}
+                    <button
+                      type="button"
+                      aria-label={`Remove ${product.title}`}
+                      onClick={(e) => {
+                        e.preventDefault();
+                        removeProduct.mutate(product.id);
+                      }}
+                      className="absolute right-1 top-1 z-10 rounded-full bg-surface-1/90 p-1 text-ink-3 shadow-sm hover:text-red-500"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
                     {product.imageUrl ? (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img

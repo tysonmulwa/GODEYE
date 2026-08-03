@@ -23,6 +23,7 @@ from ..events import publish_event
 from ..publishers import PublishError, get_publisher
 from ..publishers.base import PostPayload
 from ..security import decrypt_credentials
+from .products import attach_imported_photo
 
 logger = logging.getLogger(__name__)
 
@@ -41,6 +42,10 @@ PUBLISH_HARD_LIMIT_SEC = 10 * 60
 # comfortably past the hard limit, so a task that is merely slow is never
 # re-queued underneath itself.
 STUCK_POST_MINUTES = 12
+
+# Networks whose API refuses a post with no media. Everywhere else text alone
+# is a legitimate post, so nothing is borrowed for them.
+MEDIA_REQUIRED_PLATFORMS = ("TIKTOK", "INSTAGRAM")
 
 # When an org requires approval, a due post only dispatches once its content
 # cleared review. SCHEDULED/PUBLISHED imply approval happened earlier (manual
@@ -141,6 +146,30 @@ def publish_post(scheduled_post_id: str) -> dict:
     platform = connection["platform"]
     media_urls = [row.url for row in media if row.kind == "IMAGE"]
     video_urls = [row.url for row in media if row.kind == "VIDEO"]
+
+    # A post with nothing attached cannot go to these two at all, and retrying
+    # it changes nothing — the same content comes back with the same nothing,
+    # which is why "reschedule the failed post" kept failing identically. If
+    # the workspace imported a catalogue, borrow a photograph from it here,
+    # which is the last moment anything can still be done about it.
+    if platform in MEDIA_REQUIRED_PLATFORMS and not media_urls and not video_urls:
+        if attach_imported_photo(post["orgId"], post["contentItemId"], utcnow()):
+            with get_session() as session:
+                media_urls = [
+                    row.url
+                    for row in session.execute(
+                        select(MediaAsset.c.url)
+                        .where(
+                            MediaAsset.c.contentItemId == post["contentItemId"],
+                            MediaAsset.c.kind == "IMAGE",
+                            MediaAsset.c.url.isnot(None),
+                        )
+                        .order_by(MediaAsset.c.createdAt.asc())
+                    ).fetchall()
+                ]
+            logger.info(
+                "Publish %s had no media; attached one from the catalogue", scheduled_post_id
+            )
     payload = _build_payload(
         dict(content), platform, post.get("variantKey"), media_urls, video_urls,
         brand_music,

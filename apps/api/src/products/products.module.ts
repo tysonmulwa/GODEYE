@@ -2,7 +2,10 @@ import {
   BadRequestException,
   Body,
   Controller,
+  Delete,
   Get,
+  NotFoundException,
+  Param,
   Injectable,
   Module,
   Post,
@@ -133,6 +136,35 @@ export class ProductsService {
     return { taskId };
   }
 
+  /** Remove one product, or the whole catalogue. */
+  async remove(orgId: string, userId: string, id?: string) {
+    if (id) {
+      const product = await this.prisma.product.findFirst({ where: { id, orgId } });
+      if (!product) throw new NotFoundException("Product not found");
+      await this.prisma.product.delete({ where: { id } });
+      this.auditLog.log({
+        orgId,
+        userId,
+        action: "products.deleted",
+        targetType: "Product",
+        targetId: id,
+        metadata: { title: product.title },
+      });
+      return { deleted: 1 };
+    }
+
+    const { count } = await this.prisma.product.deleteMany({ where: { orgId } });
+    this.auditLog.log({
+      orgId,
+      userId,
+      action: "products.cleared",
+      targetType: "Product",
+      targetId: "*",
+      metadata: { deleted: count },
+    });
+    return { deleted: count };
+  }
+
   async list(orgId: string, limit = 100) {
     const rows = await this.prisma.product.findMany({
       where: { orgId },
@@ -198,6 +230,18 @@ export class ProductsController {
   @ApiOperation({ summary: "The imported catalogue" })
   list(@CurrentAuth() auth: AccessTokenPayload, @Query("limit") limit?: string) {
     return this.products.list(auth.orgId, limit ? Number(limit) : undefined);
+  }
+
+  @Delete(":id")
+  @ApiOperation({ summary: "Remove one imported product" })
+  removeOne(@CurrentAuth() auth: AccessTokenPayload, @Param("id") id: string) {
+    return this.products.remove(auth.orgId, auth.sub, id);
+  }
+
+  @Delete()
+  @ApiOperation({ summary: "Remove the whole imported catalogue" })
+  clear(@CurrentAuth() auth: AccessTokenPayload) {
+    return this.products.remove(auth.orgId, auth.sub);
   }
 }
 

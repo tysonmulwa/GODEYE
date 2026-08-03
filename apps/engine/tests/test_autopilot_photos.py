@@ -10,8 +10,8 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from godeye_engine.tasks import planner
-from godeye_engine.tasks.planner import _attach_imported_photo
+from godeye_engine.tasks import planner, products
+from godeye_engine.tasks.products import attach_imported_photo
 
 NOW = datetime(2026, 8, 3, 9, 0, 0)
 
@@ -57,8 +57,8 @@ class FakeSession:
 
 def _run(monkeypatch, product):
     session = FakeSession(product)
-    monkeypatch.setattr(planner, "get_session", lambda: session)
-    return _attach_imported_photo("org1", "content1", NOW), session
+    monkeypatch.setattr(products, "get_session", lambda: session)
+    return attach_imported_photo("org1", "content1", NOW), session
 
 
 PRODUCT = {"id": "p1", "imageUrl": "https://cdn/boot.jpg", "postCount": 2}
@@ -129,6 +129,38 @@ class TestWhichPhotoIsChosen:
         assert order and "postCount" in order[0]
 
 
+class TestRetryingAFailedPost:
+    """Real posts failed with "needs media", were rescheduled, and failed
+    identically — because a retry re-queues the same content, and that content
+    still has nothing attached. Nothing about retrying could ever fix it."""
+
+    def _publish_source(self):
+        import inspect
+
+        from godeye_engine.tasks import scheduler
+
+        return inspect.getsource(scheduler.publish_post)
+
+    def test_a_post_with_no_media_borrows_one_before_giving_up(self):
+        source = self._publish_source()
+        assert "attach_imported_photo" in source
+        # After the media lists are built, so it only fires when they are empty.
+        assert source.index("media_urls = [") < source.index("attach_imported_photo")
+
+    def test_only_for_networks_that_refuse_a_text_post(self):
+        """Elsewhere text alone is a legitimate post; borrowing a photograph
+        would change what the user wrote."""
+        from godeye_engine.tasks.scheduler import MEDIA_REQUIRED_PLATFORMS
+
+        assert set(MEDIA_REQUIRED_PLATFORMS) == {"TIKTOK", "INSTAGRAM"}
+        assert "MEDIA_REQUIRED_PLATFORMS" in self._publish_source()
+
+    def test_a_post_that_already_has_media_is_left_alone(self):
+        source = self._publish_source()
+        guard = source[source.index("MEDIA_REQUIRED_PLATFORMS") :][:200]
+        assert "not media_urls" in guard and "not video_urls" in guard
+
+
 class TestWiring:
     def test_generated_images_still_win_when_they_are_switched_on(self):
         """The fallback is for when nothing is being generated, not instead."""
@@ -136,6 +168,6 @@ class TestWiring:
 
         source = inspect.getsource(planner.autopilot_generate)
         generate_at = source.index("_queue_image_for_content")
-        fallback_at = source.index("_attach_imported_photo")
+        fallback_at = source.index("attach_imported_photo")
         assert generate_at < fallback_at
         assert "else:" in source[generate_at:fallback_at]
