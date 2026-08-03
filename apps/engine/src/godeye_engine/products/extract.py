@@ -46,6 +46,10 @@ class Product:
     availability: str | None = None
     sku: str | None = None
     source: str = "jsonld"
+    # What the shop itself says about the thing, beyond name and price. Sizes,
+    # colours and a category are what turn "Sports Shoes, KES 1,999" into a
+    # post someone can act on without opening the link.
+    variants: dict = field(default_factory=dict)
     extras: dict = field(default_factory=dict)
 
     def as_dict(self) -> dict:

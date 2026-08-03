@@ -55,6 +55,9 @@ _CURRENCY = ("currency", "currency_code", "currencyCode")
 _IMAGE = ("image_url", "imageUrl", "image", "thumbnail", "photo", "cover_image", "images")
 _SKU = ("sku", "code", "product_code", "barcode")
 _SLUG = ("slug", "handle", "id")
+_SIZES = ("sizes", "size", "available_sizes", "variants")
+_COLOURS = ("colors", "colours", "color", "colour", "available_colors")
+_CATEGORY = ("category", "product_type", "type", "shoe_type", "subcategory")
 _STOCK = ("in_stock", "inStock", "available", "is_available", "stock", "quantity", "stock_count")
 
 
@@ -197,4 +200,28 @@ def _to_product(row, origin: str) -> Product | None:
         # Its own source: this is the shop's own database value, not a price
         # parsed out of markup, so it is as trustworthy as a product page.
         source="storefront_api",
+        variants=_variants_of(row),
     )
+
+
+def _variants_of(row: dict) -> dict:
+    """Sizes, colours and category, when the shop records them.
+
+    These are what let a post answer "will it fit me, does it come in black"
+    without the reader opening the link, and the shop already knows.
+    """
+    found: dict = {}
+    for key, names in (("sizes", _SIZES), ("colours", _COLOURS)):
+        value = _pick(row, names)
+        if isinstance(value, list):
+            items = [str(v).strip() for v in value if str(v).strip()]
+        elif isinstance(value, str):
+            items = [part.strip() for part in re.split(r"[,;/|]", value) if part.strip()]
+        else:
+            items = []
+        if items:
+            found[key] = items[:12]
+    category = _pick(row, _CATEGORY)
+    if category and not isinstance(category, (list, dict)):
+        found["category"] = str(category).strip()
+    return found

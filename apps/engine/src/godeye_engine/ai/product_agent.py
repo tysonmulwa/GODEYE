@@ -56,9 +56,18 @@ consequence.
 3. Any fact you were not given. No invented materials, origin, awards,
    reviews, ratings or customer counts.
 
-Write plainly and specifically. Lead with the product rather than with a hook
-about the reader. State the price exactly as supplied, unchanged. One clear
-call to action. No em dashes.
+Write the post someone could act on without opening the link. When you are
+given sizes, colours or a category, say them — those answer "will it fit me"
+and "does it come in black", and leaving them out makes the reader click to
+find out. Include the link if one is given.
+
+A short scannable shape works better than a paragraph: a line that names the
+thing, a line or two on what it is actually like, then the details as their own
+short lines. Emoji are fine as line markers where they earn their place; do not
+sprinkle them through sentences.
+
+State the price exactly as supplied, unchanged. One clear call to action. No em
+dashes. Never invent a fact you were not given.
 
 Reply as JSON only:
 {"body": "the caption", "hashtags": ["five", "at", "most"]}"""
@@ -83,6 +92,18 @@ def build_prompt(product: dict[str, Any], profile: dict[str, Any], angle: str,
         lines.append(f"The shop's own description: {product['description'][:600]}")
     if product.get("availability"):
         lines.append(f"Availability: {product['availability']}")
+    # The details that answer "will it fit me, does it come in black" without
+    # the reader opening the link. The shop already knows them; a post that
+    # leaves them out makes someone click to find out.
+    variants = product.get("variants") or {}
+    if variants.get("sizes"):
+        lines.append(f"Sizes the shop lists: {', '.join(variants['sizes'])}")
+    if variants.get("colours"):
+        lines.append(f"Colours the shop lists: {', '.join(variants['colours'])}")
+    if variants.get("category"):
+        lines.append(f"Category: {variants['category']}")
+    if product.get("url"):
+        lines.append(f"Link to include: {product['url']}")
     if profile.get("businessName"):
         lines.append(f"Shop: {profile['businessName']}")
     if profile.get("targetAudience"):
@@ -109,17 +130,33 @@ def fallback_post(product: dict[str, Any], price_text: str | None) -> ProductPos
     # The title is a name, not a sentence, so it needs closing before the next
     # one starts: "Premium Perfume Luxurious fragrance" reads as one phrase.
     title = product["title"].strip()
-    parts = [title if title.endswith((".", "!", "?")) else f"{title}."]
+    title = product["title"].strip()
+    lines = [title if title.endswith((".", "!", "?")) else f"{title}."]
     description = (product.get("description") or "").strip()
     if description:
         sentence = description.split(". ")[0].strip().rstrip(".")
         if sentence and sentence.lower() != title.lower():
-            parts.append(f"{sentence[0].upper()}{sentence[1:]}.")
+            lines.append(f"{sentence[0].upper()}{sentence[1:]}.")
+
+    # Written as its own short lines rather than a run-on sentence: these are
+    # the facts a reader scans for, and the shop already knows every one.
+    details = []
     if price_text:
-        parts.append(f"{price_text}.")
-    parts.append("Full details on our website.")
+        details.append(f"Price: {price_text}")
+    variants = product.get("variants") or {}
+    if variants.get("sizes"):
+        details.append(f"Sizes: {', '.join(variants['sizes'])}")
+    if variants.get("colours"):
+        details.append(f"Colours: {', '.join(variants['colours'])}")
+    if details:
+        lines.append("")
+        lines.extend(details)
+
+    url = product.get("url")
+    lines.append("")
+    lines.append(f"Shop now: {url}" if url else "Full details on our website.")
     return ProductPost(
-        body=dedash(" ".join(parts)),
+        body=dedash("\n".join(lines)),
         hashtags=[],
         angle="the product's own words",
         compliant=True,

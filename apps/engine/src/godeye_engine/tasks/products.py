@@ -46,6 +46,8 @@ def content_hash(product) -> str:
         product.currency or "",
         product.image_url or "",
         product.availability or "",
+        # Sizes and colours selling out is a real change to a post.
+        repr(sorted((product.variants or {}).items())),
     ]
     return hashlib.sha256("\x1f".join(parts).encode("utf-8")).hexdigest()[:32]
 
@@ -232,6 +234,7 @@ def _store(org_id: str, products: list, now) -> tuple[int, int, int]:
                 "availability": product.availability,
                 "sku": product.sku,
                 "source": product.source,
+                "variants": product.variants or None,
                 "contentHash": digest,
                 "lastSeenAt": now,
                 "updatedAt": now,

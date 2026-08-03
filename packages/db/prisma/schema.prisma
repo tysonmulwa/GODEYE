@@ -268,8 +268,12 @@ model Product {
   imageUrl     String?
   availability String?
   sku          String?
-  /// Which route read it: shopify | jsonld | microdata | opengraph
+  /// Which route read it: shopify | jsonld | microdata | opengraph | storefront_api
   source       String
+  /// Sizes, colours and category as the shop records them: { "sizes": [...],
+  /// "colours": [...], "category": "..." }. What lets a post answer "will it
+  /// fit me" without the reader opening the link.
+  variants     Json?
   /// Fingerprint of the fields that matter, so a re-import can tell a genuine
   /// change from a shop that simply republished the same page.
   contentHash  String

@@ -46,8 +46,9 @@ export class SchedulingController {
     @CurrentAuth() auth: AccessTokenPayload,
     @Query("from") from?: string,
     @Query("to") to?: string,
+    @Query("includeCancelled") includeCancelled?: string,
   ) {
-    return this.scheduling.list(auth.orgId, from, to);
+    return this.scheduling.list(auth.orgId, from, to, includeCancelled === "1");
   }
 
   @Post("schedule/:id/cancel")

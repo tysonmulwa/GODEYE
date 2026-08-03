@@ -266,6 +266,7 @@ Product = Table(
     Column("sku", String),
     Column("source", String, nullable=False),
     Column("contentHash", String, nullable=False),
+    Column("variants", JSONB),
     Column("firstSeenAt", DateTime(timezone=False)),
     Column("lastSeenAt", DateTime(timezone=False)),
     Column("lastPostedAt", DateTime(timezone=False)),

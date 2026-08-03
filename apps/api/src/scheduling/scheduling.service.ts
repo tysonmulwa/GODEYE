@@ -92,10 +92,15 @@ export class SchedulingService {
     return posts.slice(0, connections.length);
   }
 
-  async list(orgId: string, from?: string, to?: string) {
+  async list(orgId: string, from?: string, to?: string, includeCancelled = false) {
     const rows = await this.prisma.scheduledPost.findMany({
       where: {
         orgId,
+        // Changing a plan's times cancels its upcoming posts and re-plans
+        // them. Leaving the old ones on the calendar fills it with rows
+        // marked CANCELLED sitting beside their replacements, which reads as
+        // "autopilot cancelled everything" rather than "these moved".
+        ...(includeCancelled ? {} : { status: { not: "CANCELLED" as const } }),
         ...(from || to
           ? {
               scheduledAt: {
