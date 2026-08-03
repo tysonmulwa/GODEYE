@@ -174,7 +174,7 @@ export default function TeamPage() {
             {lastInvite && (
               <div className="mt-4 rounded-lg border border-accent/30 bg-accent/5 p-3">
                 <p className="text-xs font-medium">
-                  Invite link for {lastInvite.email} — share it now, it is only shown once:
+                  Invite link for {lastInvite.email}, share it now, it is only shown once:
                 </p>
                 <div className="mt-2 flex items-center gap-2">
                   <code className="min-w-0 flex-1 truncate rounded bg-surface-3 px-2 py-1.5 text-[14px]">

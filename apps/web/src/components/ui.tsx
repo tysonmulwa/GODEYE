@@ -33,7 +33,7 @@ export const Button = forwardRef<
       ref={ref}
       disabled={disabled || loading}
       className={cx(
-        "inline-flex h-9 items-center justify-center gap-2 rounded-[9px] px-3.5 text-[14px] font-semibold",
+        "inline-flex h-9 shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-[9px] px-3.5 text-[14px] font-semibold",
         "transition-colors duration-150 focus-visible:outline-2 focus-visible:outline-accent",
         buttonStyles[variant],
         className,

@@ -171,7 +171,7 @@ export function ImageStudio({
 
     if (picked.length > remaining) {
       setError(
-        `You can attach ${MAX_IMAGES} images per post — ${remaining} slot${remaining === 1 ? "" : "s"} left.`,
+        `You can attach ${MAX_IMAGES} images per post, ${remaining} slot${remaining === 1 ? "" : "s"} left.`,
       );
       return;
     }
@@ -333,7 +333,7 @@ export function ImageStudio({
             ))}
           </div>
           <p className="mt-1.5 text-xs text-emerald-500">
-            ✓ {images.length === 1 ? "Attached" : `${images.length} images attached`} — they
+            ✓ {images.length === 1 ? "Attached" : `${images.length} images attached`}, they
             publish with this post.
           </p>
         </motion.div>

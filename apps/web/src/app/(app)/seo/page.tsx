@@ -180,7 +180,7 @@ export default function SeoPage() {
   const handleClear = () => {
     if (
       window.confirm(
-        "Delete every SEO audit in this workspace? This can't be undone — you'll start fresh.",
+        "Delete every SEO audit in this workspace? This can't be undone, you'll start fresh.",
       )
     ) {
       clearAll.mutate();
@@ -249,7 +249,7 @@ export default function SeoPage() {
       {audits.length === 0 && !runAudit.isPending ? (
         <EmptyState
           title="No audits yet"
-          hint="Run your first audit — GODEYE crawls up to 20 pages and scores your technical SEO."
+          hint="Run your first audit, GODEYE crawls up to 20 pages and scores your technical SEO."
         />
       ) : (
         <div className="grid gap-6 lg:grid-cols-4">
@@ -290,7 +290,7 @@ export default function SeoPage() {
                 <div>
                   <p className="text-sm font-medium">Auditing {detail?.url}…</p>
                   <p className="text-xs text-ink-3">
-                    Crawling pages, checking rules, researching keywords — 1–2 minutes.
+                    Crawling pages, checking rules, researching keywords. About 1-2 minutes.
                   </p>
                 </div>
               </Card>
@@ -422,7 +422,7 @@ export default function SeoPage() {
                     Findings ({sortedFindings.length})
                   </h2>
                   {sortedFindings.length === 0 ? (
-                    <p className="text-sm text-emerald-500">No issues found — clean site! 🎉</p>
+                    <p className="text-sm text-emerald-500">No issues found, clean site! 🎉</p>
                   ) : (
                     <div className="space-y-2">
                       {sortedFindings.map((finding, i) => (

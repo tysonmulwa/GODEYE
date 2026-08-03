@@ -42,7 +42,7 @@ const WHAT_IT_DOES = [
   },
   {
     heading: "Reads your shop and posts what you sell",
-    body: "Point it at your website and it reads the catalogue — names, prices, sizes, colours, photographs — and writes posts from them. New products announce themselves.",
+    body: "Point it at your website and it reads the catalogue: names, prices, sizes, colours and photographs. Then it writes posts from them. New products announce themselves.",
   },
   {
     heading: "Finds what holds your rankings back, and writes the fix",

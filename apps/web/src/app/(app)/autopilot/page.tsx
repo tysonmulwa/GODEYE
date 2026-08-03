@@ -111,7 +111,7 @@ export default function AutopilotPage() {
   // Why Launch is unavailable, in the order someone hits them. Null means go.
   const blockedReason =
     connectedPlatforms.size === 0
-      ? "Connect at least one account first — Autopilot publishes to your connected channels, and there are none yet."
+      ? "Connect at least one account first, Autopilot publishes to your connected channels, and there are none yet."
       : form.name.trim().length < 1
         ? "Give the plan a name."
         : form.platforms.length === 0
@@ -342,7 +342,7 @@ export default function AutopilotPage() {
             </div>
 
             <div>
-              <Label>Content topics (one per line — the AI rotates through these)</Label>
+              <Label>Content topics (one per line, the AI rotates through these)</Label>
               <textarea
                 rows={3}
                 value={form.topics}
@@ -412,7 +412,7 @@ export default function AutopilotPage() {
                     label="Post as video"
                     hint={
                       form.platforms.includes("TIKTOK")
-                        ? "Applies to your other destinations — TikTok is always video."
+                        ? "Applies to your other destinations, TikTok is always video."
                         : "Off posts the photos as they are, with no sound."
                     }
                   />

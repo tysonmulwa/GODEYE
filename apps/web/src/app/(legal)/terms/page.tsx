@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Terms of Service — GODEYE",
+  title: "Terms of Service, GODEYE",
   description: "The terms you agree to when using GODEYE.",
 };
 
@@ -21,7 +21,7 @@ export default function TermsPage() {
       <h2>What GODEYE does</h2>
       <p>
         GODEYE helps you plan, write and schedule marketing content, and publishes it to the social
-        accounts you connect. It acts on your instruction — it does not post anything you have not
+        accounts you connect. It acts on your instruction, it does not post anything you have not
         created or scheduled.
       </p>
 
@@ -35,7 +35,7 @@ export default function TermsPage() {
       <h2>Your content</h2>
       <p>
         You own everything you create in GODEYE, including AI-generated drafts. You grant us only
-        the permission needed to run the service — to store your content, and to transmit it to the
+        the permission needed to run the service, to store your content, and to transmit it to the
         platforms you have connected when you tell us to publish.
       </p>
 
@@ -93,7 +93,7 @@ export default function TermsPage() {
 
       <h2>Ending your use</h2>
       <p>
-        You may stop and delete your account at any time — see <a href="/data-deletion">Data deletion</a>.
+        You may stop and delete your account at any time, see <a href="/data-deletion">Data deletion</a>.
         We may suspend or close an account that breaches these terms, and will tell you why unless
         prevented by law.
       </p>

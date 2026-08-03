@@ -14,7 +14,7 @@ import { SITE_NAME } from "@/lib/site";
  * one that always works.
  */
 export const runtime = "edge";
-export const alt = "GODEYE — marketing that runs without you in the room";
+export const alt = "GODEYE, marketing that runs without you in the room";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 
@@ -46,7 +46,7 @@ export default function OpengraphImage() {
         {/* Satori refuses any div holding more than one child without an
             explicit display, so each line is its own element inside a flex
             column rather than text split by <br>. The build does not catch
-            this — only rendering does. */}
+            this, only rendering does. */}
         <div
           style={{
             display: "flex",

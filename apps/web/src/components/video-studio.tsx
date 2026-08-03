@@ -128,7 +128,7 @@ export function VideoStudio({
     // 30 MB body limit — so the practical ceiling is around 20 MB.
     if (file.size > MAX_VIDEO_BYTES) {
       setError(
-        `${file.name} is ${Math.round(file.size / 1_000_000)} MB — keep uploads under ` +
+        `${file.name} is ${Math.round(file.size / 1_000_000)} MB, keep uploads under ` +
           `${MAX_VIDEO_BYTES / 1_000_000} MB.`,
       );
       return;
@@ -202,7 +202,7 @@ export function VideoStudio({
           checked={includeCaptions}
           onChange={setIncludeCaptions}
           label="Burn in subtitles"
-          hint="Word-timed captions — most short-form video is watched muted."
+          hint="Word-timed captions, most short-form video is watched muted."
         />
       </div>
 
@@ -250,7 +250,7 @@ export function VideoStudio({
             >
               <Film className="h-4 w-4 text-accent" />
             </motion.div>
-            <span className="flex-1">AI video pipeline running — usually 1–3 minutes</span>
+            <span className="flex-1">AI video pipeline running, usually 1-3 minutes</span>
             <span className="tnum font-mono text-[13px] text-ink-3">{percent}%</span>
           </div>
           <div
@@ -290,7 +290,7 @@ export function VideoStudio({
                   )}
                 />
                 {STEP_LABELS[step]}
-                {i === currentStepIndex && run?.output?.detail ? ` — ${run.output.detail}` : ""}
+                {i === currentStepIndex && run?.output?.detail ? `, ${run.output.detail}` : ""}
               </li>
             ))}
           </ol>
@@ -309,7 +309,7 @@ export function VideoStudio({
             <p className="text-xs text-emerald-500">
               ✓ {videoMeta?.title ?? "Video ready"}
               {videoMeta?.durationSec ? ` · ${Math.round(videoMeta.durationSec)}s` : ""}
-              {contentItemId ? " — attached to this post" : ""}
+              {contentItemId ? ", attached to this post" : ""}
             </p>
             {run?.costUsd && <span className="text-[14px] text-ink-3">${run.costUsd}</span>}
           </div>

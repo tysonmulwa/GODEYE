@@ -129,8 +129,8 @@ export function ProductCatalogueCard() {
         )}
       </div>
       <p className="mb-4 text-xs text-ink-3">
-        GODEYE can read the products on your own website — names, prices, descriptions
-        and photos — and write posts from them.
+        GODEYE can read the products on your own website: names, prices, descriptions
+        and photos, and write posts from them.
       </p>
 
       {!settings.website && (

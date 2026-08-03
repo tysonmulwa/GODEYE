@@ -90,7 +90,7 @@ export function AccountCard() {
 
       <div className="space-y-2">
         <Label>Name</Label>
-        <div className="flex gap-2">
+        <div className="flex flex-col gap-2 sm:flex-row">
           <Input
             value={name}
             onChange={(e) => setName(e.target.value)}
@@ -99,7 +99,7 @@ export function AccountCard() {
           />
           <Button
             variant="secondary"
-            className="h-9"
+            className="h-9 w-full sm:w-auto"
             disabled={!nameChanged}
             loading={saveName.isPending}
             onClick={() => saveName.mutate()}
@@ -121,7 +121,7 @@ export function AccountCard() {
           autoComplete="email"
         />
         {emailChanged && (
-          <div className="flex gap-2">
+          <div className="flex flex-col gap-2 sm:flex-row">
             <PasswordInput
               value={emailPassword}
               onChange={(e) => setEmailPassword(e.target.value)}
@@ -131,7 +131,7 @@ export function AccountCard() {
             />
             <Button
               variant="secondary"
-              className="h-9"
+              className="h-9 w-full sm:w-auto"
               disabled={!emailPassword}
               loading={saveEmail.isPending}
               onClick={() => saveEmail.mutate()}
@@ -161,7 +161,7 @@ export function AccountCard() {
         />
         <Button
           variant="secondary"
-          className="h-9"
+          className="h-9 w-full sm:w-auto"
           disabled={!currentPassword || newPassword.length < 8}
           loading={savePassword.isPending}
           onClick={() => savePassword.mutate()}

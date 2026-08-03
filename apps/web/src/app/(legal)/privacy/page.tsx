@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Privacy Policy — GODEYE",
+  title: "Privacy Policy, GODEYE",
   description: "How GODEYE collects, uses, stores and deletes your data.",
 };
 
@@ -28,7 +28,7 @@ export default function PrivacyPage() {
       <h2>What we collect</h2>
       <h3>Account information</h3>
       <p>
-        Your name and email address, and a cryptographic hash of your password — we never store
+        Your name and email address, and a cryptographic hash of your password, we never store
         the password itself. If you enable two-factor authentication, the TOTP secret is stored
         encrypted.
       </p>
@@ -48,7 +48,7 @@ export default function PrivacyPage() {
       </p>
       <p>
         <strong>All platform tokens are encrypted at rest using AES-256-GCM.</strong> They are
-        decrypted only at the moment we make a request you asked for — publishing a post you
+        decrypted only at the moment we make a request you asked for, publishing a post you
         scheduled, or reading back that post&rsquo;s engagement figures.
       </p>
 
@@ -89,16 +89,16 @@ export default function PrivacyPage() {
       </p>
       <ul>
         <li>
-          <code>pages_show_list</code> — to show you which Pages you can post to.
+          <code>pages_show_list</code>, to show you which Pages you can post to.
         </li>
         <li>
-          <code>pages_manage_posts</code> — to publish the posts you schedule.
+          <code>pages_manage_posts</code>, to publish the posts you schedule.
         </li>
         <li>
-          <code>pages_read_engagement</code> — to read back likes and comments on those posts.
+          <code>pages_read_engagement</code>, to read back likes and comments on those posts.
         </li>
         <li>
-          <code>business_management</code> — to list Pages held in your Business Manager.
+          <code>business_management</code>, to list Pages held in your Business Manager.
         </li>
       </ul>
       <p>
@@ -107,11 +107,11 @@ export default function PrivacyPage() {
       </p>
       <ul>
         <li>
-          <code>instagram_business_basic</code> — to identify the Instagram account you connected
+          <code>instagram_business_basic</code>, to identify the Instagram account you connected
           and show its username next to your scheduled posts.
         </li>
         <li>
-          <code>instagram_business_content_publish</code> — to publish the posts you schedule to
+          <code>instagram_business_content_publish</code>, to publish the posts you schedule to
           Instagram.
         </li>
       </ul>
@@ -140,7 +140,7 @@ export default function PrivacyPage() {
 
       <h2>Your rights</h2>
       <p>
-        You can access, correct, export or delete your data at any time — most of it directly in the
+        You can access, correct, export or delete your data at any time. Most of it is available directly in the
         app, and anything else by emailing us. See{" "}
         <a href="/data-deletion">Data deletion</a> for how to remove your data. If you are in the EU
         or UK, you also have the right to object to processing and to lodge a complaint with your

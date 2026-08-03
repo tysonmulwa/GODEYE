@@ -37,6 +37,29 @@ import {
  */
 const OAUTH_STATE_TTL = "30m";
 
+/**
+ * How long a failure stays worth showing on a channel that is otherwise fine.
+ *
+ * lastError is stamped when a post fails and cleared when one succeeds, so a
+ * channel that failed once and has not posted since keeps that message on
+ * screen indefinitely. It sat on two workspaces for days, in red, describing
+ * an attempt nobody remembered, next to a badge reading ACTIVE. That is not a
+ * warning any more, it is furniture.
+ *
+ * A channel in a bad state still says so: status carries EXPIRED, ERROR and
+ * DISCONNECTED, and those are shown however old they are. This only hides a
+ * stale message on a channel the platform is still accepting.
+ */
+const ERROR_RELEVANT_HOURS = 24;
+
+function currentError(c: { status: string; lastError: string | null; lastErrorAt: Date | null }) {
+  if (!c.lastError) return null;
+  if (c.status !== "ACTIVE") return c.lastError;
+  if (!c.lastErrorAt) return null;
+  const ageHours = (Date.now() - c.lastErrorAt.getTime()) / 3_600_000;
+  return ageHours <= ERROR_RELEVANT_HOURS ? c.lastError : null;
+}
+
 @Injectable()
 export class ConnectionsService {
   constructor(
@@ -59,7 +82,8 @@ export class ConnectionsService {
       status: c.status,
       displayName: c.displayName,
       externalId: c.externalId,
-      lastError: c.lastError,
+      lastError: currentError(c),
+      lastErrorAt: c.lastErrorAt?.toISOString() ?? null,
       createdAt: c.createdAt.toISOString(),
     }));
   }
@@ -366,7 +390,7 @@ export class ConnectionsService {
       status: row.status,
       displayName: row.displayName,
       externalId: row.externalId,
-      lastError: row.lastError,
+      lastError: currentError(row),
       createdAt: row.createdAt.toISOString(),
     };
   }

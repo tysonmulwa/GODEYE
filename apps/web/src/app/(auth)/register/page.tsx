@@ -18,13 +18,13 @@ const ACCOUNT_TYPES: Array<{
   {
     value: "CREATOR",
     label: "Content creator",
-    hint: "I'm building my own audience — automate my posts, images & videos",
+    hint: "I'm building my own audience, automate my posts, images & videos",
     icon: Clapperboard,
   },
   {
     value: "BUSINESS",
     label: "Business / company",
-    hint: "We market a business — team seats, approvals & brand tools",
+    hint: "We market a business, team seats, approvals & brand tools",
     icon: Building2,
   },
 ];

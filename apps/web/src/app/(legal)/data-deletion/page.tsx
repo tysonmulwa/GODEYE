@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Data Deletion — GODEYE",
+  title: "Data Deletion, GODEYE",
   description: "How to delete your GODEYE data, or data GODEYE holds from a connected platform.",
 };
 
@@ -21,7 +21,7 @@ export default function DataDeletionPage() {
       </p>
       <p>
         The stored access tokens for that account are deleted immediately, and GODEYE loses all
-        ability to see or post to it. Posts already published stay on the platform — they belong to
+        ability to see or post to it. Posts already published stay on the platform, they belong to
         your account there, and only you can remove them.
       </p>
 
@@ -77,13 +77,13 @@ export default function DataDeletionPage() {
       <h2>What we cannot delete</h2>
       <p>
         Posts that were already published to Facebook, Instagram, X or anywhere else live on that
-        platform under your account. GODEYE cannot remove them once your connection is gone — delete
+        platform under your account. GODEYE cannot remove them once your connection is gone, delete
         those directly on the platform.
       </p>
 
       <h2>Questions</h2>
       <p>
-        <a href="mailto:tysonmulwa25@gmail.com">tysonmulwa25@gmail.com</a> — we answer deletion
+        <a href="mailto:tysonmulwa25@gmail.com">tysonmulwa25@gmail.com</a>, we answer deletion
         requests first.
       </p>
     </>

@@ -333,7 +333,7 @@ export default function DashboardPage() {
               <li className="flex items-center justify-between gap-3">
                 <span className="text-ink-2">next post</span>
                 <span className="truncate text-ink">
-                  {nextPost ? timeShort(nextPost.scheduledAt) : "—"}
+                  {nextPost ? timeShort(nextPost.scheduledAt) : ","}
                 </span>
               </li>
               <li className="flex items-center justify-between gap-3">

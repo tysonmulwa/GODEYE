@@ -125,7 +125,7 @@ export default function OnboardingPage() {
         <div>
           <p className="text-sm font-semibold">Set up your marketing brain</p>
           <p className="text-xs text-ink-3">
-            The AI uses this profile for everything it creates — be specific.
+            The AI uses this profile for everything it creates, be specific.
           </p>
         </div>
       </div>
@@ -275,8 +275,8 @@ export default function OnboardingPage() {
                   onChange={set("brandVoice")}
                   placeholder={
                     isCreator
-                      ? "Casual and funny, first person, lots of storytelling — never salesy."
-                      : "Warm, knowledgeable, a little playful — never corporate."
+                      ? "Casual and funny, first person, lots of storytelling, never salesy."
+                      : "Warm, knowledgeable, a little playful, never corporate."
                   }
                 />
               </div>

@@ -99,7 +99,7 @@ function BillingCard() {
       <p className="mb-4 text-xs text-ink-3">
         Usage resets on the 1st of every month.
         {data.subscriptionStatus === "PAST_DUE" && (
-          <span className="text-amber-600"> Payment past due — update your card.</span>
+          <span className="text-amber-600"> Payment past due, update your card.</span>
         )}
       </p>
 
@@ -285,7 +285,7 @@ function BrandKitCard() {
     <Card>
       <h2 className="mb-1 text-sm font-semibold">Brand kit</h2>
       <p className="mb-4 text-xs text-ink-3">
-        Used when the AI generates images — your logo and accent color are composited onto brand
+        Used when the AI generates images, your logo and accent color are composited onto brand
         overlays.
       </p>
 
@@ -404,10 +404,10 @@ function BrandKitCard() {
 
       </div>
 
-      <div className="mb-4 grid grid-cols-2 gap-4">
+      <div className="mb-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div>
           <Label>Primary / accent color</Label>
-          <div className="flex items-center gap-2">
+          <div className="flex min-w-0 items-center gap-2">
             <input
               type="color"
               value={current.primaryColor}
@@ -422,7 +422,7 @@ function BrandKitCard() {
         </div>
         <div>
           <Label>Secondary color</Label>
-          <div className="flex items-center gap-2">
+          <div className="flex min-w-0 items-center gap-2">
             <input
               type="color"
               value={current.secondaryColor}

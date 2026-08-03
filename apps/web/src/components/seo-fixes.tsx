@@ -228,7 +228,7 @@ export function SeoFixes({ auditId, platform }: { auditId: string; platform: str
       )}
 
       {/* Search-engine notification. Deliberately explicit about which engines
-          this reaches — Google is not one of them and pretending otherwise is
+          this reaches, Google is not one of them and pretending otherwise is
           the most common lie in this category of tool. */}
       {indexNow && (
         <div className="mb-3 rounded-lg border border-line bg-surface-3 px-3 py-2.5">
@@ -244,7 +244,7 @@ export function SeoFixes({ auditId, platform }: { auditId: string; platform: str
               </p>
               <p className="mt-0.5 text-[12px] leading-relaxed text-ink-3">
                 {indexNow.published
-                  ? "Bing, Yandex, Seznam and Naver accept submissions for this site. Google has no equivalent — there the sitemap is the route."
+                  ? "Bing, Yandex, Seznam and Naver accept submissions for this site. Google has no equivalent, there the sitemap is the route."
                   : "Publish the IndexNow key file listed in the fixes below, then search engines will accept instant submissions for this site."}
               </p>
             </div>

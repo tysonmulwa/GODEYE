@@ -196,7 +196,7 @@ export default function CalendarPage() {
       )}
 
       {/* overscroll-x-contain stops a sideways swipe in the week grid from
-          chaining out to the page — without it a touch that drifts horizontally
+          chaining out to the page, without it a touch that drifts horizontally
           drags the whole document and the screen judders. */}
       <div className="overflow-x-auto overscroll-x-contain rounded-[11px] border border-line bg-surface-2">
         <div className="grid min-w-[900px] grid-cols-7">

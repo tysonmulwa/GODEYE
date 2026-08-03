@@ -164,7 +164,7 @@ function ConnectionsInner() {
           {{ meta: "Meta", linkedin: "LinkedIn", reddit: "Reddit", instagram: "Instagram", tiktok: "TikTok" }[
             params.get("connected") as string
           ] ?? "Account"}{" "}
-          connected — {params.get("count")} account(s) added.
+          connected, {params.get("count")} account(s) added.
         </p>
       )}
       {params.get("error") && <ErrorNote message={params.get("error")} />}
@@ -292,7 +292,7 @@ function ConnectionsInner() {
                 <PlatformGlyph platform="REDDIT" size={36} className="!rounded-[9px]" />
                 <div>
                   <p className="text-sm font-medium">Reddit</p>
-                  <p className="text-xs text-ink-3">One click — sign in and authorize</p>
+                  <p className="text-xs text-ink-3">One click, sign in and authorize</p>
                 </div>
               </div>
               <Button variant="secondary" onClick={connectReddit}>
@@ -325,7 +325,7 @@ function ConnectionsInner() {
                 <div>
                   <p className="text-sm font-medium">Instagram</p>
                   <p className="text-xs text-ink-3">
-                    Business/Creator — works with or without a Facebook Page
+                    Business/Creator, works with or without a Facebook Page
                   </p>
                 </div>
               </div>
@@ -334,7 +334,7 @@ function ConnectionsInner() {
               </Button>
             </div>
             {/* Instagram's own OAuth is unreliable inside mobile in-app
-                browsers — the redirect gets mishandled and it fails with a
+                browsers, the redirect gets mishandled and it fails with a
                 generic "something went wrong". Say so up front rather than
                 leave people retrying. */}
             <p className="mt-2 border-t border-line pt-2 text-xs text-ink-3 lg:hidden">
@@ -350,7 +350,7 @@ function ConnectionsInner() {
                 <PlatformGlyph platform="TIKTOK" size={36} className="!rounded-[9px]" />
                 <div>
                   <p className="text-sm font-medium">TikTok</p>
-                  <p className="text-xs text-ink-3">Video posts — attach a video</p>
+                  <p className="text-xs text-ink-3">Video posts, attach a video</p>
                 </div>
               </div>
               <Button variant="secondary" onClick={connectTiktok}>
@@ -365,7 +365,7 @@ function ConnectionsInner() {
                 <PlatformGlyph platform="LINKEDIN" size={36} className="!rounded-[9px]" />
                 <div>
                   <p className="text-sm font-medium">LinkedIn</p>
-                  <p className="text-xs text-ink-3">OAuth — post to your profile feed</p>
+                  <p className="text-xs text-ink-3">OAuth, post to your profile feed</p>
                 </div>
               </div>
               <Button variant="secondary" onClick={connectLinkedin}>

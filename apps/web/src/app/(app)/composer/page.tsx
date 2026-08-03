@@ -253,7 +253,7 @@ export default function ComposerPage() {
         {/* Brief */}
         <Card className="space-y-4 lg:col-span-2">
           <div>
-            <Label>Goal — what should this post achieve?</Label>
+            <Label>Goal, what should this post achieve?</Label>
             <Textarea
               rows={3}
               value={goal}
@@ -290,7 +290,7 @@ export default function ComposerPage() {
             <Label>Publish to</Label>
             {activeConnections.length === 0 ? (
               <p className="text-xs text-ink-3">
-                No active connections — add one on the Connections page first.
+                No active connections, add one on the Connections page first.
               </p>
             ) : (
               <div className="space-y-1.5">
@@ -384,7 +384,7 @@ export default function ComposerPage() {
             <Card className="flex h-full min-h-64 flex-col items-center justify-center text-center">
               <GodeyeSpinner size={52} className="mb-3 text-accent" />
               <p className="text-sm font-medium">Writing on-brand content…</p>
-              <p className="mt-1 text-xs text-ink-3">Usually takes 5–15 seconds</p>
+              <p className="mt-1 text-xs text-ink-3">Usually takes 5-15 seconds</p>
             </Card>
           )}
 
@@ -424,7 +424,7 @@ export default function ComposerPage() {
 
                 {content.abVariants && (
                   <div>
-                    <Label>A/B variants — pick the one to use</Label>
+                    <Label>A/B variants, pick the one to use</Label>
                     <div className="grid gap-2 sm:grid-cols-2">
                       {Object.entries(content.abVariants).map(([key, v]) => (
                         <div
@@ -602,7 +602,7 @@ export default function ComposerPage() {
                     </div>
 
                     {/* TikTok's API has no still post that can carry audio, so
-                        there is nothing to choose there — offering the toggle
+                        there is nothing to choose there, offering the toggle
                         would only suggest an option that does not exist. */}
                     {selectedPlatforms.some((p) => p !== "TIKTOK") && (
                       <div className="mt-3">
@@ -612,7 +612,7 @@ export default function ComposerPage() {
                           label="Post as video"
                           hint={
                             selectedPlatforms.includes("TIKTOK")
-                              ? "Applies to your other destinations — TikTok is always video. Off posts still photos there instead."
+                              ? "Applies to your other destinations, TikTok is always video. Off posts still photos there instead."
                               : "Off posts the photos as they are, with no sound."
                           }
                         />
