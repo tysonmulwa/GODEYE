@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from datetime import timedelta
+from datetime import datetime, timedelta
 
 from sqlalchemy import and_, case, or_, select, update
 
@@ -38,10 +38,19 @@ LOCK_TIMEOUT_MINUTES = 5
 PUBLISH_SOFT_LIMIT_SEC = 8 * 60
 PUBLISH_HARD_LIMIT_SEC = 10 * 60
 
-# How long a claimed post may sit before it is treated as abandoned. Must be
-# comfortably past the hard limit, so a task that is merely slow is never
-# re-queued underneath itself.
-STUCK_POST_MINUTES = 12
+# How long a claimed post may sit before it is treated as abandoned.
+#
+# This was twelve minutes, sized against the task's own ten minute hard limit,
+# on the assumption that a claimed post is a running one. It is not: the row is
+# marked PROCESSING when it is claimed, and the worker runs --concurrency=2, so
+# a post can wait in the queue behind others for as long as they take. Counting
+# that wait as abandonment re-queued live work.
+#
+# Thirty minutes leaves room for a full queue of slow publishes — an Instagram
+# Reel alone can spend five minutes being transcoded. The claim check in
+# publish_post is what actually prevents a duplicate; this only decides how
+# long a genuinely lost post waits.
+STUCK_POST_MINUTES = 30
 
 # Networks whose API refuses a post with no media. Everywhere else text alone
 # is a legitimate post, so nothing is borrowed for them.
@@ -97,7 +106,10 @@ def dispatch_due_posts() -> int:
         session.commit()
 
     for post_id in ids:
-        publish_post.delay(post_id)
+        # The claim time travels with the task. If this post gets re-queued
+        # before the task runs, its lockedAt moves and this copy stands down —
+        # see publish_post.
+        publish_post.delay(post_id, claimed_at=now.isoformat())
     if ids:
         logger.info("Dispatched %d due post(s)", len(ids))
     return len(ids)
@@ -108,13 +120,31 @@ def dispatch_due_posts() -> int:
     soft_time_limit=PUBLISH_SOFT_LIMIT_SEC,
     time_limit=PUBLISH_HARD_LIMIT_SEC,
 )
-def publish_post(scheduled_post_id: str) -> dict:
+def publish_post(scheduled_post_id: str, claimed_at: str | None = None) -> dict:
     with get_session() as session:
         post = session.execute(
             select(ScheduledPost).where(ScheduledPost.c.id == scheduled_post_id)
         ).mappings().first()
         if post is None or post["status"] != "PROCESSING":
             return {"status": "skipped"}
+
+        # Status alone is not enough to know this task still owns the post.
+        # PROCESSING is set when the row is claimed, not when a worker picks
+        # the task up, so a post can sit in the queue behind others while
+        # already marked as being worked on. The reaper reads that wait as
+        # abandonment, re-queues it, and then two copies of this task exist —
+        # both find PROCESSING and both publish. That is how the same product
+        # went out twice, thirteen minutes apart.
+        #
+        # The claim time makes the copies distinguishable: re-queuing moves
+        # lockedAt, so only the task dispatched by the most recent claim
+        # matches, and the rest stand down.
+        if claimed_at and post["lockedAt"] is not None:
+            if post["lockedAt"] != datetime.fromisoformat(claimed_at):
+                logger.info(
+                    "Publish %s superseded by a newer claim; standing down", scheduled_post_id
+                )
+                return {"status": "superseded"}
 
         content = session.execute(
             select(ContentItem).where(ContentItem.c.id == post["contentItemId"])
