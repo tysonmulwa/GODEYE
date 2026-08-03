@@ -38,6 +38,40 @@ class TestSelectionRules:
         assert SCHEDULE_AHEAD_MINUTES >= 15
 
 
+class TestTheRowsItWrites:
+    """Compiled against the real tables. Source-inspection tests missed that
+    this insert named a column the table does not have and omitted two it
+    requires — it would have failed on the first auto-post."""
+
+    def test_the_media_row_matches_the_table(self):
+        from godeye_engine.db import MediaAsset
+
+        statement = MediaAsset.insert().values(
+            id="m1", orgId="org1", contentItemId="c1", kind="IMAGE",
+            source="IMPORTED", storageKey="https://cdn/x.jpg",
+            url="https://cdn/x.jpg", mimeType="image/jpeg",
+            createdAt=scheduler_now(),
+        )
+        params = statement.compile().params
+        assert params["storageKey"] and params["mimeType"]
+        assert "updatedAt" not in params
+
+    def test_the_task_uses_that_same_shape(self):
+        import inspect
+
+        source = inspect.getsource(product_posts.create_product_post)
+        media = source[source.index("MediaAsset.insert") : source.index("for connection")]
+        assert "storageKey=" in media and "mimeType=" in media
+        assert "updatedAt=" not in media
+        assert 'source="IMPORTED"' in media
+
+
+def scheduler_now():
+    from godeye_engine.db import utcnow
+
+    return utcnow()
+
+
 class TestScheduling:
     def test_both_jobs_are_in_the_beat_schedule(self):
         """A task nobody calls is not automation."""

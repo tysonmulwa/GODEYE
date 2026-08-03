@@ -171,10 +171,14 @@ def create_product_post(org_id: str, platforms: list[str]) -> dict:
                     orgId=org_id,
                     contentItemId=content_id,
                     kind="IMAGE",
-                    source="UPLOADED",
+                    source="IMPORTED",
+                    # The shop hosts it, so there is no object of ours behind
+                    # this — but the column is NOT NULL, so it records where
+                    # the file actually lives.
+                    storageKey=product["imageUrl"],
                     url=product["imageUrl"],
+                    mimeType="image/jpeg",
                     createdAt=now,
-                    updatedAt=now,
                 )
             )
 

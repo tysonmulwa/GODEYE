@@ -24,8 +24,10 @@ from ..db import (
     AgentRun,
     BusinessProfile,
     ContentItem,
+    MediaAsset,
     Organization,
     PostingPlan,
+    Product,
     ScheduledPost,
     SocialConnection,
     get_session,
@@ -292,6 +294,12 @@ def autopilot_generate(plan_id: str, slot_iso: str, slot_index: int = 0) -> dict
     # Optionally generate an on-brand image and attach it to this post.
     if plan["generateImages"]:
         _queue_image_for_content(plan, content_id, result.title, topic or goal, connections)
+    else:
+        # No generated image does not have to mean no image. A workspace that
+        # imported its catalogue already has real photographs of the things it
+        # sells, and a post without one goes out as bare text — on TikTok and
+        # Instagram that means it cannot go out at all.
+        _attach_imported_photo(plan["orgId"], content_id, now)
 
     publish_event(
         plan["orgId"],
@@ -309,6 +317,65 @@ def autopilot_generate(plan_id: str, slot_iso: str, slot_index: int = 0) -> dict
         "contentItemId": content_id,
         "connections": len(connections),
     }
+
+
+def _attach_imported_photo(org_id: str, content_id: str, now) -> bool:
+    """Use a photograph the shop already published, when none is generated.
+
+    A workspace that imported its catalogue owns real pictures of the things it
+    sells, and they cost nothing to reuse. Without one an autopilot post is
+    bare text, which TikTok and Instagram refuse outright — so the choice is
+    not between a good image and a plain post, it is between a post and none.
+
+    Rotates on how often each product has been used, so a run of posts does not
+    repeat the same photograph, and prefers what is actually in stock.
+    """
+    with get_session() as session:
+        product = session.execute(
+            select(Product.c.id, Product.c.imageUrl, Product.c.postCount)
+            .where(
+                Product.c.orgId == org_id,
+                Product.c.imageUrl.isnot(None),
+                # Showing something unbuyable is worse than showing nothing.
+                (Product.c.availability.is_(None)) | (Product.c.availability != "OutOfStock"),
+            )
+            .order_by(Product.c.postCount.asc(), Product.c.lastSeenAt.desc())
+            .limit(1)
+        ).mappings().first()
+
+        if product is None:
+            return False
+
+        session.execute(
+            MediaAsset.insert().values(
+                id=new_id(),
+                orgId=org_id,
+                contentItemId=content_id,
+                kind="IMAGE",
+                source="IMPORTED",
+                # The shop hosts this picture, so there is no object of ours
+                # behind it — but the column is NOT NULL, so it records where
+                # the file actually lives rather than an empty string.
+                storageKey=product["imageUrl"],
+                url=product["imageUrl"],
+                # Publishers fetch the bytes and read the real type from the
+                # response; this is the honest default for a shop photograph.
+                mimeType="image/jpeg",
+                createdAt=now,
+            )
+        )
+        # Counted as used, so the next post reaches for a different one. The
+        # same column the product-post planner rotates on, deliberately: both
+        # are drawing from one catalogue and should not fight over it.
+        session.execute(
+            update(Product)
+            .where(Product.c.id == product["id"])
+            .values(postCount=(product["postCount"] or 0) + 1, updatedAt=now)
+        )
+        session.commit()
+
+    logger.info("Autopilot: attached an imported product photo to %s", content_id)
+    return True
 
 
 def _queue_image_for_content(
