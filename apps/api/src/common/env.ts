@@ -45,6 +45,26 @@ function url(value: string | undefined, fallback: string): string {
 }
 
 /**
+ * Where a platform sends someone back after they authorize.
+ *
+ * Every one of these used to fall back to http://localhost:4000, so a
+ * deployment that forgot one variable sent live customers to a callback on
+ * their own laptop. Deriving from API_URL means production is right by
+ * default and the variable exists only to override it — which some platforms
+ * need, since the URL must match what is registered with them exactly.
+ */
+function callbackUrl(platform: string, override: string | undefined): string {
+  // A variable present but blank is treated as absent. Hosting dashboards keep
+  // a key with an empty value once it has been added and cleared, and "" would
+  // otherwise win over the derived URL and send the redirect nowhere at all.
+  const explicit = override?.trim() ? override : undefined;
+  return url(
+    explicit,
+    `${url(process.env.API_URL, "http://localhost:4000")}/connections/${platform}/callback`,
+  );
+}
+
+/**
  * Registrable domain, used to decide whether two URLs are "same site".
  * Compares the last two labels, which is right for domains like
  * godeyeautomation.com but not for multi-part TLDs (foo.co.uk) — those would be
@@ -88,10 +108,7 @@ export const env = {
     clientId: process.env.REDDIT_CLIENT_ID ?? "",
     clientSecret: process.env.REDDIT_CLIENT_SECRET ?? "",
     userAgent: process.env.REDDIT_USER_AGENT ?? "godeye/0.1",
-    redirectUri: url(
-      process.env.REDDIT_REDIRECT_URI,
-      "http://localhost:4000/connections/reddit/callback",
-    ),
+    redirectUri: callbackUrl("reddit", process.env.REDDIT_REDIRECT_URI),
   },
   /**
    * X's consumer keys identify this application, exactly as Meta's and
@@ -105,21 +122,12 @@ export const env = {
     apiSecret: process.env.X_API_SECRET ?? "",
     // Must be listed verbatim under the X app's "Callback URI / Redirect URL".
     // X compares it as a string, so a trailing slash is a different URL.
-    // Derived from API_URL rather than defaulting to localhost, because a
-    // deployment that forgets the variable would otherwise send customers to
-    // a callback on their own machine and fail with nothing to point at.
-    redirectUri: url(
-      process.env.X_REDIRECT_URI,
-      `${url(process.env.API_URL, "http://localhost:4000")}/connections/x/callback`,
-    ),
+    redirectUri: callbackUrl("x", process.env.X_REDIRECT_URI),
   },
   linkedin: {
     clientId: process.env.LINKEDIN_CLIENT_ID ?? "",
     clientSecret: process.env.LINKEDIN_CLIENT_SECRET ?? "",
-    redirectUri: url(
-      process.env.LINKEDIN_REDIRECT_URI,
-      "http://localhost:4000/connections/linkedin/callback",
-    ),
+    redirectUri: callbackUrl("linkedin", process.env.LINKEDIN_REDIRECT_URI),
   },
   stripe: {
     secretKey: process.env.STRIPE_SECRET_KEY ?? "",
@@ -136,10 +144,7 @@ export const env = {
   tiktok: {
     clientKey: (process.env.TIKTOK_CLIENT_KEY ?? "").trim(),
     clientSecret: (process.env.TIKTOK_CLIENT_SECRET ?? "").trim(),
-    redirectUri: url(
-      process.env.TIKTOK_REDIRECT_URI,
-      "http://localhost:4000/connections/tiktok/callback",
-    ),
+    redirectUri: callbackUrl("tiktok", process.env.TIKTOK_REDIRECT_URI),
   },
   /**
    * Instagram API with Instagram Login — a separate Meta app product that
@@ -150,18 +155,12 @@ export const env = {
   instagram: {
     appId: (process.env.INSTAGRAM_APP_ID ?? "").trim(),
     appSecret: (process.env.INSTAGRAM_APP_SECRET ?? "").trim(),
-    redirectUri: url(
-      process.env.INSTAGRAM_REDIRECT_URI,
-      "http://localhost:4000/connections/instagram/callback",
-    ),
+    redirectUri: callbackUrl("instagram", process.env.INSTAGRAM_REDIRECT_URI),
   },
   meta: {
     appId: (process.env.META_APP_ID ?? "").trim(),
     appSecret: (process.env.META_APP_SECRET ?? "").trim(),
-    redirectUri: url(
-      process.env.META_REDIRECT_URI,
-      "http://localhost:4000/connections/meta/callback",
-    ),
+    redirectUri: callbackUrl("meta", process.env.META_REDIRECT_URI),
     webhookVerifyToken: process.env.META_WEBHOOK_VERIFY_TOKEN ?? "godeye-verify",
     graphVersion: "v21.0",
   },
