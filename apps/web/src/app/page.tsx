@@ -77,6 +77,12 @@ export default function Home() {
               Start free
             </Link>
             <Link
+              href="/pricing"
+              className="rounded-lg border border-line px-5 py-2.5 text-sm font-semibold transition-colors hover:border-ink-3"
+            >
+              Pricing
+            </Link>
+            <Link
               href="/login"
               className="rounded-lg border border-line px-5 py-2.5 text-sm font-semibold transition-colors hover:border-ink-3"
             >

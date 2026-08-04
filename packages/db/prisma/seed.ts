@@ -1,35 +1,25 @@
 import { PrismaClient } from "../generated/client";
 import * as argon2 from "argon2";
+import { PLANS } from "@godeye/shared";
 
 const prisma = new PrismaClient();
 
 async function main() {
-  // Plans
-  const plans = [
-    {
-      code: "FREE",
-      name: "Free",
-      priceMonthlyUsd: 0,
-      limits: { postsPerMonth: 30, aiTokensPerMonth: 100_000, connections: 3, seats: 1 },
-    },
-    {
-      code: "PRO",
-      name: "Pro",
-      priceMonthlyUsd: 49,
-      limits: { postsPerMonth: 500, aiTokensPerMonth: 2_000_000, connections: 15, seats: 5 },
-    },
-    {
-      code: "SCALE",
-      name: "Scale",
-      priceMonthlyUsd: 199,
-      limits: { postsPerMonth: 5000, aiTokensPerMonth: 20_000_000, connections: 100, seats: 25 },
-    },
-  ];
-  for (const p of plans) {
+  // Plans. Defined in @godeye/shared so the database, the public pricing page
+  // and the limits the API enforces cannot drift apart — a marketing page
+  // promising a number the product refuses is discovered only after payment.
+  for (const p of PLANS) {
     await prisma.plan.upsert({
       where: { code: p.code },
+      // Spread deliberately avoided: the catalogue also carries a tagline for
+      // the pricing page, which is not a column here.
       update: { name: p.name, priceMonthlyUsd: p.priceMonthlyUsd, limits: p.limits },
-      create: p,
+      create: {
+        code: p.code,
+        name: p.name,
+        priceMonthlyUsd: p.priceMonthlyUsd,
+        limits: p.limits,
+      },
     });
   }
 

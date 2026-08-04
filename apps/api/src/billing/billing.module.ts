@@ -161,8 +161,11 @@ export class BillingService {
     const params = new URLSearchParams({
       mode: "subscription",
       client_reference_id: orgId,
-      success_url: `${env.webUrl}/settings?billing=success`,
-      cancel_url: `${env.webUrl}/settings?billing=cancelled`,
+      // Back to the page they started from, which now exists and shows the new
+      // plan. It used to return to /settings, where nothing reported the
+      // outcome of the payment either way.
+      success_url: `${env.webUrl}/billing?billing=success`,
+      cancel_url: `${env.webUrl}/billing?billing=cancelled`,
       "line_items[0][price]": price,
       "line_items[0][quantity]": "1",
       "metadata[orgId]": orgId,
