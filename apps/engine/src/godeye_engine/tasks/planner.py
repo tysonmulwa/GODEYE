@@ -14,7 +14,7 @@ from datetime import datetime, time as dt_time, timedelta
 from zoneinfo import ZoneInfo
 
 from croniter import croniter
-from sqlalchemy import select, update
+from sqlalchemy import func, select, update
 
 from .. import intel
 from ..ai import content_agent
@@ -149,8 +149,25 @@ def plan_autopilot() -> int:
         if not slots:
             continue
 
+        # The rotation cursor has to survive the run, not restart with it.
+        # enumerate() alone counts from zero every time the planner wakes, and
+        # a run usually finds a single new slot — so index was almost always 0
+        # and every autopilot post came from the first topic and the first
+        # goal. The list looked like a rotation and behaved like a constant.
+        #
+        # Counting what the plan has already produced gives a number that only
+        # ever climbs, needs no new column, and survives a restart.
+        with get_session() as session:
+            produced = (
+                session.execute(
+                    select(func.count())
+                    .select_from(ScheduledPost)
+                    .where(ScheduledPost.c.planId == plan["id"])
+                ).scalar()
+                or 0
+            )
         for index, slot in enumerate(slots):
-            autopilot_generate.delay(plan["id"], slot.isoformat(), index)
+            autopilot_generate.delay(plan["id"], slot.isoformat(), produced + index)
         with get_session() as session:
             session.execute(
                 update(PostingPlan)
