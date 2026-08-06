@@ -107,6 +107,12 @@ export default function Home() {
 
         <footer className="mt-16 flex flex-wrap items-center gap-x-5 gap-y-2 border-t border-line pt-8 text-[13px] text-ink-3">
           <span>© {new Date().getFullYear()} GODEYE</span>
+          <Link href="/pricing" className="hover:text-ink-2">
+            Pricing
+          </Link>
+          <Link href="/integrations/tiktok" className="hover:text-ink-2">
+            TikTok integration
+          </Link>
           <Link href="/privacy" className="hover:text-ink-2">
             Privacy
           </Link>
