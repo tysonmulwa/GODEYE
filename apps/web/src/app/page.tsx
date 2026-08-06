@@ -5,6 +5,7 @@ import {
   CalendarPreview,
   ChannelsPreview,
   ComposerPreview,
+  SeoPreview,
 } from "@/components/product-preview";
 import { SITE_DESCRIPTION } from "@/lib/site";
 import { RedirectIfSignedIn } from "./redirect-if-signed-in";
@@ -99,7 +100,7 @@ export default function Home() {
         {/* What the inside looks like, before anyone is asked to sign up.
             Drawn in markup rather than screenshotted, so it follows the real
             product instead of ageing away from it. */}
-        <section className="mt-16 grid gap-5 md:grid-cols-3">
+        <section className="mt-16 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
           <div>
             <h2 className="text-[13px] font-semibold uppercase tracking-[0.12em] text-ink-3">
               One brief, every platform
@@ -126,6 +127,15 @@ export default function Home() {
               Press connect, authorize, done. No developer keys to hunt down.
             </p>
             <ChannelsPreview />
+          </div>
+          <div>
+            <h2 className="text-[13px] font-semibold uppercase tracking-[0.12em] text-ink-3">
+              Findable, not just posted
+            </h2>
+            <p className="mt-2 mb-4 text-[13px] leading-relaxed text-ink-2">
+              It crawls your site, scores it, and writes the fixes out ready to publish.
+            </p>
+            <SeoPreview />
           </div>
         </section>
 

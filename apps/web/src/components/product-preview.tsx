@@ -125,3 +125,60 @@ export function ChannelsPreview() {
     </Window>
   );
 }
+
+const FIXES = [
+  { label: "Expand this page", tone: "bg-amber-500" },
+  { label: "Publish sitemap.xml", tone: "bg-amber-500" },
+  { label: "Publish the IndexNow key", tone: "bg-blue-500" },
+];
+
+const KEYWORDS = ["ladies shoes online", "kids school shoes", "leather sandals"];
+
+/** The crawl, the score, and fixes written out ready to publish. */
+export function SeoPreview() {
+  const score = 91;
+  // 2πr for r=22, so the arc can be drawn as a fraction of the circumference.
+  const circumference = 2 * Math.PI * 22;
+  return (
+    <Window title="seo">
+      <div className="flex items-center gap-4">
+        <svg width="56" height="56" viewBox="0 0 56 56" aria-hidden className="shrink-0">
+          <circle cx="28" cy="28" r="22" fill="none" strokeWidth="6" className="stroke-ink-1/10" />
+          <circle
+            cx="28"
+            cy="28"
+            r="22"
+            fill="none"
+            strokeWidth="6"
+            strokeLinecap="round"
+            className="stroke-emerald-500"
+            strokeDasharray={`${(score / 100) * circumference} ${circumference}`}
+            transform="rotate(-90 28 28)"
+          />
+        </svg>
+        <div>
+          <p className="font-mono text-[20px] font-bold leading-none">{score}</p>
+          <p className="mt-1 text-[11px] text-ink-3">SEO score</p>
+        </div>
+      </div>
+      <div className="mt-4 space-y-1.5">
+        {FIXES.map((f) => (
+          <div key={f.label} className="flex items-center gap-2 rounded-lg border border-line px-2.5 py-1.5">
+            <span className={`size-1.5 shrink-0 rounded-full ${f.tone}`} />
+            <span className="truncate text-[12px]">{f.label}</span>
+            <span className="ml-auto shrink-0 rounded bg-ink-1/10 px-1.5 py-0.5 font-mono text-[9px] font-semibold text-ink-3">
+              PROPOSED
+            </span>
+          </div>
+        ))}
+      </div>
+      <div className="mt-3 flex flex-wrap gap-1.5">
+        {KEYWORDS.map((k) => (
+          <span key={k} className="rounded bg-accent/10 px-1.5 py-0.5 text-[10px] text-accent">
+            {k}
+          </span>
+        ))}
+      </div>
+    </Window>
+  );
+}
