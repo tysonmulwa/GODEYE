@@ -65,8 +65,14 @@ export default function Home() {
     <>
       <RedirectIfSignedIn />
       <main className="mx-auto flex min-h-svh max-w-5xl flex-col px-6 py-20">
-        <header className="max-w-3xl">
-          <GodeyeCrest size={96} align="start" />
+        {/* Centred across the page, not tucked into the left margin. It sits
+            outside the header because the header is narrower than the page,
+            so centring within it would not be centring on the page. */}
+        <div className="flex justify-center">
+          <GodeyeCrest size={96} />
+        </div>
+
+        <header className="mx-auto max-w-3xl">
           <h1 className="mt-10 text-[30px] font-bold leading-[1.15] tracking-[-0.02em] sm:text-[38px]">
             Marketing that runs without you in the room
           </h1>
