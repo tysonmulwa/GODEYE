@@ -223,12 +223,24 @@ export function GodeyeBootScreen() {
 export function GodeyeCrest({
   size = 112,
   wordClass = "text-[17px]",
+  align = "center",
 }: {
   size?: number;
   wordClass?: string;
+  /**
+   * The emblem is narrower than the wordmark, so centring the two leaves the
+   * emblem visibly indented when the crest sits in a left-aligned column —
+   * which is how it looked on the homepage. Centre it on centred layouts,
+   * start it on left-aligned ones, so the two always share an edge.
+   */
+  align?: "center" | "start";
 }) {
   return (
-    <span className="inline-flex flex-col items-center gap-3 text-ink">
+    <span
+      className={`inline-flex flex-col gap-3 text-ink ${
+        align === "start" ? "items-start" : "items-center"
+      }`}
+    >
       <GodeyeEmblem style={{ width: size, height: size }} />
       <span className={`font-display tracking-[0.22em] ${wordClass}`}>GODEYE</span>
     </span>

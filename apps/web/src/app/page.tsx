@@ -1,6 +1,11 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { GodeyeCrest } from "@/components/logo";
+import {
+  CalendarPreview,
+  ChannelsPreview,
+  ComposerPreview,
+} from "@/components/product-preview";
 import { SITE_DESCRIPTION } from "@/lib/site";
 import { RedirectIfSignedIn } from "./redirect-if-signed-in";
 
@@ -58,9 +63,9 @@ export default function Home() {
   return (
     <>
       <RedirectIfSignedIn />
-      <main className="mx-auto flex min-h-svh max-w-3xl flex-col justify-center px-6 py-20">
-        <header>
-          <GodeyeCrest size={96} />
+      <main className="mx-auto flex min-h-svh max-w-5xl flex-col px-6 py-20">
+        <header className="max-w-3xl">
+          <GodeyeCrest size={96} align="start" />
           <h1 className="mt-10 text-[30px] font-bold leading-[1.15] tracking-[-0.02em] sm:text-[38px]">
             Marketing that runs without you in the room
           </h1>
@@ -90,6 +95,39 @@ export default function Home() {
             </Link>
           </div>
         </header>
+
+        {/* What the inside looks like, before anyone is asked to sign up.
+            Drawn in markup rather than screenshotted, so it follows the real
+            product instead of ageing away from it. */}
+        <section className="mt-16 grid gap-5 md:grid-cols-3">
+          <div>
+            <h2 className="text-[13px] font-semibold uppercase tracking-[0.12em] text-ink-3">
+              One brief, every platform
+            </h2>
+            <p className="mt-2 mb-4 text-[13px] leading-relaxed text-ink-2">
+              Write the thought once. GODEYE says it the way each platform expects.
+            </p>
+            <ComposerPreview />
+          </div>
+          <div>
+            <h2 className="text-[13px] font-semibold uppercase tracking-[0.12em] text-ink-3">
+              A week that fills itself
+            </h2>
+            <p className="mt-2 mb-4 text-[13px] leading-relaxed text-ink-2">
+              Autopilot picks the times from how your own posts have actually performed.
+            </p>
+            <CalendarPreview />
+          </div>
+          <div>
+            <h2 className="text-[13px] font-semibold uppercase tracking-[0.12em] text-ink-3">
+              Connected once
+            </h2>
+            <p className="mt-2 mb-4 text-[13px] leading-relaxed text-ink-2">
+              Press connect, authorize, done. No developer keys to hunt down.
+            </p>
+            <ChannelsPreview />
+          </div>
+        </section>
 
         <section className="mt-16 border-t border-line pt-12">
           <h2 className="text-[13px] font-semibold uppercase tracking-[0.14em] text-ink-3">
