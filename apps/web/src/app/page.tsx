@@ -60,10 +60,60 @@ const WHAT_IT_DOES = [
   },
 ];
 
+/**
+ * Short factual answers under a question heading.
+ *
+ * Buyers increasingly ask an assistant rather than a search box, and an
+ * assistant quotes a passage it can lift whole. Prose that unfolds an argument
+ * across a section is poor material for that; a question with a two-sentence
+ * answer is good material. The FAQPage block below says so explicitly rather
+ * than leaving it to be inferred.
+ */
+const FAQ = [
+  {
+    q: "What does GODEYE do?",
+    a: "GODEYE connects a business's social accounts, writes a post for each platform from one brief, makes the images and video, and publishes on a schedule it works out from that account's own results. It also audits the business's website and writes the SEO fixes.",
+  },
+  {
+    q: "Which platforms does it publish to?",
+    a: "TikTok, Instagram, Facebook, LinkedIn, X, Telegram, Discord and Reddit. Connecting an account is a redirect and an authorization, with no developer keys or tokens to obtain.",
+  },
+  {
+    q: "Do I need a card to start?",
+    a: "No. The free plan publishes 30 posts a month to real accounts and needs no payment details. Pro is $49 a month and Scale is $199, billed in US dollars.",
+  },
+  {
+    q: "Does it post without asking me?",
+    a: "It publishes only what you wrote or approved, at times you set or agreed to. Autopilot chooses when, not whether. You can disconnect any account at any time and publishing stops immediately.",
+  },
+  {
+    q: "Can it post video to TikTok?",
+    a: "Yes. TikTok will not accept a silent photo post, so GODEYE renders still photographs into video carrying licensed audio, at 30, 45 or 60 seconds. The same videos can go to Instagram Reels and Facebook Reels.",
+  },
+  {
+    q: "Is it safe to use for a business selling into the EU or UK?",
+    a: "GODEYE refuses to write price claims that break EU and UK consumer law, including a reduction that does not state the lowest price of the previous thirty days, and invented scarcity. The rules follow the market the shop sells in.",
+  },
+];
+
+const faqJsonLd = {
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  mainEntity: FAQ.map((item) => ({
+    "@type": "Question",
+    name: item.q,
+    acceptedAnswer: { "@type": "Answer", text: item.a },
+  })),
+};
+
 export default function Home() {
   return (
     <>
       <RedirectIfSignedIn />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(faqJsonLd) }}
+      />
       <main className="mx-auto flex min-h-svh max-w-5xl flex-col px-6 py-20">
         {/* Centred across the page, not tucked into the left margin. It sits
             outside the header because the header is narrower than the page,
@@ -154,6 +204,20 @@ export default function Home() {
               <article key={item.heading}>
                 <h3 className="text-[15px] font-semibold leading-snug">{item.heading}</h3>
                 <p className="mt-2 text-[14px] leading-relaxed text-ink-2">{item.body}</p>
+              </article>
+            ))}
+          </div>
+        </section>
+
+        <section className="mt-16 border-t border-line pt-12">
+          <h2 className="text-[13px] font-semibold uppercase tracking-[0.14em] text-ink-3">
+            Common questions
+          </h2>
+          <div className="mt-7 grid gap-8 sm:grid-cols-2">
+            {FAQ.map((item) => (
+              <article key={item.q}>
+                <h3 className="text-[15px] font-semibold leading-snug">{item.q}</h3>
+                <p className="mt-2 text-[14px] leading-relaxed text-ink-2">{item.a}</p>
               </article>
             ))}
           </div>

@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Inter, JetBrains_Mono, Michroma } from "next/font/google";
 import { Providers } from "@/lib/providers";
+import { PLANS } from "@godeye/shared";
 import { SITE_DESCRIPTION, SITE_NAME, SITE_URL } from "@/lib/site";
 import "./globals.css";
 
@@ -47,6 +48,34 @@ const organizationJsonLd = {
   url: SITE_URL,
 };
 
+/**
+ * What the product is and what it costs, in the form a search engine reads.
+ *
+ * The Organization block alone says a company exists; it says nothing about
+ * software, price or plan, so nothing could be shown as a product result. The
+ * offers are built from the same catalogue that seeds the database and renders
+ * the pricing page, so a price cannot be advertised here that nobody is
+ * charged — which is the failure mode worth engineering against, since it is
+ * both a bad search result and a false claim.
+ */
+const softwareJsonLd = {
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  name: SITE_NAME,
+  description: SITE_DESCRIPTION,
+  url: SITE_URL,
+  applicationCategory: "BusinessApplication",
+  operatingSystem: "Web",
+  offers: PLANS.map((plan) => ({
+    "@type": "Offer",
+    name: plan.name,
+    price: plan.priceMonthlyUsd.toFixed(2),
+    priceCurrency: "USD",
+    description: plan.tagline,
+    url: `${SITE_URL}/pricing`,
+  })),
+};
+
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html
@@ -59,6 +88,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           type="application/ld+json"
           // Next escapes the string; the JSON is ours, not user input.
           dangerouslySetInnerHTML={{ __html: JSON.stringify(organizationJsonLd) }}
+        />
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(softwareJsonLd) }}
         />
         <Providers>{children}</Providers>
       </body>

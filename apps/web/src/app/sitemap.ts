@@ -1,4 +1,5 @@
 import type { MetadataRoute } from "next";
+import { PUBLIC_PAGES } from "@/lib/public-pages";
 import { SITE_URL } from "@/lib/site";
 
 /**
@@ -6,16 +7,16 @@ import { SITE_URL } from "@/lib/site";
  * following links — which matters most on a site whose navigation is drawn by
  * JavaScript, as this one's is.
  *
- * Only public pages. The application behind the login has nothing a crawler
- * can reach.
+ * The list itself lives in lib/public-pages.ts rather than here, because when
+ * it was written out by hand it fell behind: /pricing and both integration
+ * pages were live for days with nothing pointing a crawler at them.
  */
 export default function sitemap(): MetadataRoute.Sitemap {
   const now = new Date();
-  return [
-    { url: `${SITE_URL}/`, lastModified: now, changeFrequency: "weekly", priority: 1 },
-    { url: `${SITE_URL}/login`, lastModified: now, changeFrequency: "yearly", priority: 0.3 },
-    { url: `${SITE_URL}/register`, lastModified: now, changeFrequency: "yearly", priority: 0.5 },
-    { url: `${SITE_URL}/privacy`, lastModified: now, changeFrequency: "yearly", priority: 0.2 },
-    { url: `${SITE_URL}/terms`, lastModified: now, changeFrequency: "yearly", priority: 0.2 },
-  ];
+  return PUBLIC_PAGES.map((page) => ({
+    url: `${SITE_URL}${page.path}`,
+    lastModified: now,
+    changeFrequency: page.changeFrequency,
+    priority: page.priority,
+  }));
 }

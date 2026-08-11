@@ -52,9 +52,31 @@ const QUESTIONS = [
   },
 ];
 
+/**
+ * The questions again, as structured data.
+ *
+ * Answer engines quote a short factual passage under a question heading, and
+ * FAQPage is how a page says "these are questions and these are the answers"
+ * rather than leaving it to be inferred from markup. Generated from the same
+ * array the page renders, so the two cannot disagree.
+ */
+const faqJsonLd = {
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  mainEntity: QUESTIONS.map((item) => ({
+    "@type": "Question",
+    name: item.q,
+    acceptedAnswer: { "@type": "Answer", text: item.a },
+  })),
+};
+
 export default function PricingPage() {
   return (
     <main className="mx-auto flex min-h-svh max-w-5xl flex-col px-6 py-16">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(faqJsonLd) }}
+      />
       <header className="mx-auto max-w-2xl text-center">
         <Link href="/" aria-label="GODEYE home" className="inline-block">
           <GodeyeCrest size={64} />
