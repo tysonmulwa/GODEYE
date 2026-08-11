@@ -165,7 +165,10 @@ export default function Home() {
             Pricing
           </Link>
           <Link href="/integrations/tiktok" className="hover:text-ink-2">
-            TikTok integration
+            TikTok
+          </Link>
+          <Link href="/integrations/meta" className="hover:text-ink-2">
+            Facebook &amp; Instagram
           </Link>
           <Link href="/privacy" className="hover:text-ink-2">
             Privacy
