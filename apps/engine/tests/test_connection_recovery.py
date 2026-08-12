@@ -62,8 +62,23 @@ class TestSuccessClearsTheError:
         assert "connection_id=connection" in source
 
 
-def test_the_failure_path_still_records_why():
-    """The error has to be written in the first place, or Connections says
-    nothing when a channel really is broken."""
+def test_a_failed_post_never_writes_prose_onto_the_channel():
+    """The card says whether the channel works, not what went wrong last time.
+
+    Every permanent failure used to stamp its message onto the connection, so
+    the text of a single bad post sat there in red until something later
+    happened to clear it — and users disconnected and reconnected to be rid of
+    it. The message lives on the post; the card carries status only.
+    """
     source = inspect.getsource(scheduler._record_failure)
-    assert "lastError=" in source and "lastErrorAt=" in source
+    assert "lastError=" not in source
+    assert "lastErrorAt=" not in source
+
+
+def test_a_broken_channel_still_changes_status():
+    """Dropping the message must not also drop the signal. A credential
+    failure has to move the connection out of ACTIVE, or a dead channel looks
+    healthy and nobody is told to reconnect."""
+    source = inspect.getsource(scheduler._record_failure)
+    assert '_is_connection_fault' in source
+    assert 'status="ERROR"' in source

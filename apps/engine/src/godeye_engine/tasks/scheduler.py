@@ -315,6 +315,31 @@ def _mark_connection_error(connection_id: str) -> None:
         session.commit()
 
 
+# Words that mean "this channel is broken" rather than "this post was wrong".
+# Deliberately narrow: a miss leaves a dead channel looking healthy for a
+# while, which the next failure corrects, whereas a false positive puts a red
+# line on a working channel and that is the complaint this exists to fix.
+_CONNECTION_FAULT_SIGNS = (
+    "access token",
+    "token has expired",
+    "session has expired",
+    "oauthexception",
+    "invalid_grant",
+    "invalid credentials",
+    "not authorized",
+    "unauthorized",
+    "permission",
+    "re-authenticate",
+    "reconnect the account",
+    "revoked",
+)
+
+
+def _is_connection_fault(error: str) -> bool:
+    text = error.lower()
+    return any(sign in text for sign in _CONNECTION_FAULT_SIGNS)
+
+
 def _record_failure(
     post_id: str, org_id: str, connection_id: str, error: str, attempts: int, permanent: bool
 ) -> None:
@@ -327,11 +352,26 @@ def _record_failure(
                 .values(status="FAILED", attempts=attempts, error=error[:2000],
                         lockedAt=None, updatedAt=now)
             )
-            session.execute(
-                update(SocialConnection)
-                .where(SocialConnection.c.id == connection_id)
-                .values(lastError=error[:500], lastErrorAt=now)
-            )
+            # A failed post is not written onto the channel, ever.
+            #
+            # Every permanent failure used to stamp its message here, so the
+            # text of whatever went wrong sat on the connection card in red
+            # until a later post happened to succeed — or, in practice, until
+            # the user disconnected and reconnected to be rid of it. The
+            # message belongs to the post: ScheduledPost.error above already
+            # holds it, and the calendar is where someone looks to find out
+            # why a post did not go out.
+            #
+            # What the card owes the user is whether the channel still works.
+            # That is the status, so a credential failure moves it out of
+            # ACTIVE and the badge says reconnect. No prose, nothing to
+            # accumulate, nothing to dismiss.
+            if _is_connection_fault(error):
+                session.execute(
+                    update(SocialConnection)
+                    .where(SocialConnection.c.id == connection_id)
+                    .values(status="ERROR", updatedAt=now)
+                )
         else:
             session.execute(
                 update(ScheduledPost)
