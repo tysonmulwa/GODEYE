@@ -113,16 +113,19 @@ def generate_image(
                 .limit(4)
             ).scalars()
         )
-        # Which platform this image is destined for, so the brief can suit that
-        # platform's visual culture. Read from the content item rather than
-        # added as a task argument, so every existing caller keeps working.
+        # Platform adaptation is not wired up here yet, deliberately.
+        #
+        # It was, briefly, and it read ContentItem.platforms — a column that
+        # does not exist. ContentItem holds the content; the destination lives
+        # on ScheduledPost via its connection. That shipped and every image
+        # generation failed, because a Celery task body does not run at import
+        # and the whole suite stayed green.
+        #
+        # The rest of the creative strategy — category rotation, the hook, the
+        # negative-space decision — does not depend on knowing the platform, so
+        # it runs regardless. Wiring the real source is a separate change with
+        # its own test.
         platform: str | None = None
-        if content_item_id:
-            platforms = session.execute(
-                select(ContentItem.c.platforms).where(ContentItem.c.id == content_item_id)
-            ).scalar()
-            if platforms:
-                platform = str(platforms[0])
         session.commit()
 
     profile_dict = dict(profile) if profile else {"industry": "business"}
@@ -135,9 +138,8 @@ def generate_image(
                 profile_dict,
                 image_agent.ImagePromptRequest(brief=brief, style=style),
                 recent_prompts=recent_prompts,
-                # A platform is a visual culture: what works on LinkedIn is
-                # wrong on TikTok. Taken from the content item rather than a new
-                # argument, so no caller changes.
+                # Always None for now — see above. The parameter stays so
+                # wiring the real source later is a one-line change.
                 platform=platform,
                 # Decides whether to leave room for a headline, or fill the frame.
                 preset_id=preset_id,
