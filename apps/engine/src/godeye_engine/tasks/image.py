@@ -113,6 +113,16 @@ def generate_image(
                 .limit(4)
             ).scalars()
         )
+        # Which platform this image is destined for, so the brief can suit that
+        # platform's visual culture. Read from the content item rather than
+        # added as a task argument, so every existing caller keeps working.
+        platform: str | None = None
+        if content_item_id:
+            platforms = session.execute(
+                select(ContentItem.c.platforms).where(ContentItem.c.id == content_item_id)
+            ).scalar()
+            if platforms:
+                platform = str(platforms[0])
         session.commit()
 
     profile_dict = dict(profile) if profile else {"industry": "business"}
@@ -125,6 +135,12 @@ def generate_image(
                 profile_dict,
                 image_agent.ImagePromptRequest(brief=brief, style=style),
                 recent_prompts=recent_prompts,
+                # A platform is a visual culture: what works on LinkedIn is
+                # wrong on TikTok. Taken from the content item rather than a new
+                # argument, so no caller changes.
+                platform=platform,
+                # Decides whether to leave room for a headline, or fill the frame.
+                preset_id=preset_id,
             )
         except Exception as e:  # noqa: BLE001 — text LLM optional for images
             logger.info("Image prompt LLM unavailable (%s); using fallback prompt", e)

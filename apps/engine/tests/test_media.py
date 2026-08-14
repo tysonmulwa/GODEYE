@@ -169,8 +169,11 @@ class TestImageAgent:
         prompt = image_agent.build_image_prompt(
             profile, image_agent.ImagePromptRequest(brief="a latte")
         )
-        # surrounding quotes stripped
-        assert prompt == "A warm cinematic latte scene"
+        # Surrounding quotes stripped, and the prompt now carries a one-line
+        # strategy header recording the idea behind it, which the next image
+        # reads back so it does not repeat the same creative category.
+        assert prompt.startswith("[strategy] ")
+        assert prompt.endswith("A warm cinematic latte scene")
 
 
 class TestImagePromptQuality:

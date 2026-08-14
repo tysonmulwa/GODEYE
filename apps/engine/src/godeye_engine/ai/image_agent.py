@@ -14,10 +14,11 @@ it must not fall back on, and varies the framing between calls.
 from __future__ import annotations
 
 import random
+import re
 from dataclasses import dataclass
 from typing import Any
 
-from . import mission, provider
+from . import creative_strategy, mission, provider
 
 # Rotated per call so repeated briefs do not converge on one composition. Each
 # forces a genuinely different camera position rather than a different adjective.
@@ -43,6 +44,19 @@ BANNED_CLICHES = (
 )
 
 PROMPT_SYSTEM = mission.charter("image") + "\n\n" + (
+    "You are a creative director briefing a photographer. Two jobs, in order.\n\n"
+    "FIRST, decide what the picture is for. You are given the business, the "
+    "audience, and a creative category to work inside. Work out what this "
+    "customer actually wants, what stands in their way, and the single visual "
+    "hook that would stop a thumb. Photograph the outcome the customer is "
+    "buying rather than the thing being sold: the confidence rather than the "
+    "gym, the table of people rather than the plate of food, the life in the "
+    "house rather than the house.\n\n"
+    "Reply in exactly this form, with nothing before it:\n"
+    "ANGLE: <two or three words>\n"
+    "HOOK: <one short sentence naming what stops the scroll>\n"
+    "PROMPT: <the photographic brief>\n\n"
+    "SECOND, write that brief. "
     "You write briefs for a photographer, not descriptions of a concept. A "
     "one-line prompt gives the model nothing to hold onto and it falls back on "
     "stock imagery, so every brief you write is complete.\n\n"
@@ -67,7 +81,8 @@ PROMPT_SYSTEM = mission.charter("image") + "\n\n" + (
     f"Never use any of these: {BANNED_CLICHES}.\n"
     "No text, words, signage, logos or watermarks anywhere in the image; "
     "branding is added separately.\n\n"
-    "Return ONLY the image prompt, no preamble and no quotes. 70 to 120 words."
+    "No preamble and no quotes. The three labelled lines and nothing else; the "
+    "image prompt after PROMPT: is 70 to 120 words."
 )
 
 
@@ -82,6 +97,8 @@ def build_image_prompt(
     request: ImagePromptRequest,
     rng: random.Random | None = None,
     recent_prompts: list[str] | None = None,
+    platform: str | None = None,
+    preset_id: str | None = None,
 ) -> str:
     """Expand a short brief into a detailed image prompt via the text LLM.
 
@@ -114,28 +131,94 @@ def build_image_prompt(
             f"colour instruction: {profile['brandVoice']}"
         )
 
+    # The idea and the framing are separate choices. Rotating the framing alone
+    # gave the same picture from a new angle, which is what the recent-prompt
+    # memory below was fighting on its own.
+    category = creative_strategy.choose_category(
+        creative_strategy.recent_categories(recent_prompts), picker
+    )
+    negative_space = creative_strategy.negative_space_plan(preset_id, rng=picker)
+
     style = request.style or "photorealistic editorial photography, natural light"
     parts = [
         "\n".join(context),
         "",
         f"Image brief: {request.brief}",
         f"Visual style: {style}",
+        f"Creative category to work inside: {category}",
         f"Use this framing: {picker.choice(SHOT_TYPES)}",
     ]
+    if platform and platform.upper() in creative_strategy.PLATFORM_BIAS:
+        parts.append(creative_strategy.PLATFORM_BIAS[platform.upper()])
+    parts.append(
+        f"Composition: {negative_space}"
+        if negative_space
+        else "Composition: fill the frame. No text is going over this one, so do "
+        "not leave empty space waiting for a headline."
+    )
     if recent_prompts:
         parts += [
             "",
             "This business's last few images were the following. Yours must be a "
             "different photograph, not the same idea from another angle: change "
             "the subject, what they are doing, the setting and the time of day.",
-            *(f"- {p.strip()[:200]}" for p in recent_prompts[:4]),
+            # Stripped of their strategy headers: those are bookkeeping, and
+            # showing them back would teach the model to write headers rather
+            # than photographs.
+            *(
+                f"- {creative_strategy.strip_header(p)[:200]}"
+                for p in recent_prompts[:4]
+            ),
         ]
     parts += ["", "Write the image generation prompt now."]
     # 300 truncated these mid-word once the brief became a full photographic
     # description, and the tail is where the texture detail lives, which is the
     # part that stops the render looking synthetic.
     result = provider.complete(PROMPT_SYSTEM, "\n".join(parts), max_tokens=600)
-    return result.text.strip().strip('"')
+    angle, hook, prompt = _split_reply(result.text)
+    # The idea is recorded on the front of the prompt, which is already stored
+    # and already read back, so the next image knows what this one was without
+    # a new column anywhere.
+    header = creative_strategy.format_header(
+        creative_strategy.CreativeStrategy(
+            objective="",
+            audience_desire="",
+            audience_problem="",
+            angle=angle,
+            creative_category=category,
+            visual_hook=hook,
+            desired_action="",
+            platform=platform,
+            negative_space=negative_space,
+        )
+    )
+    return f"{header}\n{prompt}"
+
+
+_ANGLE_RE = re.compile(r"^\s*ANGLE:\s*(.+)$", re.IGNORECASE | re.MULTILINE)
+_HOOK_RE = re.compile(r"^\s*HOOK:\s*(.+)$", re.IGNORECASE | re.MULTILINE)
+_PROMPT_RE = re.compile(r"^\s*PROMPT:\s*(.*)$", re.IGNORECASE | re.MULTILINE | re.DOTALL)
+
+
+def _split_reply(text: str) -> tuple[str, str, str]:
+    """Pull the angle, the hook and the brief out of the model's reply.
+
+    A model asked for three labelled parts usually returns three labelled
+    parts, and sometimes returns the brief alone. That is not worth failing a
+    render over: an unlabelled reply is treated as the brief, and the labels
+    fall back to empty, which costs the memory a line and nothing else.
+    """
+    body = (text or "").strip().strip('"')
+    prompt_match = _PROMPT_RE.search(body)
+    if not prompt_match:
+        return "", "", body
+    angle_match = _ANGLE_RE.search(body)
+    hook_match = _HOOK_RE.search(body)
+    return (
+        (angle_match.group(1).strip() if angle_match else ""),
+        (hook_match.group(1).strip() if hook_match else ""),
+        prompt_match.group(1).strip().strip('"'),
+    )
 
 
 def fallback_prompt(
