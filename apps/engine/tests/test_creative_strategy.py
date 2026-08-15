@@ -116,3 +116,29 @@ class TestPlatform:
 
     def test_an_unknown_platform_is_simply_omitted(self):
         assert "Objective:" in strategy(platform="MYSPACE").brief()
+
+
+class TestTheContentCalendarFailure:
+    """The picture that prompted this: an overhead desk with a content
+    calendar, a notebook, coffee and a hand placing a photograph. Beautiful,
+    and a photograph of the act of marketing rather than a reason to buy."""
+
+    def test_process_categories_are_withheld_from_an_ordinary_selling_post(self):
+        brief = "New linen shirts have landed, four colours"
+        for _ in range(60):
+            chosen = cs.choose_category(None, random.Random(), brief=brief)
+            assert cs.category_key(chosen) not in cs.PROCESS_CATEGORIES
+
+    def test_a_post_actually_about_process_may_use_them(self):
+        # Withholding them always would be the opposite mistake.
+        briefs = ["Behind the scenes at our workshop", "Meet the founder", "A guide to linen care"]
+        assert all(cs.is_process_post(b) for b in briefs)
+
+    def test_an_ordinary_post_is_not_mistaken_for_a_process_post(self):
+        assert not cs.is_process_post("New linen shirts have landed, four colours")
+        assert not cs.is_process_post("30% off all shoes this weekend")
+
+    def test_the_desk_is_named_in_the_refusal_list(self):
+        banned = cs.STOCK_PATTERNS.lower()
+        for thing in ("calendar", "notebook", "coffee", "planner", "hand writing"):
+            assert thing in banned

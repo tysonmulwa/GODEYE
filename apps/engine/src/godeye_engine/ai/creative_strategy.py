@@ -29,6 +29,50 @@ from dataclasses import dataclass
 # What kind of marketing idea the picture is. Rotated, and checked against what
 # this business has recently had, so a run of posts does not settle into one
 # shape.
+# Categories that photograph how the business works rather than what the
+# customer gets. They are legitimate creatives — for a post that is actually
+# about process, a founder, or a lesson — and a trap otherwise.
+#
+# The failure that produced this set: an overhead desk with a content calendar,
+# a notebook, coffee and a hand placing a photograph. Beautiful, and a picture
+# of the *act of marketing* rather than a reason to buy anything. It was
+# reachable because "behind the scenes" sits in the rotation and nothing
+# stopped a generic post from drawing it.
+PROCESS_CATEGORIES = frozenset(
+    {"behind the scenes", "founder", "educational", "demonstration"}
+)
+
+# Words in a brief that mean the post really is about process, which is when
+# the categories above stop being a trap and become the right answer.
+_PROCESS_SIGNS = (
+    "behind the scenes",
+    "how we",
+    "how it",
+    "our process",
+    "meet the",
+    "founder",
+    "team",
+    "tutorial",
+    "guide",
+    "explain",
+    "tip",
+    "lesson",
+    "workshop",
+    "day in the life",
+    "culture",
+)
+
+# Concepts that exist in every stock library and sell nothing. Named so the
+# brief can refuse them outright rather than hoping the model has better taste.
+STOCK_PATTERNS = (
+    "a desk shot with any combination of notebook, planner, calendar, coffee "
+    "cup, laptop, pens or printed photographs; a hand writing, typing, or "
+    "reaching into frame; a mood board or content calendar; a person looking "
+    "at a phone or pointing at a screen; a meeting around a table; a smiling "
+    "employee at a workstation; a laptop beside a coffee; a product floating "
+    "on a plain or gradient background; a city skyline"
+)
+
 CREATIVE_CATEGORIES = (
     "product hero, the thing itself shot with real care",
     "lifestyle, the product inside a life the viewer would want",
@@ -156,15 +200,32 @@ def category_key(category: str) -> str:
     return category.split(",", 1)[0].strip().lower()
 
 
-def choose_category(recent: list[str] | None = None, rng: random.Random | None = None) -> str:
+def is_process_post(brief: str | None) -> bool:
+    """Whether the post is genuinely about how the business works."""
+    text = (brief or "").lower()
+    return any(sign in text for sign in _PROCESS_SIGNS)
+
+
+def choose_category(
+    recent: list[str] | None = None,
+    rng: random.Random | None = None,
+    brief: str | None = None,
+) -> str:
     """A creative category this business has not just had.
 
     Mirrors how the image agent picks a shot type, but excludes what was used
     recently — the whole point is that consecutive posts are different ideas,
     not the same idea from a new angle.
+
+    Process categories are withheld unless the post is actually about process.
+    Left in the general pool they get drawn for ordinary selling posts, and the
+    result is a photograph of the business at work rather than a reason to buy
+    from it. A shop announcing new stock does not want a picture of a desk.
     """
     picker = rng or random
     used = {category_key(c) for c in (recent or [])}
+    if not is_process_post(brief):
+        used |= PROCESS_CATEGORIES
     fresh = [c for c in CREATIVE_CATEGORIES if category_key(c) not in used]
     # Everything used means the memory is longer than the catalogue; start over
     # rather than fail.

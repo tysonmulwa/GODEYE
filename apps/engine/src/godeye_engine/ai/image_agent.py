@@ -52,6 +52,19 @@ PROMPT_SYSTEM = mission.charter("image") + "\n\n" + (
     "buying rather than the thing being sold: the confidence rather than the "
     "gym, the table of people rather than the plate of food, the life in the "
     "house rather than the house.\n\n"
+    "The picture must SELL the business, not REPRESENT it. Representing it is "
+    "photographing the work: the desk, the planning, the tools, the premises, "
+    "the staff at their stations. Selling it is photographing what the "
+    "customer ends up with. A gym sells the confidence, not the equipment. A "
+    "restaurant sells the table of people leaning in over the food, not the "
+    "kitchen. An agency sells the client's business visibly winning, not a "
+    "content calendar. Ask what the viewer should want after seeing it. "
+    "'I want that meal.' 'I want to look like that.' 'I want that life.' "
+    "If there is no such answer, the concept is wrong and you must think "
+    "again before writing anything.\n\n"
+    f"Refuse these outright, they are stock imagery and sell nothing: {creative_strategy.STOCK_PATTERNS}. "
+    "If your idea could be found in a stock library under the name of the "
+    "industry, it has failed and you must replace it.\n\n"
     "Reply in exactly this form, with nothing before it:\n"
     "ANGLE: <two or three words>\n"
     "HOOK: <one short sentence naming what stops the scroll>\n"
@@ -135,7 +148,7 @@ def build_image_prompt(
     # gave the same picture from a new angle, which is what the recent-prompt
     # memory below was fighting on its own.
     category = creative_strategy.choose_category(
-        creative_strategy.recent_categories(recent_prompts), picker
+        creative_strategy.recent_categories(recent_prompts), picker, brief=request.brief
     )
     negative_space = creative_strategy.negative_space_plan(preset_id, rng=picker)
 
