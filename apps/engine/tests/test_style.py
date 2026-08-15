@@ -2,13 +2,55 @@
 
 import pytest
 
-from godeye_engine.ai import content_agent, image_agent, mission, seo_agent, video_agent
+from godeye_engine.ai import (
+    content_agent,
+    creative_strategy,
+    image_agent,
+    mission,
+    seo_agent,
+    video_agent,
+)
 from godeye_engine.ai.content_agent import (
     PLATFORM_LIMITS,
     enforce_limits,
     extract_ab_variants,
 )
 from godeye_engine.ai.style import dedash
+
+
+def _image_user_prompt(profile: dict, platform: str | None) -> str:
+    """The user prompt the image agent would actually send, without an LLM.
+
+    Composed rather than grepped, so it catches text that only appears for some
+    platforms or some presets, which is exactly the text nobody reads.
+    """
+    captured = {}
+    original = image_agent.provider.complete
+
+    class _Stub:
+        text = "PROMPT: a photograph"
+        provider = model = "test"
+        input_tokens = output_tokens = 1
+        cost_usd = 0.0
+
+    def _capture(system, user, **kw):
+        captured["user"] = user
+        return _Stub()
+
+    image_agent.provider.complete = _capture
+    try:
+        image_agent.build_image_prompt(
+            profile,
+            image_agent.ImagePromptRequest(brief="a launch"),
+            recent_prompts=["an earlier photograph"],
+            platform=platform,
+            # A preset that carries a headline, so the negative-space text is
+            # composed too rather than skipped.
+            preset_id="STORY",
+        )
+    finally:
+        image_agent.provider.complete = original
+    return captured["user"]
 
 
 class TestDedash:
@@ -124,6 +166,14 @@ class TestCharter:
             "video user": video_agent.build_prompt(profile, "a launch clip", 30, None),
         }
         prompts |= {f"charter:{k}": mission.charter(k) for k in mission.SKILLS}
+        # The image user prompt, once per platform. This is where PLATFORM_BIAS
+        # lands, and it is how an em dash survived: the constant was written
+        # months ago but the task hardcoded platform=None, so the text was
+        # never composed into a real prompt and never inspected here.
+        prompts |= {
+            f"image user:{platform}": _image_user_prompt(profile, platform)
+            for platform in [None, *creative_strategy.PLATFORM_BIAS]
+        }
 
         offenders = [name for name, text in prompts.items() if "—" in text or "–" in text]
         assert not offenders, f"em dashes in composed prompts: {offenders}"

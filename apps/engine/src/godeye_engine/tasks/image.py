@@ -15,6 +15,7 @@ from ..db import (
     BrandKit,
     BusinessProfile,
     MediaAsset,
+    Organization,
     UsageRecord,
     get_session,
     new_id,
@@ -83,7 +84,18 @@ def generate_image(
     style: str | None = None,
     content_item_id: str | None = None,
     apply_brand: bool = False,
+    platform: str | None = None,
 ) -> dict:
+    """Generate one image.
+
+    ``platform`` is passed in by the caller rather than looked up here. An
+    earlier attempt read it from ContentItem.platforms, a column that does not
+    exist: the content holds the post, the destination lives on ScheduledPost
+    via its connection. That shipped and broke every image generation, because
+    a Celery task body does not run at import and the suite stayed green. The
+    planner already picks the platform to choose the preset, so it is the one
+    place that knows, and it now says so.
+    """
     started = time.monotonic()
     preset = presets.get_preset(preset_id)
 
@@ -96,6 +108,13 @@ def generate_image(
         profile = session.execute(
             select(BusinessProfile).where(BusinessProfile.c.orgId == org_id)
         ).mappings().first()
+        # A solo creator is the product, so the person in shot has to be them
+        # rather than an anonymous model. The type lives on Organization, not
+        # on the profile, which is why the content agent has always had it here
+        # and the image agent never did.
+        org_type = session.execute(
+            select(Organization.c.type).where(Organization.c.id == org_id)
+        ).scalar()
         brand = session.execute(
             select(BrandKit).where(BrandKit.c.orgId == org_id)
         ).mappings().first()
@@ -113,22 +132,10 @@ def generate_image(
                 .limit(4)
             ).scalars()
         )
-        # Platform adaptation is not wired up here yet, deliberately.
-        #
-        # It was, briefly, and it read ContentItem.platforms — a column that
-        # does not exist. ContentItem holds the content; the destination lives
-        # on ScheduledPost via its connection. That shipped and every image
-        # generation failed, because a Celery task body does not run at import
-        # and the whole suite stayed green.
-        #
-        # The rest of the creative strategy — category rotation, the hook, the
-        # negative-space decision — does not depend on knowing the platform, so
-        # it runs regardless. Wiring the real source is a separate change with
-        # its own test.
-        platform: str | None = None
         session.commit()
 
     profile_dict = dict(profile) if profile else {"industry": "business"}
+    profile_dict["orgType"] = org_type or "BUSINESS"
 
     try:
         # 1. Expand the brief into a strong prompt (LLM if available, else fallback)
@@ -138,8 +145,6 @@ def generate_image(
                 profile_dict,
                 image_agent.ImagePromptRequest(brief=brief, style=style),
                 recent_prompts=recent_prompts,
-                # Always None for now — see above. The parameter stays so
-                # wiring the real source later is a one-line change.
                 platform=platform,
                 # Decides whether to leave room for a headline, or fill the frame.
                 preset_id=preset_id,

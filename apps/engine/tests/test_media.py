@@ -1,6 +1,7 @@
 """Image presets, Pillow processing, and provider selection."""
 
 import io
+from typing import ClassVar
 
 import pytest
 from PIL import Image
@@ -182,7 +183,7 @@ class TestImagePromptQuality:
     held a location and an audience that were never passed to the agent, so
     every image was set nowhere and aimed at no one."""
 
-    PROFILE = {
+    PROFILE: ClassVar[dict] = {
         "businessName": "PataMpoa",
         "industry": "Dating",
         "description": "A dating app.",
@@ -273,11 +274,169 @@ def image_provider_stub():
     )
 
 
+class TestTheAgentKnowsWhatTheBusinessSells:
+    """The wristwatch.
+
+    A PataMpoa post about earning from live video calls came back as a
+    photograph of a wristwatch. The cause was not the model's taste: the image
+    agent was given the business name, the word "Dating" and a caption, and was
+    never once told that the business does video calls, streaming, gifts and
+    payouts. The content agent had been given all of that from the start, which
+    is why the captions were right and the pictures were not.
+
+    With nothing concrete to photograph, "earning" resolves to a stock symbol
+    of success. So the products and the services are the load-bearing input
+    here, not an enrichment.
+    """
+
+    PROFILE: ClassVar[dict] = {
+        "businessName": "PataMpoa",
+        "industry": "Dating",
+        "description": "A dating and live streaming app.",
+        "location": "Nairobi-Kenya",
+        "targetAudience": "relationship seekers, content creators",
+        "services": ["live video calls", "gifting", "creator payouts"],
+        "products": ["coin packs"],
+        "goals": ["grow paying creators"],
+        "seasonalNotes": "December holidays",
+    }
+
+    def _capture(self, monkeypatch) -> dict:
+        captured = {}
+        monkeypatch.setattr(
+            image_agent.provider, "complete",
+            lambda system, user, **kw: (captured.update(user=user), image_provider_stub())[1],
+        )
+        return captured
+
+    def test_the_services_reach_the_model(self, monkeypatch):
+        """The exact regression. Without these words there is no video call to
+        photograph and the model draws a watch."""
+        captured = self._capture(monkeypatch)
+        image_agent.build_image_prompt(
+            self.PROFILE, image_agent.ImagePromptRequest(brief="earning from the app")
+        )
+        assert "live video calls" in captured["user"]
+        assert "creator payouts" in captured["user"]
+
+    def test_the_products_reach_the_model(self, monkeypatch):
+        captured = self._capture(monkeypatch)
+        image_agent.build_image_prompt(
+            self.PROFILE, image_agent.ImagePromptRequest(brief="earning from the app")
+        )
+        assert "coin packs" in captured["user"]
+
+    def test_what_is_sold_must_be_recognisable(self, monkeypatch):
+        """Listing the services is not enough on its own. The brief has to say
+        they belong in the frame, or they read as background trivia."""
+        captured = self._capture(monkeypatch)
+        image_agent.build_image_prompt(
+            self.PROFILE, image_agent.ImagePromptRequest(brief="earning from the app")
+        )
+        assert "recognisable in the picture" in captured["user"]
+
+    def test_the_goals_and_the_season_reach_the_model(self, monkeypatch):
+        """Goals decide which outcome is worth photographing; the season is
+        visible in weather, daylight and what people are wearing."""
+        captured = self._capture(monkeypatch)
+        image_agent.build_image_prompt(
+            self.PROFILE, image_agent.ImagePromptRequest(brief="earning from the app")
+        )
+        assert "grow paying creators" in captured["user"]
+        assert "December holidays" in captured["user"]
+
+    def test_a_profile_with_no_catalogue_is_told_so_explicitly(self, monkeypatch):
+        """Silence is what caused the original failure, so an empty catalogue
+        must not be silent. The model is told to work the subject out of the
+        description rather than reach for an industry symbol."""
+        captured = self._capture(monkeypatch)
+        image_agent.build_image_prompt(
+            {"businessName": "Acme", "industry": "Dating", "description": "A dating app."},
+            image_agent.ImagePromptRequest(brief="earning from the app"),
+        )
+        assert "No product or service list was supplied" in captured["user"]
+        assert "generic symbol" in captured["user"]
+
+    def test_a_solo_creator_is_the_person_in_shot(self, monkeypatch):
+        """A creator is the product. An anonymous model sells a stranger."""
+        captured = self._capture(monkeypatch)
+        image_agent.build_image_prompt(
+            {**self.PROFILE, "orgType": "CREATOR"},
+            image_agent.ImagePromptRequest(brief="a studio day"),
+        )
+        assert "solo creator" in captured["user"]
+
+    def test_a_company_is_not_told_it_is_a_creator(self, monkeypatch):
+        captured = self._capture(monkeypatch)
+        image_agent.build_image_prompt(
+            self.PROFILE, image_agent.ImagePromptRequest(brief="a studio day")
+        )
+        assert "solo creator" not in captured["user"]
+
+    def test_the_website_is_still_withheld(self, monkeypatch):
+        """A URL cannot be photographed and this brief bans text in the frame,
+        so sending one only invites the model to draw it."""
+        captured = self._capture(monkeypatch)
+        image_agent.build_image_prompt(
+            {**self.PROFILE, "website": "https://patampoaglobal.com"},
+            image_agent.ImagePromptRequest(brief="earning from the app"),
+        )
+        assert "patampoaglobal.com" not in captured["user"]
+
+    def test_the_fallback_also_names_what_is_sold(self):
+        """No text LLM is exactly when the model has least to go on."""
+        prompt = image_agent.fallback_prompt(
+            self.PROFILE, image_agent.ImagePromptRequest(brief="earning from the app")
+        )
+        assert "coin packs" in prompt
+
+    def test_the_system_prompt_forbids_the_symbol(self):
+        """"Sell the outcome, do not represent the business" pushed the agent
+        toward abstraction with nothing pulling it back to the actual trade.
+        The wristwatch is named so the rule cannot be read the wrong way."""
+        system = image_agent.PROMPT_SYSTEM
+        assert "wristwatch" in system
+        assert "identifiable in the frame" in system
+        assert "name the industry from the picture alone" in system
+
+
+class TestPlatformReachesTheBrief:
+    """PLATFORM_BIAS existed for weeks and never once fired: the task hardcoded
+    platform=None because an earlier attempt read a column that does not exist.
+    """
+
+    PROFILE: ClassVar[dict] = {"businessName": "PataMpoa", "industry": "Dating", "description": "A dating app."}
+
+    def test_the_platform_culture_reaches_the_model(self, monkeypatch):
+        captured = {}
+        monkeypatch.setattr(
+            image_agent.provider, "complete",
+            lambda system, user, **kw: (captured.update(user=user), image_provider_stub())[1],
+        )
+        image_agent.build_image_prompt(
+            self.PROFILE,
+            image_agent.ImagePromptRequest(brief="a date night"),
+            platform="TIKTOK",
+        )
+        assert "candid and unpolished" in captured["user"]
+
+    def test_no_platform_adds_no_instruction(self, monkeypatch):
+        captured = {}
+        monkeypatch.setattr(
+            image_agent.provider, "complete",
+            lambda system, user, **kw: (captured.update(user=user), image_provider_stub())[1],
+        )
+        image_agent.build_image_prompt(
+            self.PROFILE, image_agent.ImagePromptRequest(brief="a date night")
+        )
+        assert "candid and unpolished" not in captured["user"]
+
+
 class TestVariationAcrossRuns:
     """Rotating the framing alone is not enough: given the same brief a model
     lands on the same idea and merely photographs it from a new angle."""
 
-    PROFILE = {"businessName": "PataMpoa", "industry": "Dating", "description": "A dating app."}
+    PROFILE: ClassVar[dict] = {"businessName": "PataMpoa", "industry": "Dating", "description": "A dating app."}
 
     def _capture(self, monkeypatch) -> dict:
         captured = {}

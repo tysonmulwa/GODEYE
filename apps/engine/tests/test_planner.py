@@ -1,6 +1,7 @@
 """Autopilot planner slot computation (pure logic — no DB)."""
 
 from datetime import datetime
+from typing import ClassVar
 
 from godeye_engine.tasks.planner import compute_slots
 
@@ -174,3 +175,61 @@ class TestFirstRunGrace:
             start, now + timedelta(hours=24), [9, 13, 19],
         )
         assert not any(s.day == 2 and s.hour == 6 and s.minute == 35 for s in slots)
+
+
+class TestTheImageBriefCarriesThePlatform:
+    """The planner is the only place that knows where an autopilot image is
+    going. It worked the platform out to pick the preset and then dropped it,
+    so every generated image was briefed with no idea of its destination and
+    the per-platform visual culture never applied to a single post.
+    """
+
+    PLAN: ClassVar[dict] = {
+        "orgId": "org1",
+        "platforms": ["TIKTOK", "INSTAGRAM"],
+    }
+
+    def _dispatch(self, monkeypatch) -> dict:
+        from godeye_engine.tasks import image as image_task
+        from godeye_engine.tasks import planner
+
+        sent: dict = {}
+
+        class FakeSession:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *exc):
+                return False
+
+            def execute(self, *a, **kw):
+                return None
+
+            def commit(self):
+                pass
+
+        monkeypatch.setattr(planner, "get_session", lambda: FakeSession())
+        monkeypatch.setattr(
+            image_task.generate_image, "delay",
+            lambda **kw: sent.update(kw),
+        )
+        planner._queue_image_for_content(
+            self.PLAN, "content1", "Payday", "earning", [], body="A creator cashes out."
+        )
+        return sent
+
+    def test_the_platform_is_dispatched(self, monkeypatch):
+        assert self._dispatch(monkeypatch)["platform"] == "TIKTOK"
+
+    def test_the_preset_still_matches_that_platform(self, monkeypatch):
+        """The platform and the preset must not drift apart: they are two uses
+        of the same decision."""
+        from godeye_engine.media import presets
+
+        sent = self._dispatch(monkeypatch)
+        assert sent["preset_id"] == presets.PLATFORM_DEFAULT_PRESET.get("TIKTOK", "SQUARE")
+
+    def test_the_post_body_still_reaches_the_brief(self, monkeypatch):
+        """Guards the earlier fix in the same call: the image agent illustrates
+        the post, not the business in general."""
+        assert "A creator cashes out." in self._dispatch(monkeypatch)["brief"]

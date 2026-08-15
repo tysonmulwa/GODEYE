@@ -396,6 +396,10 @@ def _queue_image_for_content(
         brief=_image_brief(title, brief, body),
         preset_id=preset_id,
         content_item_id=content_id,
+        # Already worked out above to pick the preset, and until now thrown
+        # away, so every image was briefed with no idea where it was going and
+        # the per-platform visual culture never once applied.
+        platform=platform,
         apply_brand=True,  # no-ops if the org has no brand kit/logo
     )
 

@@ -45,6 +45,7 @@ class GenerateImageRequest(BaseModel):
     style: str | None = None
     contentItemId: str | None = None
     applyBrand: bool = False
+    platform: str | None = None
 
 
 class StoreLogoRequest(BaseModel):
@@ -203,6 +204,7 @@ def enqueue_generate_image(request: GenerateImageRequest) -> dict:
         style=request.style,
         content_item_id=request.contentItemId,
         apply_brand=request.applyBrand,
+        platform=request.platform,
     )
     return {"taskId": task.id}
 

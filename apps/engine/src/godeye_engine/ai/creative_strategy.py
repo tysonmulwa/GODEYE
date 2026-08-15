@@ -125,7 +125,7 @@ PLATFORM_BIAS = {
     ),
     "TIKTOK": (
         "TikTok: candid and unpolished. It should look photographed by a person "
-        "rather than produced by a brand — imperfect framing, real rooms, "
+        "rather than produced by a brand: imperfect framing, real rooms, "
         "nothing that reads as an advertisement."
     ),
     "FACEBOOK": (

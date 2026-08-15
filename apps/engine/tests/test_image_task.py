@@ -17,8 +17,9 @@ from godeye_engine.tasks import image as image_task
 class FakeResult:
     """Whatever session.execute() returns.
 
-    The task reads profile and brand rows through .mappings().first(), and the
-    org's recent image prompts through .scalars().
+    The task reads profile and brand rows through .mappings().first(), the
+    org's recent image prompts through .scalars(), and the organisation type
+    through .scalar().
     """
 
     def mappings(self):
@@ -29,6 +30,9 @@ class FakeResult:
 
     def scalars(self):
         return iter([])
+
+    def scalar(self):
+        return None
 
 
 class FakeSession:
@@ -134,3 +138,54 @@ def test_the_happy_path_reports_success(harness, monkeypatch):
     assert result["status"] == "SUCCEEDED"
     assert result["url"].startswith("https://cdn.example/")
     assert not harness, "a successful run must not be marked failed"
+
+
+def test_the_platform_reaches_the_image_agent(harness, monkeypatch):
+    """The task body is the only place this can be caught.
+
+    Platform adaptation was written, shipped, and never ran: the task set
+    platform=None unconditionally, so the per-platform visual culture was dead
+    code in production. The same blind spot broke image generation outright
+    when an earlier version read a column that does not exist. A Celery task
+    body does not execute at import, so nothing in a 596-test suite touched
+    either fault. Only calling the body does.
+    """
+    seen = {}
+    monkeypatch.setattr(
+        image_task.image_agent, "build_image_prompt",
+        lambda *a, **kw: (seen.update(kw), "a prompt")[1],
+    )
+    monkeypatch.setattr(
+        image_task, "upload_bytes", lambda key, data, ct: f"https://cdn.example/{key}"
+    )
+
+    result = image_task.generate_image(
+        agent_run_id="run1", org_id="org1", brief="a date night",
+        preset_id="VERTICAL", platform="TIKTOK",
+    )
+
+    assert result["status"] == "SUCCEEDED"
+    assert seen.get("platform") == "TIKTOK", "the platform never reached the agent"
+
+
+def test_the_org_type_reaches_the_image_agent(harness, monkeypatch):
+    """Same blind spot, caught before it shipped this time.
+
+    The image agent treats a solo creator differently: the person in shot is
+    the creator, not an anonymous model. That type lives on Organization and
+    not on BusinessProfile, so a branch keyed on it is dead code unless the
+    task actually looks it up. The content agent has always had it. This one
+    did not.
+    """
+    seen = {}
+    monkeypatch.setattr(
+        image_task.image_agent, "build_image_prompt",
+        lambda profile, *a, **kw: (seen.update(profile=profile), "a prompt")[1],
+    )
+    monkeypatch.setattr(
+        image_task, "upload_bytes", lambda key, data, ct: f"https://cdn.example/{key}"
+    )
+
+    run_task()
+
+    assert "orgType" in seen["profile"], "the agent cannot tell a creator from a company"
