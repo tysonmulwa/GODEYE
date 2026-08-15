@@ -58,8 +58,27 @@ def _anthropic(system: str, user: str, max_tokens: int) -> LlmResult:
         max_tokens=max_tokens,
         system=system,
         messages=[{"role": "user", "content": user}],
+        # Thinking off, deliberately.
+        #
+        # It is on by default on claude-sonnet-5, and max_tokens covers thinking
+        # and the reply together. The image agent asks for a short labelled
+        # reply inside 600 tokens, so the model spent all 600 thinking and
+        # returned a response whose only block was thinking: no text at all.
+        # Every agent here asks for a strict output format, JSON or labelled
+        # lines, and not one of them reads a thinking block, so the budget was
+        # pure risk. Measured on the live API: the same call returns a complete
+        # reply in 353 tokens with this off.
+        thinking={"type": "disabled"},
     )
     text = "".join(block.text for block in response.content if block.type == "text")
+    if not text.strip():
+        # Loudly, so the caller's fallback runs. Silence here is what put a
+        # bookkeeping header into an image model as though it were a brief.
+        raise RuntimeError(
+            f"{settings.anthropic_model} returned no text (stop_reason="
+            f"{response.stop_reason}, output_tokens={response.usage.output_tokens}). "
+            "If stop_reason is max_tokens the reply did not fit in the budget."
+        )
     return LlmResult(
         text=text,
         provider="anthropic",

@@ -150,7 +150,13 @@ def generate_image(
                 preset_id=preset_id,
             )
         except Exception as e:  # noqa: BLE001 — text LLM optional for images
-            logger.info("Image prompt LLM unavailable (%s); using fallback prompt", e)
+            # Warning, not info. This is the difference between a photograph of
+            # the business and a picture of nothing in particular, and it went
+            # unnoticed at info level while the run was recorded SUCCEEDED.
+            logger.warning(
+                "Image prompt agent failed (%s); falling back to the deterministic "
+                "prompt, which is weaker. The picture will still be generated.", e
+            )
             prompt = image_agent.fallback_prompt(
                 profile_dict, image_agent.ImagePromptRequest(brief=brief, style=style)
             )

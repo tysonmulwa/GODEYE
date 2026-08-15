@@ -28,7 +28,12 @@ def _image_user_prompt(profile: dict, platform: str | None) -> str:
     original = image_agent.provider.complete
 
     class _Stub:
-        text = "PROMPT: a photograph"
+        # Long enough to clear MIN_PROMPT_CHARS: the agent now refuses a brief
+        # too short to be real, which is what an empty reply looks like.
+        text = (
+            "PROMPT: A tight portrait of a barista mid pour behind a scuffed "
+            "counter, morning light raking across the crema, steam rising."
+        )
         provider = model = "test"
         input_tokens = output_tokens = 1
         cost_usd = 0.0

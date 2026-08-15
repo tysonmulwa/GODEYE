@@ -134,6 +134,11 @@ PROMPT_SYSTEM = mission.charter("image") + "\n\n" + (
 )
 
 
+# A real photographic brief is 70 to 120 words. Anything under this is a
+# truncated or empty reply, not a short one, and must not reach the image model.
+MIN_PROMPT_CHARS = 80
+
+
 @dataclass
 class ImagePromptRequest:
     brief: str
@@ -292,8 +297,22 @@ def build_image_prompt(
     # 300 truncated these mid-word once the brief became a full photographic
     # description, and the tail is where the texture detail lives, which is the
     # part that stops the render looking synthetic.
-    result = provider.complete(PROMPT_SYSTEM, "\n".join(parts), max_tokens=600)
+    result = provider.complete(PROMPT_SYSTEM, "\n".join(parts), max_tokens=900)
     angle, hook, prompt = _split_reply(result.text)
+    # Never hand the image model a header with no brief under it.
+    #
+    # The strategy header is bookkeeping, but it is also text, so prepending it
+    # turned an empty reply into a non-empty return value. The caller's fallback
+    # is guarded by an except, and nothing raised, so a prompt reading exactly
+    # "[strategy] category=problem; angle=; hook=" went to the image provider as
+    # the whole brief. It drew the category: "problem" came back as a literal
+    # logic puzzle, "lifestyle" as a stock living room. Every run was recorded
+    # SUCCEEDED because a picture did come back.
+    if len(prompt.strip()) < MIN_PROMPT_CHARS:
+        raise ValueError(
+            f"the image agent returned no usable brief (got {len(prompt.strip())} "
+            f"characters, need {MIN_PROMPT_CHARS})"
+        )
     # The idea is recorded on the front of the prompt, which is already stored
     # and already read back, so the next image knows what this one was without
     # a new column anywhere.

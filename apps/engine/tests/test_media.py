@@ -143,6 +143,12 @@ class TestProviderSelection:
         assert image_provider.price_for("some-future-model") == image_provider.DEFAULT_IMAGE_PRICE
 
 
+LATTE_BRIEF = (
+    "A warm cinematic latte scene on a scuffed oak counter, morning light "
+    "raking across the crema, a barista's hands still on the jug."
+)
+
+
 class TestImageAgent:
     def test_fallback_prompt_keeps_the_safety_rules(self):
         profile = {"industry": "coffee roasting", "businessName": "Acme"}
@@ -159,7 +165,7 @@ class TestImageAgent:
             image_agent.provider,
             "complete",
             lambda system, user, max_tokens=300: LlmResult(
-                text='"A warm cinematic latte scene"',
+                text=f'"{LATTE_BRIEF}"',
                 provider="anthropic",
                 model="claude-sonnet-5",
                 input_tokens=50,
@@ -174,7 +180,7 @@ class TestImageAgent:
         # strategy header recording the idea behind it, which the next image
         # reads back so it does not repeat the same creative category.
         assert prompt.startswith("[strategy] ")
-        assert prompt.endswith("A warm cinematic latte scene")
+        assert prompt.endswith(LATTE_BRIEF)
 
 
 class TestImagePromptQuality:
@@ -264,11 +270,20 @@ class TestImagePromptQuality:
         assert "no text or logos" in prompt
 
 
+# Long enough to be a real brief. A stub shorter than MIN_PROMPT_CHARS is
+# indistinguishable from the empty reply that put a logic puzzle on a dating
+# app's feed, and the agent now rejects it, correctly.
+STUB_BRIEF = (
+    "Tight portrait of a woman in her mid twenties in a small Nairobi bedroom, "
+    "phone angled toward the camera, ring light caught in her irises, mid laugh."
+)
+
+
 def image_provider_stub():
     from godeye_engine.ai.provider import LlmResult
 
     return LlmResult(
-        text="A specific photographic prompt.",
+        text=STUB_BRIEF,
         provider="anthropic", model="test",
         input_tokens=1, output_tokens=1,
     )
@@ -398,6 +413,95 @@ class TestTheAgentKnowsWhatTheBusinessSells:
         assert "wristwatch" in system
         assert "identifiable in the frame" in system
         assert "name the industry from the picture alone" in system
+
+
+class TestAnEmptyReplyNeverReachesTheImageModel:
+    """The scales puzzle.
+
+    A PataMpoa post produced a shapes-and-scales logic puzzle, and another
+    produced a stock living room with a to-do list on the table. Both were
+    stored with this as the entire prompt:
+
+        [strategy] category=problem; angle=; hook=
+
+    The photographic brief was empty and the image model drew the category
+    name. "problem" became a literal logic problem. "lifestyle" became a
+    lifestyle stock photo.
+
+    The cause was a strict-output call with thinking left on: the model spent
+    the whole 600 token budget thinking and returned a response with no text
+    block. The header made the empty result look like a prompt, so nothing
+    raised, the fallback never ran, and every run was recorded SUCCEEDED
+    because a picture did come back.
+    """
+
+    PROFILE: ClassVar[dict] = {
+        "businessName": "PataMpoa",
+        "industry": "Dating",
+        "description": "A dating app.",
+        "services": ["live video calls"],
+    }
+
+    def _reply(self, monkeypatch, text: str):
+        from godeye_engine.ai.provider import LlmResult
+
+        monkeypatch.setattr(
+            image_agent.provider, "complete",
+            lambda system, user, **kw: LlmResult(
+                text=text, provider="anthropic", model="test",
+                input_tokens=1, output_tokens=1,
+            ),
+        )
+
+    def test_an_empty_reply_raises_rather_than_returning_a_header(self, monkeypatch):
+        self._reply(monkeypatch, "")
+        with pytest.raises(ValueError, match="no usable brief"):
+            image_agent.build_image_prompt(
+                self.PROFILE, image_agent.ImagePromptRequest(brief="earning")
+            )
+
+    def test_a_reply_truncated_mid_label_raises(self, monkeypatch):
+        """One stored prompt ended at "ANG", three characters into ANGLE."""
+        self._reply(monkeypatch, "ANG")
+        with pytest.raises(ValueError, match="no usable brief"):
+            image_agent.build_image_prompt(
+                self.PROFILE, image_agent.ImagePromptRequest(brief="earning")
+            )
+
+    def test_a_labelled_reply_with_an_empty_prompt_raises(self, monkeypatch):
+        """The labels arriving is not the same as a brief arriving."""
+        self._reply(monkeypatch, "ANGLE: payday\nHOOK: she sees the number\nPROMPT:")
+        with pytest.raises(ValueError, match="no usable brief"):
+            image_agent.build_image_prompt(
+                self.PROFILE, image_agent.ImagePromptRequest(brief="earning")
+            )
+
+    def test_a_real_brief_still_passes(self, monkeypatch):
+        brief = (
+            "Tight portrait of a Kenyan woman in her mid twenties in a small "
+            "Nairobi bedroom, phone angled toward camera showing a live call, "
+            "ring light in her irises, caught mid laugh."
+        )
+        self._reply(monkeypatch, f"ANGLE: payday\nHOOK: the moment she sees it\nPROMPT: {brief}")
+        prompt = image_agent.build_image_prompt(
+            self.PROFILE, image_agent.ImagePromptRequest(brief="earning")
+        )
+        assert brief in prompt
+        assert prompt.startswith("[strategy] ")
+
+    def test_an_unlabelled_reply_is_still_accepted_as_the_brief(self, monkeypatch):
+        """Tolerated on purpose. A model that ignores the labels but writes a
+        real photographic brief has not failed, and failing the render over
+        formatting would throw away a usable picture."""
+        brief = (
+            "Wide environmental shot of a Nairobi rooftop at golden hour, a "
+            "creator packing up her ring light after a long stream, city "
+            "buildings soft behind her."
+        )
+        self._reply(monkeypatch, brief)
+        assert brief in image_agent.build_image_prompt(
+            self.PROFILE, image_agent.ImagePromptRequest(brief="earning")
+        )
 
 
 class TestPlatformReachesTheBrief:
