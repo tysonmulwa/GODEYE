@@ -43,4 +43,7 @@ class TestAgentsAdoptCharter:
         assert "valid JSON" in content_agent.SYSTEM_PROMPT
         assert "schema.org" in seo_agent.SYSTEM_PROMPT
         assert "TikTok" in video_agent.SYSTEM_PROMPT
-        assert "image prompt" in image_agent.PROMPT_SYSTEM
+        # "photograph" rather than "image prompt": the agent's specialism is
+        # photography, and the old phrase was incidental wording that happened
+        # to be there.
+        assert "photograph" in image_agent.PROMPT_SYSTEM

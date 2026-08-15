@@ -246,7 +246,7 @@ class TestImagePromptQuality:
         seen = set()
         monkeypatch.setattr(
             image_agent.provider, "complete",
-            lambda system, user, **kw: (seen.add(user.split("Use this framing: ")[1]),
+            lambda system, user, **kw: (seen.add(user.split("Framing to lean toward, same rule: ")[1]),
                                         image_provider_stub())[1],
         )
         import random as _random
@@ -413,6 +413,105 @@ class TestTheAgentKnowsWhatTheBusinessSells:
         assert "wristwatch" in system
         assert "identifiable in the frame" in system
         assert "name the industry from the picture alone" in system
+
+
+class TestTheCaptionDecidesThePicture:
+    """Read the post, find what is happening, photograph that.
+
+    The agent used to reason from the business to a marketing concept and only
+    then to a picture, and posts got lost in the jump. An upbeat post calling
+    on streamers to come and connect produced a woman alone in her room with an
+    unlit ring light: a good photograph of the opposite of the post, because
+    the rotated creative category said "problem" and outranked the caption.
+    """
+
+    POST = (
+        "Calling all streamers and content creators in Nairobi and beyond. "
+        "PataMpoa is where genuine connections happen, and where your audience "
+        "can grow across borders. PataMpoa gives you the space to stream, "
+        "connect, and turn conversations into opportunities."
+    )
+
+    def _capture(self, monkeypatch) -> dict:
+        captured = {}
+        monkeypatch.setattr(
+            image_agent.provider, "complete",
+            lambda system, user, **kw: (captured.update(user=user), image_provider_stub())[1],
+        )
+        return captured
+
+    def test_the_post_is_labelled_as_the_post(self, monkeypatch):
+        """It used to arrive as "Image brief", which invites interpretation.
+        It is the caption that will run beside the picture."""
+        captured = self._capture(monkeypatch)
+        image_agent.build_image_prompt(
+            {"businessName": "PataMpoa", "industry": "Dating", "description": "Dating app."},
+            image_agent.ImagePromptRequest(brief=self.POST),
+        )
+        assert "The post this image goes with:" in captured["user"]
+
+    def test_the_category_is_a_suggestion_not_a_mandate(self, monkeypatch):
+        """The regression. As a mandate it produced the opposite of the post."""
+        captured = self._capture(monkeypatch)
+        image_agent.build_image_prompt(
+            {"businessName": "PataMpoa", "industry": "Dating", "description": "Dating app."},
+            image_agent.ImagePromptRequest(brief=self.POST),
+        )
+        assert "ignore if it fights it" in captured["user"]
+        assert "Creative category to work inside" not in captured["user"]
+
+    def test_the_extraction_is_demanded_in_order(self):
+        system = image_agent.PROMPT_SYSTEM
+        for label in ("SUBJECT:", "ACTION:", "WITH:", "OUTCOME:", "PROMPT:"):
+            assert label in system, f"{label} missing from the reply format"
+        assert system.index("SUBJECT:") < system.index("PROMPT:")
+
+    def test_the_verb_is_photographed_not_symbolised(self):
+        system = image_agent.PROMPT_SYSTEM
+        assert "Photograph the verb" in system
+        assert "abstract representation of authenticity" in system
+
+    def test_people_posts_default_to_people(self):
+        """Never a desk, a notebook or a calendar for a post about connecting."""
+        system = image_agent.PROMPT_SYSTEM
+        assert "realistic people interacting" in system
+        assert "Relevant first, attractive second" in system
+
+    def test_the_concept_is_recorded_in_the_header(self, monkeypatch):
+        """The extraction is worth keeping: it is what the next image reads
+        back to avoid repeating itself."""
+        from godeye_engine.ai import creative_strategy
+        from godeye_engine.ai.provider import LlmResult
+
+        reply = (
+            "SUBJECT: a Nairobi content creator\n"
+            "ACTION: livestreaming to her audience\n"
+            "WITH: viewers reacting in the chat\n"
+            "OUTCOME: her audience growing across borders\n"
+            "PROMPT: A woman in her mid twenties mid stream in a bright Nairobi "
+            "apartment, ring light catching her face, phone propped in front of "
+            "her, laughing at something a viewer just sent."
+        )
+        monkeypatch.setattr(
+            image_agent.provider, "complete",
+            lambda system, user, **kw: LlmResult(
+                text=reply, provider="anthropic", model="test",
+                input_tokens=1, output_tokens=1,
+            ),
+        )
+        prompt = image_agent.build_image_prompt(
+            {"businessName": "PataMpoa", "industry": "Dating", "description": "Dating app."},
+            image_agent.ImagePromptRequest(brief=self.POST),
+        )
+        header = creative_strategy.parse_header(prompt)
+        assert "livestreaming" in header["hook"]
+        assert "audience growing" in header["angle"]
+
+    def test_an_unlabelled_reply_still_yields_the_brief(self, monkeypatch):
+        """Format compliance is not worth failing a usable picture over."""
+        concept = image_agent._split_reply("A woman mid stream in a Nairobi flat.")
+        assert concept.prompt == "A woman mid stream in a Nairobi flat."
+        assert concept.action == ""
 
 
 class TestAnEmptyReplyNeverReachesTheImageModel:

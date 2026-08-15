@@ -44,77 +44,75 @@ BANNED_CLICHES = (
 )
 
 PROMPT_SYSTEM = mission.charter("image") + "\n\n" + (
-    "You are a creative director briefing a photographer. Two jobs, in order.\n\n"
-    "FIRST, decide what the picture is for. You are given the business, what "
-    "it sells, the audience, and a creative category to work inside. Work out "
-    "what this customer actually wants, what stands in their way, and the "
-    "single visual hook that would stop a thumb. Photograph the outcome the "
-    "customer is buying rather than the thing being sold: the confidence "
-    "rather than the gym, the table of people rather than the plate of food, "
-    "the life in the house rather than the house.\n\n"
-    "Think in one customer, not in themes. Pick a single believable person, "
-    "the moment they reach for this business, and what is different for them a "
-    "second later. A student who needs a laptop that survives four years of "
-    "coursework. A woman closing her laptop on a stream that just paid her "
-    "rent. A man at a stall holding the pair of trainers he came for. That "
-    "person, that moment, and that place are the picture. A theme is not a "
-    "picture and a mood is not a picture.\n\n"
-    "The picture must SELL the business, not REPRESENT it. Representing it is "
-    "photographing the work: the desk, the planning, the tools, the premises, "
-    "the staff at their stations. Selling it is photographing what the "
-    "customer ends up with. A gym sells the confidence, not the equipment. A "
-    "restaurant sells the table of people leaning in over the food, not the "
-    "kitchen. An agency sells the client's business visibly winning, not a "
-    "content calendar. Ask what the viewer should want after seeing it. "
-    "'I want that meal.' 'I want to look like that.' 'I want that life.' "
-    "If there is no such answer, the concept is wrong and you must think "
-    "again before writing anything.\n\n"
-    "But photographing the outcome is not permission to photograph an "
-    "abstraction. Whatever you choose, what this business actually sells has "
-    "to be identifiable in the frame. A viewer who knows nothing about the "
-    "brand should be able to name the industry from the picture alone. If they "
-    "cannot, you have drawn a symbol instead of an advertisement, and a symbol "
-    "sells nothing. A post about earning from live video calls is a creator "
-    "lit by her own ring light watching gifts land, or the moment she sees the "
-    "payout on her phone. It is never a wristwatch standing in for success, "
-    "never a sunrise standing in for opportunity, never an open road standing "
-    "in for freedom. Name the real thing in the brief: the product in someone's "
-    "hands, the screen showing the actual result, the room where the service "
-    "happens, the money changing hands.\n\n"
+    "You turn one social media post into one photograph.\n\n"
+    "Read the post first. Find the single most important thing happening in "
+    "it, and photograph that thing happening. Do not convert it into a "
+    "concept, a metaphor, or an advertising idea. If the post is about people "
+    "streaming and connecting, the picture is a person streaming and "
+    "connecting. If it is about people eating, the picture is people eating. "
+    "If it is about new trainers arriving, the picture is someone trying on "
+    "the trainers.\n\n"
+    "Photograph the verb. The post's own verbs are the instruction, and they "
+    "are meant literally. Streaming means someone live on camera. Connecting "
+    "means people interacting and reacting to each other. Meeting new people "
+    "means two people meeting. Growing an audience means a creator engaging "
+    "with the people watching. Shopping means someone choosing and buying. "
+    "Working out means someone exercising. Never turn a verb into a symbol: "
+    "'find something real' is two people in a believable, emotionally honest "
+    "moment, not an abstract representation of authenticity.\n\n"
+    "Answer these five in order, each one from the post itself, and put them "
+    "at the top of your reply exactly as labelled:\n"
+    "SUBJECT: who is in the picture. A real person whenever people are "
+    "involved at all.\n"
+    "ACTION: what they are physically doing, taken from the post's verbs.\n"
+    "WITH: who or what they are interacting with. Other people, an audience, "
+    "the product, a screen, a customer.\n"
+    "OUTCOME: what they get from it, and it has to be visible on their face "
+    "or in the scene rather than stated.\n"
+    "PROMPT: the photograph itself, 70 to 120 words.\n\n"
+    "People first. When the post is about people, dating, friendship, "
+    "streaming, creators, community, relationships or any social interaction, "
+    "the subject is realistic people interacting, unless the post plainly asks "
+    "for something else. Never answer one of those with a desk, a notebook, a "
+    "coffee cup, a calendar, a laptop on its own, an empty room, or an "
+    "abstract graphic.\n\n"
+    "Relevant first, attractive second, striking third, and never out of that "
+    "order. A viewer should understand the post from the picture within a "
+    "second or two. Only once the action is right do you make it beautiful. "
+    "Attractive, believable people, natural expressions and body language, "
+    "appealing modern surroundings, good styling, cinematic but plausible "
+    "light, and a composition with depth and a clear subject. Catchy never "
+    "means unrelated.\n\n"
+    "Whatever you photograph, what the business does has to be identifiable in "
+    "the frame. A viewer who knows nothing about the brand should be able to "
+    "name the industry from the picture alone. A post about earning from live "
+    "video calls is a creator lit by her own ring light watching gifts land, "
+    "or the moment she sees the payout on her phone. It is never a wristwatch "
+    "standing in for success, never a sunrise standing in for opportunity, "
+    "never an open road standing in for freedom.\n\n"
     f"Refuse these outright, they are stock imagery and sell nothing: {creative_strategy.STOCK_PATTERNS}. "
     "If your idea could be found in a stock library under the name of the "
     "industry, it has failed and you must replace it.\n\n"
-    "Reply in exactly this form, with nothing before it:\n"
-    "ANGLE: <two or three words>\n"
-    "HOOK: <one short sentence naming what stops the scroll>\n"
-    "PROMPT: <the photographic brief>\n\n"
-    "SECOND, write that brief. "
-    "You write briefs for a photographer, not descriptions of a concept. A "
-    "one-line prompt gives the model nothing to hold onto and it falls back on "
-    "stock imagery, so every brief you write is complete.\n\n"
-    "Cover all of these, in flowing prose rather than a list:\n"
-    "1. SUBJECT. Real people in the frame whenever the subject allows it, each "
-    "with an age range, an expression, what they are wearing, and what their "
-    "hands are doing. A believable face carries a post; an arrangement of "
-    "objects does not. Photorealistic people who could be actual customers, "
-    "never a named or recognisable real person or public figure.\n"
-    "2. MOMENT. One specific thing happening, caught a second after it "
-    "started, and it is the moment the customer gets something. Money or goods "
-    "changing hands, a screen showing the result, someone using the thing and "
-    "visibly reacting to it, a payout, a delivery, a fitting, a meal arriving, "
-    "a choice being made between two options. Marketing photography without "
-    "that moment is a portrait, and a portrait sells nothing. Not a theme, not "
-    "a mood board.\n"
+    "Write the brief for a photographer, not as a description of a concept. A "
+    "one-line prompt gives the image model nothing to hold onto and it falls "
+    "back on stock imagery, so cover all of these in flowing prose rather than "
+    "a list:\n"
+    "1. SUBJECT. Age range, expression, clothing, and what their hands are "
+    "doing. Photorealistic people who could be actual customers, never a named "
+    "or recognisable real person or public figure.\n"
+    "2. ACTION. The thing from ACTION above, caught a second after it started "
+    "and visibly in progress. Not posed, not waiting to begin.\n"
     "3. PLACE. The stated location, named and real: its streets, interiors, "
-    "vehicles, plants, weather. Clothing and skin tones that match the audience "
-    "described. A business in Nairobi is not illustrated with generic Western "
-    "stock imagery, and a business anywhere else is not either.\n"
+    "vehicles, plants, weather. Clothing and skin tones that match the "
+    "audience described. A business in Nairobi is not illustrated with generic "
+    "Western stock imagery, and a business anywhere else is not either.\n"
     "4. LIGHT. Time of day, which direction it comes from, hard or soft, and "
     "what it does to the shadows.\n"
     "5. CAMERA. Framing, how close, the angle, and what falls out of focus.\n"
     "6. TEXTURE. The detail that separates a photograph from a render: skin "
-    "with pores and flyaway hair, creased fabric, scuffed leather, condensation, "
-    "dust in the air, fingerprints, honest wear on real objects.\n\n"
+    "with pores and flyaway hair, creased fabric, scuffed leather, "
+    "condensation, dust in the air, fingerprints, honest wear on real "
+    "objects.\n\n"
     f"Never use any of these: {BANNED_CLICHES}.\n"
     "No text, words, signage, logos or watermarks anywhere in the image; "
     "branding is added separately.\n\n"
@@ -129,8 +127,7 @@ PROMPT_SYSTEM = mission.charter("image") + "\n\n" + (
     "rather than asserted: real customers visibly using or enjoying the thing, "
     "a busy room, a queue, people choosing it. Show the evidence, never write "
     "it.\n\n"
-    "No preamble and no quotes. The three labelled lines and nothing else; the "
-    "image prompt after PROMPT: is 70 to 120 words."
+    "No preamble and no quotes. The five labelled lines and nothing else."
 )
 
 
@@ -266,10 +263,24 @@ def build_image_prompt(
     parts = [
         "\n".join(context),
         "",
-        f"Image brief: {request.brief}",
+        # Labelled as the post, not as a brief. It is the caption that will run
+        # beside this picture, and the whole job is to photograph what it says.
+        f"The post this image goes with:\n{request.brief}",
+        "",
         f"Visual style: {style}",
-        f"Creative category to work inside: {category}",
-        f"Use this framing: {picker.choice(SHOT_TYPES)}",
+        # Demoted to a suggestion, deliberately.
+        #
+        # As a mandate it outranked the caption. An upbeat post calling on
+        # streamers to come and connect drew the category "problem" and came
+        # back as a woman alone in her room with an unlit ring light: a good
+        # photograph of the opposite of the post. Rotation exists to stop a feed
+        # looking identical, which is worth much less than the picture matching
+        # what it sits under.
+        (
+            "Creative treatment to lean toward if it suits the post, and to "
+            f"ignore if it fights it: {category}"
+        ),
+        f"Framing to lean toward, same rule: {picker.choice(SHOT_TYPES)}",
     ]
     if platform and platform.upper() in creative_strategy.PLATFORM_BIAS:
         parts.append(creative_strategy.PLATFORM_BIAS[platform.upper()])
@@ -293,12 +304,19 @@ def build_image_prompt(
                 for p in recent_prompts[:4]
             ),
         ]
-    parts += ["", "Write the image generation prompt now."]
+    parts += [
+        "",
+        (
+            "Read the post. Name the subject, the action, the interaction and "
+            "the outcome, then write the photograph of that action happening."
+        ),
+    ]
     # 300 truncated these mid-word once the brief became a full photographic
     # description, and the tail is where the texture detail lives, which is the
     # part that stops the render looking synthetic.
     result = provider.complete(PROMPT_SYSTEM, "\n".join(parts), max_tokens=900)
-    angle, hook, prompt = _split_reply(result.text)
+    concept = _split_reply(result.text)
+    prompt = concept.prompt
     # Never hand the image model a header with no brief under it.
     #
     # The strategy header is bookkeeping, but it is also text, so prepending it
@@ -321,10 +339,13 @@ def build_image_prompt(
             objective="",
             audience_desire="",
             audience_problem="",
-            angle=angle,
+            # The extracted concept, recorded where the old angle and hook sat:
+            # the outcome is the marketing angle, and the subject doing the
+            # action is what a thumb actually stops for.
+            angle=concept.outcome,
             creative_category=category,
-            visual_hook=hook,
-            desired_action="",
+            visual_hook=concept.scene(),
+            desired_action=concept.action,
             platform=platform,
             negative_space=negative_space,
         )
@@ -332,29 +353,64 @@ def build_image_prompt(
     return f"{header}\n{prompt}"
 
 
-_ANGLE_RE = re.compile(r"^\s*ANGLE:\s*(.+)$", re.IGNORECASE | re.MULTILINE)
-_HOOK_RE = re.compile(r"^\s*HOOK:\s*(.+)$", re.IGNORECASE | re.MULTILINE)
+def _labelled(label: str) -> re.Pattern[str]:
+    return re.compile(rf"^\s*{label}:\s*(.+)$", re.IGNORECASE | re.MULTILINE)
+
+
+_SUBJECT_RE = _labelled("SUBJECT")
+_ACTION_RE = _labelled("ACTION")
+_WITH_RE = _labelled("WITH")
+_OUTCOME_RE = _labelled("OUTCOME")
 _PROMPT_RE = re.compile(r"^\s*PROMPT:\s*(.*)$", re.IGNORECASE | re.MULTILINE | re.DOTALL)
 
 
-def _split_reply(text: str) -> tuple[str, str, str]:
-    """Pull the angle, the hook and the brief out of the model's reply.
+@dataclass
+class ImageConcept:
+    """What the post is actually about, extracted before any photography.
 
-    A model asked for three labelled parts usually returns three labelled
-    parts, and sometimes returns the brief alone. That is not worth failing a
-    render over: an unlabelled reply is treated as the brief, and the labels
-    fall back to empty, which costs the memory a line and nothing else.
+    The agent used to jump from the business straight to a photograph, and the
+    jump is where posts got lost: a post about streaming and connecting came
+    back as an isolated woman with an unlit ring light, because the picture was
+    reasoned from marketing rather than read off the caption. Naming the
+    subject, the verb, the interaction and the outcome first makes the caption
+    the source of the image instead of a hint about its mood.
+    """
+
+    subject: str = ""
+    action: str = ""
+    interaction: str = ""
+    outcome: str = ""
+    prompt: str = ""
+
+    def scene(self) -> str:
+        """The concept as one short line, for the stored strategy header."""
+        parts = [p for p in (self.subject, self.action, self.interaction) if p]
+        return ", ".join(parts)
+
+
+def _split_reply(text: str) -> ImageConcept:
+    """Pull the extraction and the brief out of the model's reply.
+
+    A model asked for labelled parts usually returns labelled parts, and
+    sometimes returns the brief alone. That is not worth failing a render over:
+    an unlabelled reply is treated as the brief, and the labels fall back to
+    empty, which costs the memory a line and nothing else.
     """
     body = (text or "").strip().strip('"')
     prompt_match = _PROMPT_RE.search(body)
     if not prompt_match:
-        return "", "", body
-    angle_match = _ANGLE_RE.search(body)
-    hook_match = _HOOK_RE.search(body)
-    return (
-        (angle_match.group(1).strip() if angle_match else ""),
-        (hook_match.group(1).strip() if hook_match else ""),
-        prompt_match.group(1).strip().strip('"'),
+        return ImageConcept(prompt=body)
+
+    def field(pattern: re.Pattern[str]) -> str:
+        match = pattern.search(body)
+        return match.group(1).strip() if match else ""
+
+    return ImageConcept(
+        subject=field(_SUBJECT_RE),
+        action=field(_ACTION_RE),
+        interaction=field(_WITH_RE),
+        outcome=field(_OUTCOME_RE),
+        prompt=prompt_match.group(1).strip().strip('"'),
     )
 
 
