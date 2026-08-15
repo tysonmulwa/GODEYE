@@ -311,7 +311,9 @@ def autopilot_generate(plan_id: str, slot_iso: str, slot_index: int = 0) -> dict
 
     # Optionally generate an on-brand image and attach it to this post.
     if plan["generateImages"]:
-        _queue_image_for_content(plan, content_id, result.title, topic or goal, connections)
+        _queue_image_for_content(
+            plan, content_id, result.title, topic or goal, connections, body=result.body
+        )
     else:
         # No generated image does not have to mean no image. A workspace that
         # imported its catalogue already has real photographs of the things it
@@ -337,8 +339,27 @@ def autopilot_generate(plan_id: str, slot_iso: str, slot_index: int = 0) -> dict
     }
 
 
+
+def _image_brief(title: str, topic: str, body: str | None) -> str:
+    """What the image agent is asked to illustrate.
+
+    Trimmed rather than sent whole: the agent needs the concrete detail near
+    the top of a post, not a thousand words of caption that push the actual
+    subject out of its attention.
+    """
+    parts = [f"{title}. {topic}"]
+    if body and body.strip():
+        parts.append(f"The post this illustrates says: {body.strip()[:700]}")
+    return "\n".join(parts)
+
+
 def _queue_image_for_content(
-    plan: dict, content_id: str, title: str, brief: str, connections: list
+    plan: dict,
+    content_id: str,
+    title: str,
+    brief: str,
+    connections: list,
+    body: str | None = None,
 ) -> None:
     """Create an IMAGE AgentRun and dispatch generation for an autopilot post."""
     from .image import generate_image
@@ -364,7 +385,15 @@ def _queue_image_for_content(
     generate_image.delay(
         agent_run_id=run_id,
         org_id=plan["orgId"],
-        brief=f"{title}. {brief}",
+        # The post itself, not just its topic.
+        #
+        # This used to send the title and the plan's topic word, so the image
+        # agent illustrated the business in general and never the post in
+        # front of it. A post about earning money from video calls got a
+        # wristwatch, because "PataMpoa. earning" is all it was ever shown.
+        # The body is where the photographable detail lives: who this is for,
+        # where they are, and what actually changes for them.
+        brief=_image_brief(title, brief, body),
         preset_id=preset_id,
         content_item_id=content_id,
         apply_brand=True,  # no-ops if the org has no brand kit/logo
