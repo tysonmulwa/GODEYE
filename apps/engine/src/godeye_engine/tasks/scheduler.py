@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 from datetime import datetime, timedelta
 
 from sqlalchemy import and_, or_, select, update
@@ -60,6 +61,17 @@ CLAIM_TOLERANCE_SEC = 1.0
 # Networks whose API refuses a post with no media. Everywhere else text alone
 # is a legitimate post, so nothing is borrowed for them.
 MEDIA_REQUIRED_PLATFORMS = ("TIKTOK", "INSTAGRAM")
+
+# How long a due post waits for an image that is still being made.
+#
+# Autopilot writes the post and queues its image as two separate jobs, so the
+# image can still be in the queue when the slot arrives. Publishing anyway is
+# how a marketing post went out as bare text on Facebook and failed outright on
+# Instagram, on the same content, minutes apart. Waiting costs a few minutes of
+# punctuality and saves the post.
+#
+# Bounded, because an image that is never coming must not hold a slot forever.
+IMAGE_WAIT_MINUTES = 45
 
 # When an org requires approval, a due post only dispatches once its content
 # cleared review. SCHEDULED/PUBLISHED imply approval happened earlier (manual
@@ -190,6 +202,31 @@ def publish_post(scheduled_post_id: str, claimed_at: str | None = None) -> dict:
     platform = connection["platform"]
     media_urls = [row.url for row in media if row.kind == "IMAGE"]
     video_urls = [row.url for row in media if row.kind == "VIDEO"]
+
+    # An image that is still being made is worth waiting for.
+    #
+    # The post and its image are two jobs. When the image is slower than the
+    # slot, this published the post without it: bare text on Facebook, and on
+    # Instagram an outright failure, from the same content item. Neither is
+    # recoverable afterwards, because a published post cannot grow an image and
+    # retrying a failed one finds the same nothing.
+    #
+    # So a due post with no media steps aside while its image is queued or
+    # running, and is picked up again on the next tick. Bounded by
+    # IMAGE_WAIT_MINUTES, after which it goes out as it is rather than holding
+    # the slot forever.
+    overdue = utcnow() - post["scheduledAt"]
+    if should_wait_for_image(
+        has_media=bool(media_urls or video_urls),
+        overdue=overdue,
+        image_coming=lambda: _image_still_coming(post["contentItemId"]),
+    ):
+        _release_claim(scheduled_post_id)
+        logger.info(
+            "Publish %s is waiting for its image (%.0fs overdue); back to PENDING",
+            scheduled_post_id, overdue.total_seconds(),
+        )
+        return {"status": "waiting_for_image"}
 
     # A post with nothing attached cannot go to these two at all, and retrying
     # it changes nothing — the same content comes back with the same nothing,
@@ -395,6 +432,65 @@ def _record_failure(
             "error": error[:300],
         },
     )
+
+
+def should_wait_for_image(
+    has_media: bool,
+    overdue: timedelta,
+    image_coming: Callable[[], bool],
+) -> bool:
+    """Whether a due post should step aside and let its image finish.
+
+    Three conditions, and all of them matter. A post that already has media
+    goes out now. A post whose image is not actually in flight would wait for
+    nothing, so it goes out as it is rather than stalling until the deadline.
+    And the wait is bounded, because a slot held open forever is worse than a
+    post that went out plain.
+
+    ``image_coming`` is a callable so the database is only asked when the
+    cheap checks have already passed.
+    """
+    if has_media:
+        return False
+    if overdue >= timedelta(minutes=IMAGE_WAIT_MINUTES):
+        return False
+    return image_coming()
+
+
+def _image_still_coming(content_item_id: str) -> bool:
+    """Whether an image for this content item is queued or already running.
+
+    Read off AgentRun rather than guessed from timing. QUEUED is written by the
+    planner the moment it dispatches generation, and RUNNING by the image task
+    when it starts, so between them they cover the whole window where an image
+    is on its way but not yet stored.
+    """
+    with get_session() as session:
+        return session.execute(
+            select(AgentRun.c.id)
+            .where(
+                AgentRun.c.agent == "IMAGE",
+                AgentRun.c.status.in_(["QUEUED", "RUNNING"]),
+                AgentRun.c.input["contentItemId"].astext == content_item_id,
+            )
+            .limit(1)
+        ).first() is not None
+
+
+def _release_claim(post_id: str) -> None:
+    """Put a claimed post back in the pool without spending an attempt.
+
+    Standing aside is not a failure, so attempts is untouched: burning one here
+    would exhaust the retry budget on a post that has not been sent anywhere.
+    Clearing lockedAt is what makes the next dispatch tick pick it up again.
+    """
+    with get_session() as session:
+        session.execute(
+            update(ScheduledPost)
+            .where(ScheduledPost.c.id == post_id)
+            .values(status="PENDING", lockedAt=None, updatedAt=utcnow())
+        )
+        session.commit()
 
 
 def _finish(
