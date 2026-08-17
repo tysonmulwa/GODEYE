@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { PLANS, PLAN_FEATURES } from "@godeye/shared";
+import { PLANS, PLAN_FEATURES, TRIAL_HOURS } from "@godeye/shared";
 import { GodeyeCrest } from "@/components/logo";
 
 /**
@@ -13,11 +13,12 @@ import { GodeyeCrest } from "@/components/logo";
 export const metadata: Metadata = {
   title: "Pricing",
   description:
-    "GODEYE pricing in USD. Start free with 30 posts a month, or take Pro at $49 and Scale at $199. No card needed to begin.",
+    `GODEYE pricing in USD. Every workspace starts with ${TRIAL_HOURS} hours of full access, ` +
+    "no card needed. Pro $19 a month, Premium $49, VIP $199.",
   alternates: { canonical: "/pricing" },
   openGraph: {
     title: "GODEYE pricing",
-    description: "Start free. Pro $49 a month, Scale $199. Billed in USD, cancel any time.",
+    description: `${TRIAL_HOURS} hours free, no card. Then Pro $19 a month, Premium $49, VIP $199.`,
     url: "/pricing",
   },
 };
@@ -36,11 +37,15 @@ function value(key: string, n: number): string {
 const QUESTIONS = [
   {
     q: "What currency am I charged in?",
-    a: "US dollars. Payment is handled by Stripe, which converts from your own currency at checkout and shows you the amount before you confirm.",
+    a: "US dollars. Payment is handled by Paystack — card, mobile money or Apple Pay — which converts from your own currency at checkout and shows you the amount before you confirm.",
   },
   {
     q: "Do I need a card to start?",
-    a: "No. The Free plan needs no payment details at all, and it publishes real posts to real accounts rather than being a preview.",
+    a: `No. Every new workspace gets ${TRIAL_HOURS} hours of the full product with no payment details at all, and it publishes real posts to real accounts rather than being a preview.`,
+  },
+  {
+    q: `What happens after the ${TRIAL_HOURS} hours?`,
+    a: "The workspace turns read-only until you choose a plan. Nothing is deleted: your posts, drafts, connected channels and history are all still there, and picking a plan switches everything back on straight away.",
   },
   {
     q: "What happens when I reach a limit?",
@@ -48,7 +53,7 @@ const QUESTIONS = [
   },
   {
     q: "Can I cancel?",
-    a: "Any time, from the billing page. You keep the paid plan until the end of the period you have already paid for, then drop to Free. Your posts, connections and history stay.",
+    a: "Any time, from the billing page. You keep the paid plan until the end of the period you have already paid for. Your posts, connections and history stay.",
   },
 ];
 
@@ -87,6 +92,11 @@ export default function PricingPage() {
         <p className="mt-4 text-[15px] leading-relaxed text-ink-2">
           Every plan writes, generates the images and video, publishes on its own schedule and
           watches your rankings. The difference is volume, not features. Billed in US dollars.
+        </p>
+        <p className="mt-3 text-[15px] leading-relaxed text-ink-2">
+          Every new workspace starts with{" "}
+          <span className="font-semibold text-ink">{TRIAL_HOURS} hours of full access</span> — no
+          card, no preview mode, real posts on your real accounts.
         </p>
       </header>
 
@@ -138,7 +148,7 @@ export default function PricingPage() {
                     : "border border-line hover:border-ink-3"
                 }`}
               >
-                {p.priceMonthlyUsd === 0 ? "Start free" : `Start with ${p.name}`}
+                Start with {p.name}
               </Link>
             </article>
           );

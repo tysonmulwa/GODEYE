@@ -1,11 +1,13 @@
 "use client";
 
-import { useMutation, useQuery } from "@tanstack/react-query";
-import { Check, ExternalLink } from "lucide-react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Check, Clock, ExternalLink, Lock } from "lucide-react";
 import { useSearchParams } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import type { WorkspaceAccess } from "@godeye/shared";
 import { Badge, Button, Card, ErrorNote, PageHeader } from "@/components/ui";
 import { api } from "@/lib/api";
+import { useAuthStore } from "@/lib/auth-store";
 
 interface PlanLimits {
   postsPerMonth: number;
@@ -25,19 +27,21 @@ interface Overview {
   plan: { code: string; name: string; priceMonthlyUsd: string };
   subscriptionStatus: string | null;
   currentPeriodEnd: string | null;
+  /** The trial clock and read-only state, exactly as the API enforces them. */
+  access: WorkspaceAccess;
   limits: PlanLimits;
   usage: PlanLimits;
   plans: PlanRow[];
-  /** True when EITHER provider is live. Gating on Stripe alone hid the
-   * upgrade buttons on a server billing through Paystack. */
+  /** True when Paystack is live on this server. False hides the upgrade
+   *  buttons rather than sending somebody to a checkout that cannot start. */
   paymentsConfigured: boolean;
 }
 
 /**
  * Prices are held in the database as USD and shown as USD everywhere. GODEYE
- * sells internationally and Stripe settles in the currency of the Price
- * object, so quoting a local figure on this page would be a number the
- * customer never actually gets charged.
+ * sells internationally and Paystack settles in the currency of the plan, so
+ * quoting a local figure on this page would be a number the customer never
+ * actually gets charged.
  */
 const usd = new Intl.NumberFormat("en-US", {
   style: "currency",
@@ -46,6 +50,16 @@ const usd = new Intl.NumberFormat("en-US", {
 });
 
 const compact = new Intl.NumberFormat("en-US", { notation: "compact" });
+
+/** "23 hours", "45 minutes" — the same wording the trial strip uses. */
+function trialRemaining(endsAt: string | null): string {
+  const ms = endsAt ? Date.parse(endsAt) - Date.now() : 0;
+  if (!Number.isFinite(ms) || ms <= 0) return "no time";
+  const minutes = Math.floor(ms / 60_000);
+  if (minutes < 60) return `${minutes} minute${minutes === 1 ? "" : "s"}`;
+  const hours = Math.round(minutes / 60);
+  return `${hours} hour${hours === 1 ? "" : "s"}`;
+}
 
 const METRICS: { key: keyof PlanLimits; label: string; format: (n: number) => string }[] = [
   { key: "postsPerMonth", label: "Posts this month", format: (n) => n.toLocaleString("en-US") },
@@ -69,19 +83,24 @@ function UsageBar({ used, limit }: { used: number; limit: number }) {
 
 export default function BillingPage() {
   const params = useSearchParams();
+  const queryClient = useQueryClient();
+  const setAccess = useAuthStore((s) => s.setAccess);
   const [error, setError] = useState<string | null>(null);
 
   const { data, isLoading } = useQuery<Overview>({
     queryKey: ["billing"],
     queryFn: () => api<Overview>("/billing"),
+    // Paystack sends the customer back here the moment they pay, and the
+    // webhook that activates the plan can land a second or two later.
+    refetchOnMount: "always",
   });
 
   const checkout = useMutation({
     mutationFn: (planCode: string) =>
-      api<{ url: string }>("/billing/checkout", {
-        method: "POST",
-        body: JSON.stringify({ planCode }),
-      }),
+      // The body is the object itself. api() serialises it — passing a string
+      // here stringified it twice, and the API received a quoted blob instead
+      // of a plan code, so every upgrade failed validation.
+      api<{ url: string }>("/billing/checkout", { method: "POST", body: { planCode } }),
     onSuccess: ({ url }) => {
       window.location.href = url;
     },
@@ -89,6 +108,21 @@ export default function BillingPage() {
   });
 
   const banner = params.get("billing");
+
+  // Keep the rest of the app in step: paying here is what lifts the read-only
+  // state, and the sidebar strip should stop warning about a trial that is over.
+  useEffect(() => {
+    if (data?.access) setAccess(data.access);
+  }, [data?.access, setAccess]);
+
+  // A successful return from Paystack races the webhook. One retry a few
+  // seconds later turns "still says trial" into "says Premium" without the
+  // customer having to reload the page and wonder.
+  useEffect(() => {
+    if (banner !== "success") return;
+    const id = setTimeout(() => void queryClient.invalidateQueries({ queryKey: ["billing"] }), 4000);
+    return () => clearTimeout(id);
+  }, [banner, queryClient]);
 
   return (
     <>
@@ -135,6 +169,38 @@ export default function BillingPage() {
 
       {data && (
         <>
+          {(data.access.status === "TRIALING" || data.access.locked) && (
+            <Card
+              className={`mb-6 ${
+                data.access.locked ? "border-red-500/30 bg-red-500/5" : "border-accent/30"
+              }`}
+            >
+              <div className="flex items-start gap-3">
+                <span
+                  className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${
+                    data.access.locked
+                      ? "bg-red-500/10 text-red-600 dark:text-red-400"
+                      : "bg-accent-soft text-accent"
+                  }`}
+                >
+                  {data.access.locked ? <Lock size={15} /> : <Clock size={15} />}
+                </span>
+                <div>
+                  <h2 className="text-sm font-semibold">
+                    {data.access.locked
+                      ? "This workspace is read-only"
+                      : `Free trial — ${trialRemaining(data.access.trialEndsAt)} left`}
+                  </h2>
+                  <p className="mt-1 text-[13px] leading-relaxed text-ink-2">
+                    {data.access.locked
+                      ? "Your free trial has ended, so publishing, generating and editing are paused. Everything you have made is still here. Choosing a plan below turns it all back on straight away."
+                      : "Everything is switched on until then — publishing included. Choose a plan before the clock runs out and nothing pauses."}
+                  </p>
+                </div>
+              </div>
+            </Card>
+          )}
+
           <Card className="mb-6">
             <div className="mb-4 flex items-center justify-between">
               <h2 className="text-sm font-semibold">This month</h2>
@@ -164,8 +230,12 @@ export default function BillingPage() {
 
           <div className="grid gap-4 lg:grid-cols-3">
             {data.plans.map((p) => {
-              const current = p.code === data.plan.code;
-              const paid = p.code !== "FREE";
+              // A trial runs on the Pro plan, so matching on the plan code
+              // alone marked Pro as "current" and left a trialing workspace
+              // with no way to actually buy it — only the two dearer tiers.
+              // Nothing is current until something has been paid for.
+              const paying = data.access.status === "ACTIVE" || data.access.status === "EXEMPT";
+              const current = paying && p.code === data.plan.code;
               return (
                 <Card key={p.code} className={current ? "ring-1 ring-accent" : undefined}>
                   <div className="flex items-center justify-between">
@@ -189,7 +259,7 @@ export default function BillingPage() {
                       </li>
                     ))}
                   </ul>
-                  {paid && !current && (
+                  {!current && (
                     <Button
                       className="mt-5 w-full"
                       loading={checkout.isPending}
@@ -199,7 +269,7 @@ export default function BillingPage() {
                         checkout.mutate(p.code);
                       }}
                     >
-                      Upgrade to {p.name}
+                      {paying ? `Switch to ${p.name}` : `Choose ${p.name}`}
                     </Button>
                   )}
                 </Card>
@@ -215,7 +285,8 @@ export default function BillingPage() {
 
           <p className="mt-6 flex items-center gap-1.5 text-xs text-ink-3">
             <ExternalLink size={12} />
-            Payments are handled by Stripe. GODEYE never sees or stores your card details.
+            Payments are handled by Paystack — card, mobile money and Apple Pay. GODEYE never sees
+            or stores your card details.
           </p>
         </>
       )}

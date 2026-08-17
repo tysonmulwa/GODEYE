@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { TRIAL_HOURS } from "@godeye/shared";
 import { GodeyeCrest } from "@/components/logo";
 import {
   CalendarPreview,
@@ -80,7 +81,7 @@ const FAQ = [
   },
   {
     q: "Do I need a card to start?",
-    a: "No. The free plan publishes 30 posts a month to real accounts and needs no payment details. Pro is $49 a month and Scale is $199, billed in US dollars.",
+    a: `No. Every new workspace gets ${TRIAL_HOURS} hours of the full product with no payment details, publishing to real accounts rather than a preview. After that: Pro $19 a month, Premium $49, VIP $199, billed in US dollars.`,
   },
   {
     q: "Does it post without asking me?",
@@ -136,7 +137,7 @@ export default function Home() {
               href="/register"
               className="rounded-lg bg-accent px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-accent-hover"
             >
-              Start free
+              Start free for {TRIAL_HOURS} hours
             </Link>
             <Link
               href="/pricing"

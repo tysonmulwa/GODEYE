@@ -4,7 +4,7 @@ import { Building2, Clapperboard } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { registerSchema, type AccountType } from "@godeye/shared";
+import { registerSchema, TRIAL_HOURS, type AccountType } from "@godeye/shared";
 import { AUTH_URL } from "@/lib/api";
 import { useAuthStore } from "@/lib/auth-store";
 import { Button, Card, ErrorNote, Input, Label, PasswordInput, cx } from "@/components/ui";
@@ -78,8 +78,15 @@ export default function RegisterPage() {
   return (
     <Card>
       <h1 className="mb-1 text-lg font-semibold">Create your workspace</h1>
-      <p className="mb-6 text-sm text-ink-2">
+      <p className="mb-1 text-sm text-ink-2">
         One account. An entire AI marketing department.
+      </p>
+      {/* Said before the form, not after it: the trial is the reason to fill
+          this in, and nobody should discover the clock once they are inside. */}
+      <p className="mb-6 text-sm text-ink-2">
+        <span className="font-semibold text-ink">{TRIAL_HOURS} hours of full access</span>, no card
+        needed. After that the workspace turns read-only until you choose a plan — nothing is
+        deleted.
       </p>
       <form onSubmit={submit} className="space-y-4">
         <div>

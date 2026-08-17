@@ -3,6 +3,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle } from "lucide-react";
 import { useState } from "react";
+import type { WorkspaceAccess } from "@godeye/shared";
 import { AccountCard } from "@/components/account-card";
 import { BusinessProfileCard } from "@/components/business-profile-card";
 import { ProductCatalogueCard } from "@/components/product-catalogue";
@@ -42,6 +43,7 @@ interface PlanLimits {
 interface BillingOverview {
   plan: { code: string; name: string; priceMonthlyUsd: string };
   subscriptionStatus: string | null;
+  access: WorkspaceAccess;
   limits: PlanLimits;
   usage: PlanLimits;
   plans: Array<{ code: string; name: string; priceMonthlyUsd: string; limits: PlanLimits }>;
@@ -119,7 +121,11 @@ function BillingCard() {
 
       <div className="mt-5 grid gap-2.5 border-t border-line-soft pt-4 sm:grid-cols-3">
         {data.plans.map((p) => {
-          const current = p.code === data.plan.code;
+          // A trial runs on the Pro plan, so nothing counts as the current plan
+          // until it has actually been paid for — otherwise a trialing
+          // workspace is shown Pro as "current" and cannot buy it.
+          const paying = data.access.status === "ACTIVE" || data.access.status === "EXEMPT";
+          const current = paying && p.code === data.plan.code;
           return (
             <div
               key={p.code}
@@ -142,7 +148,7 @@ function BillingCard() {
               </ul>
               {current ? (
                 <p className="mt-2.5 text-[12px] font-medium text-accent-hover">Current plan</p>
-              ) : p.code !== "FREE" && canManage ? (
+              ) : canManage ? (
                 <Button
                   variant="secondary"
                   className="mt-2.5 h-8 w-full"
@@ -151,7 +157,11 @@ function BillingCard() {
                   title={data.paymentsConfigured ? "" : "Payments are not configured on this server yet"}
                   onClick={() => checkout.mutate(p.code)}
                 >
-                  {data.paymentsConfigured ? `Upgrade to ${p.name}` : "Payments coming soon"}
+                  {!data.paymentsConfigured
+                    ? "Payments coming soon"
+                    : paying
+                      ? `Switch to ${p.name}`
+                      : `Choose ${p.name}`}
                 </Button>
               ) : null}
             </div>

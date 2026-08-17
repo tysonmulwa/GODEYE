@@ -1,4 +1,4 @@
-import { PLANS } from "@godeye/shared";
+import { PLANS, TRIAL_HOURS } from "@godeye/shared";
 import { PUBLIC_PAGES } from "@/lib/public-pages";
 import { SITE_DESCRIPTION, SITE_NAME, SITE_URL } from "@/lib/site";
 
@@ -16,7 +16,8 @@ import { SITE_DESCRIPTION, SITE_NAME, SITE_URL } from "@/lib/site";
  */
 export const dynamic = "force-static";
 
-const usd = (n: number) => (n === 0 ? "free" : `$${n} per month`);
+// Every plan is paid — the entry point is the trial, not a free tier.
+const usd = (n: number) => `$${n} per month`;
 
 export function GET(): Response {
   const plans = PLANS.map(
@@ -58,7 +59,9 @@ from that account's own results, and reports what happened.
 
 ## Pricing
 
-Billed in US dollars. No card is required to begin.
+Billed in US dollars. Every new workspace gets ${TRIAL_HOURS} hours of the full
+product with no card. After that the workspace turns read-only until a plan is
+chosen; nothing is deleted.
 
 ${plans}
 
@@ -73,8 +76,8 @@ ${pages}
 - Platform credentials are encrypted before they are stored.
 - Accounts can be disconnected at any time, from ${SITE_NAME} or from the
   platform, and publishing stops immediately.
-- The free plan publishes to real accounts. It is not a preview or a trial that
-  expires.
+- The ${TRIAL_HOURS}-hour trial publishes to real accounts. It is a working
+  product, not a preview.
 
 Contact: ${SITE_URL}
 `;

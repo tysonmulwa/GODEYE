@@ -51,6 +51,10 @@ export default function OnboardingPage() {
   useEffect(() => {
     if (status === "guest") router.replace("/login");
     if (status === "authed" && organization?.hasProfile) router.replace("/dashboard");
+    // A read-only workspace is refused this form's save, so sending them
+    // straight to the page that lifts the lock beats a form that fails on
+    // submit for a reason it cannot explain.
+    if (status === "authed" && organization?.access?.locked) router.replace("/billing");
     if (organization && !form.businessName) {
       setForm((f) => ({ ...f, businessName: organization.name }));
     }

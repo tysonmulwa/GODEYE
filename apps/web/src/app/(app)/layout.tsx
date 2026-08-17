@@ -23,6 +23,7 @@ import { useEffect, useState } from "react";
 import { CommandPalette } from "@/components/command-palette";
 import { GodeyeBootScreen, GodeyeLockup } from "@/components/logo";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { TrialNotice } from "@/components/trial-notice";
 import { cx } from "@/components/ui";
 import { api, AUTH_URL } from "@/lib/api";
 import { useAuthStore, type SessionOrg, type SessionUser } from "@/lib/auth-store";
@@ -107,8 +108,12 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (status === "guest") router.replace("/login");
+    // Not while locked. Onboarding saves a business profile, which a read-only
+    // workspace is refused — so somebody who let the trial lapse mid-signup
+    // would be redirected into a form that cannot be submitted, with no way to
+    // reach the page that takes their money.
     if (status === "authed" && organization && !organization.hasProfile) {
-      router.replace("/onboarding");
+      if (!organization.access?.locked) router.replace("/onboarding");
     }
   }, [status, organization, router]);
 
@@ -258,6 +263,11 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             <Search className="h-4 w-4" />
           </button>
         </header>
+
+        {/* Outside the animated container on purpose: the trial strip is a
+            property of the workspace, not of the page, and re-fading it in on
+            every navigation would read as a new warning each time. */}
+        <TrialNotice />
 
         <motion.div
           key={pathname}
