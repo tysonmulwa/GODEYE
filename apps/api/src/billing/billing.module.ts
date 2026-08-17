@@ -73,6 +73,7 @@ export class BillingService implements OnModuleInit {
   onModuleInit(): void {
     if (env.nodeEnv === "test" || !env.paystack.secretKey) return;
     void (async () => {
+      this.logger.log(`Paystack keys are ${env.paystack.mode} mode`);
       for (const code of ["PRO", "PREMIUM", "VIP"] as PlanCode[]) {
         const configured = env.paystack.plans[code];
         if (!configured) {
@@ -211,12 +212,15 @@ export class BillingService implements OnModuleInit {
     const amount = data.data?.amount;
     if (!res.ok || !data.status || typeof amount !== "number" || amount <= 0) {
       this.logger.error(
-        `Paystack rejected the plan code in PAYSTACK_PLAN_${planCode} ("${code}"): ${data.message}`,
+        `Paystack rejected the plan code in PAYSTACK_PLAN_${planCode} ("${code}") ` +
+          `using the ${env.paystack.mode} key: ${data.message}`,
       );
       throw new BadRequestException(
-        `Paystack does not recognise the plan code set in PAYSTACK_PLAN_${planCode}. ` +
-          `It must be the code beginning with PLN_, copied from Products → Plans in the ` +
-          `Paystack dashboard — not the plan's name or id.`,
+        `Paystack does not recognise the plan code in PAYSTACK_PLAN_${planCode}, using this ` +
+          `server's ${env.paystack.mode} key. Plan codes belong to one mode: a plan created ` +
+          `in test mode does not exist for a live key, and the other way round. Check that ` +
+          `the plan was created with the dashboard's Test/Live switch set to ${env.paystack.mode}, ` +
+          `and that the value is the code beginning with PLN_ — not the plan's name or id.`,
       );
     }
     return { amount, currency: data.data?.currency, interval: data.data?.interval };

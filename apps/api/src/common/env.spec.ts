@@ -72,4 +72,27 @@ describe("OAuth callback URLs", () => {
       "https://api.godeyeautomation.com/connections/reddit/callback",
     );
   });
+
+  /**
+   * Paystack plan codes belong to one mode. A plan created with the dashboard
+   * switched to Test is invisible to a live key, and Paystack reports that as
+   * "plan not found" — indistinguishable from a mistyped code.
+   */
+  describe("Paystack mode", () => {
+    it("reads live and test from the key's own prefix", () => {
+      expect(loadEnv({ PAYSTACK_SECRET_KEY: "sk_live_abc123" }).paystack.mode).toBe("live");
+      expect(loadEnv({ PAYSTACK_SECRET_KEY: "sk_test_abc123" }).paystack.mode).toBe("test");
+    });
+
+    it("says unknown rather than guessing when the key is absent or odd", () => {
+      expect(loadEnv({ PAYSTACK_SECRET_KEY: undefined }).paystack.mode).toBe("unknown");
+      expect(loadEnv({ PAYSTACK_SECRET_KEY: "pk_live_abc" }).paystack.mode).toBe("unknown");
+    });
+
+    it("survives a key pasted with surrounding whitespace", () => {
+      // It is used as an HMAC key as well as a bearer token, so an untrimmed
+      // value would fail every webhook signature with no hint as to why.
+      expect(loadEnv({ PAYSTACK_SECRET_KEY: "  sk_live_abc123 " }).paystack.mode).toBe("live");
+    });
+  });
 });

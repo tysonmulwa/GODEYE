@@ -34,6 +34,11 @@ export class HealthController {
       payments: {
         provider: "paystack",
         secretKey: !!env.paystack.secretKey,
+        // Test or live, from the key's prefix — never the key. Plan codes are
+        // scoped to a mode, so a plan built on one side of that switch is
+        // invisible to a key from the other, and this is the fastest way to
+        // see it.
+        mode: env.paystack.mode,
         plans: {
           PRO: !!env.paystack.plans.PRO,
           PREMIUM: !!env.paystack.plans.PREMIUM,

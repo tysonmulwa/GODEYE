@@ -154,6 +154,19 @@ export const env = {
       PREMIUM: (process.env.PAYSTACK_PLAN_PREMIUM ?? "").trim(),
       VIP: (process.env.PAYSTACK_PLAN_VIP ?? "").trim(),
     } as Record<string, string>,
+    /**
+     * Which Paystack mode these keys belong to, read from the key's own prefix.
+     *
+     * Worth knowing because plan codes are scoped to a mode: a PLN_ created in
+     * test mode does not exist for a live key, and Paystack's answer is the
+     * indistinguishable "plan not found". Half a day can go into checking a
+     * code character by character when the code was never the problem.
+     */
+    get mode(): "live" | "test" | "unknown" {
+      if (this.secretKey.startsWith("sk_live_")) return "live";
+      if (this.secretKey.startsWith("sk_test_")) return "test";
+      return "unknown";
+    },
   },
   /**
    * TikTok Content Posting API. Note it calls the app identifier `client_key`,
