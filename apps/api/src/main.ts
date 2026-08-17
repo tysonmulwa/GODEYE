@@ -14,14 +14,18 @@ async function bootstrap() {
     rawBody: true, // needed for webhook HMAC validation
   });
 
-  // Photo uploads are posted as base64 JSON, which the default ~100kb body limit
-  // rejects with "request entity too large". Base64 inflates bytes by ~33%, so
-  // 30mb covers the 25 MB file cap enforced in the upload schema and the engine.
-  app.useBodyParser("json", { limit: "30mb" });
-  app.useBodyParser("urlencoded", { limit: "30mb", extended: true });
-
-  app.use(helmet());
-  app.use(cookieParser());
+  // CORS first, before anything that can reject a request.
+  //
+  // This used to sit after the body parsers, and that ordering hid a real bug
+  // for weeks. A malformed JSON body is rejected by the parser itself, which
+  // returns 400 before any CORS header has been attached — and a response
+  // without Access-Control-Allow-Origin is the one thing a browser refuses to
+  // show you, so the console said "blocked by CORS policy" while the server
+  // had actually said "that is not valid JSON". The same masking applied to
+  // every oversized upload: "request entity too large" reached the browser as
+  // a CORS failure too. Registered first, the headers are on the response
+  // whatever happens afterwards, and the error can speak for itself.
+  //
   // WEB_URL accepts a comma-separated list so a rename or a preview deployment
   // can be allowed without a code change. Kept to an explicit allow-list on
   // purpose: with credentials:true a wildcard would let any site on that domain
@@ -48,6 +52,15 @@ async function bootstrap() {
     },
     credentials: true,
   });
+
+  // Photo uploads are posted as base64 JSON, which the default ~100kb body limit
+  // rejects with "request entity too large". Base64 inflates bytes by ~33%, so
+  // 30mb covers the 25 MB file cap enforced in the upload schema and the engine.
+  app.useBodyParser("json", { limit: "30mb" });
+  app.useBodyParser("urlencoded", { limit: "30mb", extended: true });
+
+  app.use(helmet());
+  app.use(cookieParser());
   app.enableShutdownHooks();
 
   const swagger = new DocumentBuilder()
