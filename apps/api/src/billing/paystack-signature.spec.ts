@@ -35,7 +35,7 @@ describe("verifyPaystackSignature", () => {
 
   const body = JSON.stringify({
     event: "charge.success",
-    data: { metadata: { orgId: "org1", planCode: "SCALE" } },
+    data: { metadata: { orgId: "org1", planCode: "VIP" } },
   });
 
   it("accepts a genuine signature", () => {

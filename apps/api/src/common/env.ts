@@ -147,7 +147,8 @@ export const env = {
     publicKey: process.env.PAYSTACK_PUBLIC_KEY ?? "",
     plans: {
       PRO: process.env.PAYSTACK_PLAN_PRO ?? "",
-      SCALE: process.env.PAYSTACK_PLAN_SCALE ?? "",
+      PREMIUM: process.env.PAYSTACK_PLAN_PREMIUM ?? "",
+      VIP: process.env.PAYSTACK_PLAN_VIP ?? "",
     } as Record<string, string>,
   },
   stripe: {
@@ -155,7 +156,8 @@ export const env = {
     webhookSecret: process.env.STRIPE_WEBHOOK_SECRET ?? "",
     prices: {
       PRO: process.env.STRIPE_PRICE_PRO ?? "",
-      SCALE: process.env.STRIPE_PRICE_SCALE ?? "",
+      PREMIUM: process.env.STRIPE_PRICE_PREMIUM ?? "",
+      VIP: process.env.STRIPE_PRICE_VIP ?? "",
     } as Record<string, string>,
   },
   /**

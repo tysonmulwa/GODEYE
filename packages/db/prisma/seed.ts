@@ -61,7 +61,7 @@ async function main() {
     },
   });
 
-  const freePlan = await prisma.plan.findUniqueOrThrow({ where: { code: "FREE" } });
+  const freePlan = await prisma.plan.findUniqueOrThrow({ where: { code: "PRO" } });
   await prisma.subscription.upsert({
     where: { orgId: org.id },
     update: {},

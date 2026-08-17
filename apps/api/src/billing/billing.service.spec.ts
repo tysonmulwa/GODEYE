@@ -4,7 +4,7 @@ import { BillingService } from "./billing.module";
 
 const FREE_PLAN = {
   id: "plan-free",
-  code: "FREE",
+  code: "PRO",
   name: "Free",
   priceMonthlyUsd: { toString: () => "0" },
   limits: { postsPerMonth: 30, aiTokensPerMonth: 100_000, connections: 3, seats: 1 },
@@ -41,7 +41,7 @@ describe("BillingService", () => {
 
   it("falls back to the FREE plan when there is no subscription", async () => {
     const overview = await service.overview("org1");
-    expect(overview.plan.code).toBe("FREE");
+    expect(overview.plan.code).toBe("PRO");
     expect(overview.limits.postsPerMonth).toBe(30);
     expect(overview.stripeConfigured).toBe(false);
   });
@@ -52,7 +52,7 @@ describe("BillingService", () => {
       plan: { ...FREE_PLAN, code: "PRO" },
     });
     const overview = await service.overview("org1");
-    expect(overview.plan.code).toBe("FREE");
+    expect(overview.plan.code).toBe("PRO");
   });
 
   it("counts pending invites toward seats", async () => {

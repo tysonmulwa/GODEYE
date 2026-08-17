@@ -18,6 +18,7 @@ import { ApiBearerAuth, ApiOperation, ApiTags } from "@nestjs/swagger";
 import { Throttle } from "@nestjs/throttler";
 import { createHmac, timingSafeEqual } from "crypto";
 import type { Request } from "express";
+import type { PlanCode } from "@godeye/shared";
 import { z } from "zod";
 import { AuditService } from "../common/audit.service";
 import { CurrentAuth } from "../common/current-auth.decorator";
@@ -36,14 +37,14 @@ export interface PlanLimits {
 
 export type UsageMetric = keyof PlanLimits;
 
-const FREE_LIMITS: PlanLimits = {
+const ENTRY_LIMITS: PlanLimits = {
   postsPerMonth: 30,
   aiTokensPerMonth: 100_000,
   connections: 3,
   seats: 1,
 };
 
-const checkoutSchema = z.object({ planCode: z.enum(["PRO", "SCALE"]) });
+const checkoutSchema = z.object({ planCode: z.enum(["PRO", "PREMIUM", "VIP"]) });
 
 function monthStart(): Date {
   const d = new Date();
@@ -68,13 +69,13 @@ export class BillingService {
     if (sub && sub.status !== "CANCELED") {
       return { plan: sub.plan, subscription: sub };
     }
-    const free = await this.prisma.plan.findUnique({ where: { code: "FREE" } });
+    const free = await this.prisma.plan.findUnique({ where: { code: "PRO" } });
     return { plan: free, subscription: sub };
   }
 
   private limitsOf(plan: { limits: unknown } | null): PlanLimits {
     const raw = (plan?.limits ?? {}) as Partial<PlanLimits>;
-    return { ...FREE_LIMITS, ...raw };
+    return { ...ENTRY_LIMITS, ...raw };
   }
 
   async usage(orgId: string) {
@@ -111,7 +112,7 @@ export class BillingService {
     return {
       plan: plan
         ? { code: plan.code, name: plan.name, priceMonthlyUsd: plan.priceMonthlyUsd.toString() }
-        : { code: "FREE", name: "Free", priceMonthlyUsd: "0" },
+        : { code: "PRO", name: "Pro", priceMonthlyUsd: "19" },
       subscriptionStatus: subscription?.status ?? null,
       currentPeriodEnd: subscription?.currentPeriodEnd?.toISOString() ?? null,
       limits: this.limitsOf(plan),
@@ -160,7 +161,7 @@ export class BillingService {
    * plan, not on the request, so passing both would let the two disagree. Only
    * the plan code is sent and Paystack bills what the plan says.
    */
-  async checkoutPaystack(orgId: string, userId: string, planCode: "PRO" | "SCALE") {
+  async checkoutPaystack(orgId: string, userId: string, planCode: PlanCode) {
     const plan = env.paystack.plans[planCode];
     if (!plan) {
       throw new BadRequestException(
@@ -293,7 +294,7 @@ export class BillingService {
 
   // ---------- Stripe (activates when STRIPE_SECRET_KEY is set) ----------
 
-  async checkout(orgId: string, userId: string, planCode: "PRO" | "SCALE") {
+  async checkout(orgId: string, userId: string, planCode: PlanCode) {
     // Paystack first when it is configured: it is the provider carrying Apple
     // Pay for this merchant, and running both at once would let one workspace
     // hold two live subscriptions for the same plan.

@@ -18,8 +18,10 @@ export interface PlanLimits {
   seats: number;
 }
 
+export type PlanCode = "PRO" | "PREMIUM" | "VIP";
+
 export interface PlanDefinition {
-  code: "FREE" | "PRO" | "SCALE";
+  code: PlanCode;
   name: string;
   priceMonthlyUsd: number;
   /** One line on who the plan is for, shown on the public pricing page. */
@@ -27,29 +29,54 @@ export interface PlanDefinition {
   limits: PlanLimits;
 }
 
+/**
+ * There is no free plan. Every workspace starts on a 24 hour Pro trial and then
+ * has to pay, so the entry tier is Pro at 19 dollars carrying what used to be
+ * the free allowance.
+ *
+ * The three tiers are the same three rows that were here before, renamed and
+ * repriced rather than replaced: the old free allowance became Pro, the old Pro
+ * became Premium, the old Scale became VIP. Limits are untouched. That matters
+ * because Subscription rows point at a plan by id, so replacing the rows would
+ * have orphaned every paying workspace.
+ */
 export const PLANS: PlanDefinition[] = [
-  {
-    code: "FREE",
-    name: "Free",
-    priceMonthlyUsd: 0,
-    tagline: "Enough to see whether it earns its place.",
-    limits: { postsPerMonth: 30, aiTokensPerMonth: 100_000, connections: 3, seats: 1 },
-  },
   {
     code: "PRO",
     name: "Pro",
+    priceMonthlyUsd: 19,
+    tagline: "Everything working, for one business on its own channels.",
+    limits: { postsPerMonth: 30, aiTokensPerMonth: 100_000, connections: 3, seats: 1 },
+  },
+  {
+    code: "PREMIUM",
+    name: "Premium",
     priceMonthlyUsd: 49,
     tagline: "For a business posting every day across its channels.",
     limits: { postsPerMonth: 500, aiTokensPerMonth: 2_000_000, connections: 15, seats: 5 },
   },
   {
-    code: "SCALE",
-    name: "Scale",
+    code: "VIP",
+    name: "VIP",
     priceMonthlyUsd: 199,
     tagline: "For agencies and teams running several brands at once.",
     limits: { postsPerMonth: 5000, aiTokensPerMonth: 20_000_000, connections: 100, seats: 25 },
   },
 ];
+
+/** Hours of full Pro access a brand new workspace gets before it must pay. */
+export const TRIAL_HOURS = 24;
+
+/**
+ * Workspaces that are never billed and never lock: the ones GODEYE itself runs.
+ *
+ * Matched by slug rather than id so the list survives a reseed, and kept in
+ * shared code so the API, the trial sweeper and the billing page all agree on
+ * who is exempt. A workspace missing from here would lock its owner out of
+ * their own product, which is exactly the sort of thing nobody notices until it
+ * happens at the weekend.
+ */
+export const BILLING_EXEMPT_SLUGS = ["godeye", "patampoa", "mjini-collection"];
 
 export const PLAN_FEATURES: { key: keyof PlanLimits; label: string }[] = [
   { key: "postsPerMonth", label: "posts per month" },
