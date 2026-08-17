@@ -123,6 +123,10 @@ export class BillingService {
         limits: this.limitsOf(p),
       })),
       stripeConfigured: !!env.stripe.secretKey,
+      // What the billing page needs to know to show an upgrade button at all.
+      // Reported as a boolean: the secret key must never leave the server.
+      paystackConfigured: !!env.paystack.secretKey,
+      paymentsConfigured: !!(env.paystack.secretKey || env.stripe.secretKey),
     };
   }
 
@@ -147,9 +151,155 @@ export class BillingService {
     }
   }
 
+  // ---------- Paystack (activates when PAYSTACK_SECRET_KEY is set) ----------
+
+  /**
+   * Start a Paystack subscription checkout.
+   *
+   * Paystack works the opposite way round to Stripe: the amount lives on the
+   * plan, not on the request, so passing both would let the two disagree. Only
+   * the plan code is sent and Paystack bills what the plan says.
+   */
+  async checkoutPaystack(orgId: string, userId: string, planCode: "PRO" | "SCALE") {
+    const plan = env.paystack.plans[planCode];
+    if (!plan) {
+      throw new BadRequestException(
+        `No Paystack plan configured for ${planCode}. Create a recurring plan in ` +
+          `the Paystack dashboard and set PAYSTACK_PLAN_${planCode} to its plan code.`,
+      );
+    }
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { email: true },
+    });
+    if (!user?.email) {
+      throw new BadRequestException("Your account has no email address to bill");
+    }
+
+    const res = await fetch("https://api.paystack.co/transaction/initialize", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${env.paystack.secretKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        email: user.email,
+        plan,
+        // Paystack appends its own query string, so the page has to tolerate
+        // extra params. It already does: it reads only `billing`.
+        callback_url: `${env.webUrl}/billing?billing=success`,
+        // The only link back to the workspace. The webhook arrives on its own,
+        // with no session, so without this there is no way to know which
+        // organisation just paid.
+        metadata: { orgId, planCode, userId },
+      }),
+    });
+    const data = (await res.json()) as {
+      status?: boolean;
+      message?: string;
+      data?: { authorization_url?: string };
+    };
+    if (!res.ok || !data.status || !data.data?.authorization_url) {
+      this.logger.error(`Paystack checkout failed: ${data.message}`);
+      throw new BadRequestException(data.message ?? "Could not start checkout");
+    }
+
+    this.audit.log({
+      orgId,
+      userId,
+      action: "billing.checkout_started",
+      metadata: { planCode, provider: "paystack" },
+    });
+    return { url: data.data.authorization_url };
+  }
+
+  /**
+   * Paystack signs with HMAC SHA512 over the raw body, keyed by the SECRET key
+   * rather than a separate webhook secret. Verified against the exact bytes
+   * received: re-serialising parsed JSON reorders keys and changes the digest,
+   * so the check would fail on every genuine event.
+   */
+  verifyPaystackSignature(raw: Buffer | undefined, header: string | undefined): boolean {
+    if (!raw || !header || !env.paystack.secretKey) return false;
+    const expected = createHmac("sha512", env.paystack.secretKey).update(raw).digest("hex");
+    const a = Buffer.from(expected);
+    const b = Buffer.from(header);
+    // Length-checked first: timingSafeEqual throws on a mismatch rather than
+    // returning false, and a thrown error here would read as a server fault
+    // instead of a rejected forgery.
+    return a.length === b.length && timingSafeEqual(a, b);
+  }
+
+  async handlePaystackEvent(event: {
+    event?: string;
+    data?: Record<string, unknown>;
+  }): Promise<void> {
+    const data = event.data ?? {};
+    const metadata = (data.metadata ?? {}) as Record<string, unknown>;
+    const orgId = typeof metadata.orgId === "string" ? metadata.orgId : null;
+
+    if (event.event === "charge.success" || event.event === "subscription.create") {
+      const planCode = typeof metadata.planCode === "string" ? metadata.planCode : null;
+      if (!orgId || !planCode) {
+        // Loud, because the money has already moved. A payment that cannot be
+        // matched to a workspace is a customer who paid and got nothing.
+        this.logger.error(
+          `Paystack ${event.event} carried no orgId/planCode metadata; ` +
+            `cannot activate a plan. Reference: ${String(data.reference ?? "unknown")}`,
+        );
+        return;
+      }
+      const plan = await this.prisma.plan.findUnique({ where: { code: planCode } });
+      if (!plan) {
+        this.logger.error(`Paystack event names plan ${planCode}, which does not exist`);
+        return;
+      }
+      const customer = (data.customer ?? {}) as Record<string, unknown>;
+      await this.prisma.subscription.upsert({
+        where: { orgId },
+        create: {
+          orgId,
+          planId: plan.id,
+          status: "ACTIVE",
+          stripeCustomerId: (customer.customer_code as string) ?? null,
+          stripeSubscriptionId: (data.subscription_code as string) ?? null,
+        },
+        update: {
+          planId: plan.id,
+          status: "ACTIVE",
+          stripeCustomerId: (customer.customer_code as string) ?? null,
+          stripeSubscriptionId: (data.subscription_code as string) ?? null,
+        },
+      });
+      this.logger.log(`Paystack activated ${planCode} for org ${orgId}`);
+      return;
+    }
+
+    if (event.event === "subscription.disable" || event.event === "subscription.not_renew") {
+      const code = data.subscription_code as string | undefined;
+      if (!code) return;
+      const sub = await this.prisma.subscription.findFirst({
+        where: { stripeSubscriptionId: code },
+      });
+      if (sub) {
+        await this.prisma.subscription.update({
+          where: { id: sub.id },
+          data: { status: "CANCELED" },
+        });
+        this.logger.log(`Paystack cancelled the subscription for org ${sub.orgId}`);
+      }
+    }
+  }
+
   // ---------- Stripe (activates when STRIPE_SECRET_KEY is set) ----------
 
   async checkout(orgId: string, userId: string, planCode: "PRO" | "SCALE") {
+    // Paystack first when it is configured: it is the provider carrying Apple
+    // Pay for this merchant, and running both at once would let one workspace
+    // hold two live subscriptions for the same plan.
+    if (env.paystack.secretKey) {
+      return this.checkoutPaystack(orgId, userId, planCode);
+    }
     if (!env.stripe.secretKey) {
       throw new BadRequestException("Payments are not configured yet on this server");
     }
@@ -307,6 +457,33 @@ export class StripeWebhookController {
       JSON.parse(req.rawBody!.toString("utf8")) as {
         type: string;
         data: { object: Record<string, unknown> };
+      },
+    );
+    return { received: true };
+  }
+
+  /**
+   * Paystack events.
+   *
+   * Answers 200 as soon as the signature checks out. Paystack retries anything
+   * that is slow or non-200, and a retried charge.success would be a second
+   * activation for a payment that already happened.
+   */
+  @Post("paystack")
+  @HttpCode(200)
+  @ApiOperation({ summary: "Paystack events (signature-verified)" })
+  async paystack(
+    @Req() req: RawBodyRequest<Request>,
+    @Headers("x-paystack-signature") signature: string | undefined,
+  ) {
+    if (!this.billing.verifyPaystackSignature(req.rawBody, signature)) {
+      this.logger.warn("Paystack webhook with invalid signature rejected");
+      throw new BadRequestException("Invalid signature");
+    }
+    await this.billing.handlePaystackEvent(
+      JSON.parse(req.rawBody!.toString("utf8")) as {
+        event?: string;
+        data?: Record<string, unknown>;
       },
     );
     return { received: true };

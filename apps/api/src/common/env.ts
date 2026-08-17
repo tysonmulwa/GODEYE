@@ -129,6 +129,27 @@ export const env = {
     clientSecret: process.env.LINKEDIN_CLIENT_SECRET ?? "",
     redirectUri: callbackUrl("linkedin", process.env.LINKEDIN_REDIRECT_URI),
   },
+  /**
+   * Paystack. Preferred over Stripe when both are set, because it is the one
+   * that carries Apple Pay for this merchant.
+   *
+   * `plans` are Paystack plan codes (PLN_...), which is what makes a charge
+   * recurring. Without them a subscription would be a single payment that
+   * silently never renews, so checkout refuses rather than take money on a
+   * promise it cannot keep.
+   *
+   * The public key is here only so the API can hand it to the browser. The
+   * secret key must never reach the client: it also signs webhooks, so anyone
+   * holding it can both move money and forge payment confirmations.
+   */
+  paystack: {
+    secretKey: process.env.PAYSTACK_SECRET_KEY ?? "",
+    publicKey: process.env.PAYSTACK_PUBLIC_KEY ?? "",
+    plans: {
+      PRO: process.env.PAYSTACK_PLAN_PRO ?? "",
+      SCALE: process.env.PAYSTACK_PLAN_SCALE ?? "",
+    } as Record<string, string>,
+  },
   stripe: {
     secretKey: process.env.STRIPE_SECRET_KEY ?? "",
     webhookSecret: process.env.STRIPE_WEBHOOK_SECRET ?? "",
