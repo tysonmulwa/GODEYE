@@ -45,7 +45,7 @@ interface BillingOverview {
   limits: PlanLimits;
   usage: PlanLimits;
   plans: Array<{ code: string; name: string; priceMonthlyUsd: string; limits: PlanLimits }>;
-  stripeConfigured: boolean;
+  paymentsConfigured: boolean;
 }
 
 const USAGE_ROWS: Array<{ key: keyof PlanLimits; label: string }> = [
@@ -146,12 +146,12 @@ function BillingCard() {
                 <Button
                   variant="secondary"
                   className="mt-2.5 h-8 w-full"
-                  disabled={!data.stripeConfigured}
+                  disabled={!data.paymentsConfigured}
                   loading={checkout.isPending}
-                  title={data.stripeConfigured ? "" : "Payments are not configured on this server yet"}
+                  title={data.paymentsConfigured ? "" : "Payments are not configured on this server yet"}
                   onClick={() => checkout.mutate(p.code)}
                 >
-                  {data.stripeConfigured ? `Upgrade to ${p.name}` : "Payments coming soon"}
+                  {data.paymentsConfigured ? `Upgrade to ${p.name}` : "Payments coming soon"}
                 </Button>
               ) : null}
             </div>

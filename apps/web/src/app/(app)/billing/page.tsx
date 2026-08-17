@@ -28,7 +28,9 @@ interface Overview {
   limits: PlanLimits;
   usage: PlanLimits;
   plans: PlanRow[];
-  stripeConfigured: boolean;
+  /** True when EITHER provider is live. Gating on Stripe alone hid the
+   * upgrade buttons on a server billing through Paystack. */
+  paymentsConfigured: boolean;
 }
 
 /**
@@ -191,7 +193,7 @@ export default function BillingPage() {
                     <Button
                       className="mt-5 w-full"
                       loading={checkout.isPending}
-                      disabled={!data.stripeConfigured}
+                      disabled={!data.paymentsConfigured}
                       onClick={() => {
                         setError(null);
                         checkout.mutate(p.code);
@@ -205,7 +207,7 @@ export default function BillingPage() {
             })}
           </div>
 
-          {!data.stripeConfigured && (
+          {!data.paymentsConfigured && (
             <p className="mt-4 text-xs text-ink-3">
               Payments are not configured on this server yet, so upgrading is unavailable.
             </p>
