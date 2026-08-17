@@ -1,5 +1,6 @@
 import { BadRequestException, ForbiddenException } from "@nestjs/common";
 import { AuditService } from "../common/audit.service";
+import { env } from "../common/env";
 import { BillingService } from "./billing.module";
 import { WorkspaceAccessService } from "./workspace-access.service";
 
@@ -118,6 +119,79 @@ describe("BillingService", () => {
   it("refuses checkout when Paystack is not configured", async () => {
     await expect(service.checkout("org1", "user1", "PRO")).rejects.toThrow(BadRequestException);
     await expect(service.checkout("org1", "user1", "PRO")).rejects.toThrow(/PAYSTACK_SECRET_KEY/);
+  });
+
+  describe("checkout against Paystack", () => {
+    const realFetch = global.fetch;
+    const realKey = env.paystack.secretKey;
+    const realPlan = env.paystack.plans.PRO;
+
+    /** The plan, then the transaction — in the order checkout calls them. */
+    const respond = (...bodies: unknown[]) => {
+      const fetchMock = jest.fn();
+      for (const body of bodies) {
+        fetchMock.mockResolvedValueOnce({ ok: true, json: async () => body });
+      }
+      global.fetch = fetchMock as never;
+      return fetchMock;
+    };
+
+    beforeEach(() => {
+      env.paystack.secretKey = "sk_test_checkout";
+      env.paystack.plans.PRO = "PLN_pro_code";
+    });
+
+    afterEach(() => {
+      global.fetch = realFetch;
+      env.paystack.secretKey = realKey;
+      env.paystack.plans.PRO = realPlan;
+    });
+
+    it("bills the plan's own amount and currency, not a figure of our own", async () => {
+      const fetchMock = respond(
+        { status: true, data: { amount: 1900, currency: "KES", interval: "monthly" } },
+        { status: true, data: { authorization_url: "https://checkout.paystack.com/abc" } },
+      );
+
+      await expect(service.checkout("org1", "user1", "PRO")).resolves.toEqual({
+        url: "https://checkout.paystack.com/abc",
+      });
+
+      // The plan is read first — Paystack answers "Invalid Amount Sent" to an
+      // initialize that carries no amount, however valid the plan code is.
+      expect(fetchMock.mock.calls[0][0]).toBe("https://api.paystack.co/plan/PLN_pro_code");
+      const body = JSON.parse(fetchMock.mock.calls[1][1].body);
+      expect(body).toEqual(
+        expect.objectContaining({
+          plan: "PLN_pro_code",
+          amount: 1900,
+          currency: "KES",
+          email: "jane@acme.com",
+          metadata: { orgId: "org1", planCode: "PRO", userId: "user1" },
+        }),
+      );
+    });
+
+    it("names the variable to fix when Paystack does not know the plan code", async () => {
+      respond({ status: false, message: "Plan not found" });
+      await expect(service.checkout("org1", "user1", "PRO")).rejects.toThrow(
+        /PAYSTACK_PLAN_PRO/,
+      );
+    });
+
+    it("treats a zero-amount plan as unusable rather than charging nothing", async () => {
+      respond({ status: true, data: { amount: 0, currency: "KES" } });
+      await expect(service.checkout("org1", "user1", "PRO")).rejects.toThrow(BadRequestException);
+    });
+
+    it("omits the currency when Paystack states none", async () => {
+      const fetchMock = respond(
+        { status: true, data: { amount: 4900 } },
+        { status: true, data: { authorization_url: "https://checkout.paystack.com/xyz" } },
+      );
+      await service.checkout("org1", "user1", "PRO");
+      expect(JSON.parse(fetchMock.mock.calls[1][1].body)).not.toHaveProperty("currency");
+    });
   });
 
   it("activates a subscription from a Paystack charge.success", async () => {

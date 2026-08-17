@@ -9,6 +9,7 @@ import {
   HttpCode,
   Injectable,
   Logger,
+  OnModuleInit,
   Post,
   RawBodyRequest,
   Req,
@@ -53,7 +54,7 @@ function monthStart(): Date {
 }
 
 @Injectable()
-export class BillingService {
+export class BillingService implements OnModuleInit {
   private readonly logger = new Logger(BillingService.name);
 
   constructor(
@@ -61,6 +62,34 @@ export class BillingService {
     private readonly audit: AuditService,
     private readonly access: WorkspaceAccessService,
   ) {}
+
+  /**
+   * Check the plan codes at boot, so a wrong one is a line in the deploy log
+   * rather than a customer discovering it with their card out.
+   *
+   * Deliberately not awaited and never fatal: Paystack being slow or briefly
+   * down is not a reason to refuse to start the API.
+   */
+  onModuleInit(): void {
+    if (env.nodeEnv === "test" || !env.paystack.secretKey) return;
+    void (async () => {
+      for (const code of ["PRO", "PREMIUM", "VIP"] as PlanCode[]) {
+        const configured = env.paystack.plans[code];
+        if (!configured) {
+          this.logger.warn(`PAYSTACK_PLAN_${code} is not set — that tier cannot be bought`);
+          continue;
+        }
+        try {
+          const { amount, currency, interval } = await this.paystackPlan(code, configured);
+          this.logger.log(
+            `Paystack plan ${code}: ${(amount / 100).toFixed(2)} ${currency ?? "?"} / ${interval ?? "?"}`,
+          );
+        } catch {
+          // paystackPlan already logged which variable Paystack rejected.
+        }
+      }
+    })();
+  }
 
   /** The org's effective plan — CANCELED/absent subscriptions fall back to the entry plan. */
   async effectivePlan(orgId: string) {
@@ -158,11 +187,49 @@ export class BillingService {
   // ---------- Paystack ----------
 
   /**
+   * The plan as Paystack itself holds it.
+   *
+   * Read at checkout rather than kept in configuration, because the number that
+   * matters is the one Paystack will actually bill. Taking it from anywhere
+   * else — our own USD catalogue, an amount in an env var — invents a second
+   * source of truth for a price, and the two only ever disagree in front of a
+   * paying customer.
+   *
+   * It doubles as the check on the plan code. A code that does not resolve is
+   * the difference between "PAYSTACK_PLAN_PRO holds the wrong string" and
+   * Paystack's own reply, which is the unhelpful "Invalid Amount Sent".
+   */
+  private async paystackPlan(planCode: PlanCode, code: string) {
+    const res = await fetch(`https://api.paystack.co/plan/${encodeURIComponent(code)}`, {
+      headers: { Authorization: `Bearer ${env.paystack.secretKey}` },
+    });
+    const data = (await res.json()) as {
+      status?: boolean;
+      message?: string;
+      data?: { amount?: number; currency?: string; interval?: string; name?: string };
+    };
+    const amount = data.data?.amount;
+    if (!res.ok || !data.status || typeof amount !== "number" || amount <= 0) {
+      this.logger.error(
+        `Paystack rejected the plan code in PAYSTACK_PLAN_${planCode} ("${code}"): ${data.message}`,
+      );
+      throw new BadRequestException(
+        `Paystack does not recognise the plan code set in PAYSTACK_PLAN_${planCode}. ` +
+          `It must be the code beginning with PLN_, copied from Products → Plans in the ` +
+          `Paystack dashboard — not the plan's name or id.`,
+      );
+    }
+    return { amount, currency: data.data?.currency, interval: data.data?.interval };
+  }
+
+  /**
    * Start a Paystack subscription checkout.
    *
-   * The amount lives on the Paystack plan, not on this request: passing both
-   * would let the two disagree, and the customer would be charged the number
-   * nobody was looking at. Only the plan code is sent.
+   * The amount is the plan's own, fetched a moment earlier. Paystack's
+   * documented example omits it when a plan code is passed, but the live API
+   * answers "Invalid Amount Sent" without one — it treats a missing amount as
+   * zero. Sending the plan's exact figure satisfies it and cannot disagree
+   * with what the subscription then charges.
    */
   async checkout(orgId: string, userId: string, planCode: PlanCode) {
     if (!env.paystack.secretKey) {
@@ -185,6 +252,8 @@ export class BillingService {
       throw new BadRequestException("Your account has no email address to bill");
     }
 
+    const { amount, currency } = await this.paystackPlan(planCode, plan);
+
     const res = await fetch("https://api.paystack.co/transaction/initialize", {
       method: "POST",
       headers: {
@@ -194,6 +263,11 @@ export class BillingService {
       body: JSON.stringify({
         email: user.email,
         plan,
+        amount,
+        // Only when Paystack stated one. A plan priced in a currency the
+        // merchant does not have enabled fails at checkout, and guessing a
+        // default here would hide which of the two is actually wrong.
+        ...(currency ? { currency } : {}),
         // Paystack appends its own query string, so the page has to tolerate
         // extra params. It already does: it reads only `billing`.
         callback_url: `${env.webUrl.split(",")[0]}/billing?billing=success`,
