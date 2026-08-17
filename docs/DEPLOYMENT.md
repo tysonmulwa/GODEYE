@@ -84,7 +84,7 @@ root and point it at the Dockerfile — do **not** set root to `apps/api`.
   `TOKEN_ENCRYPTION_KEY`, `ENGINE_INTERNAL_SECRET`, `ENGINE_URL` (the engine's
   private URL), `WEB_URL` (**your Vercel domain** — drives CORS + the session
   cookie), the `S3_*` set, and any platform keys (`REDDIT_*`, `META_*`,
-  `LINKEDIN_*`, `STRIPE_*`).
+  `LINKEDIN_*`, `PAYSTACK_*`).
 - `NODE_ENV=production` is required — it switches the refresh cookie to
   `SameSite=None; Secure` so login works across the Vercel↔API domain split.
 
@@ -146,8 +146,17 @@ the stricter `SameSite=Lax` when they match, so **set `API_URL` too**.
   - `REDDIT_REDIRECT_URI` = `https://<api>/connections/reddit/callback`
   - `META_REDIRECT_URI` = `https://<api>/connections/meta/callback`
   - `LINKEDIN_REDIRECT_URI` = `https://<api>/connections/linkedin/callback`
-- If using Stripe, point its webhook at `https://<api>/webhooks/stripe` and set
-  `STRIPE_WEBHOOK_SECRET`.
+- `GET https://<api>/health` reports `api.payments` — whether the secret key
+  and each plan code are set on *that* service. Check it before debugging an
+  upgrade button: a key set in the wrong Railway service looks exactly like a
+  broken checkout from the browser.
+- Point the Paystack webhook (Settings → API Keys & Webhooks) at
+  `https://<api>/webhooks/paystack`. There is no separate webhook secret:
+  Paystack signs with `PAYSTACK_SECRET_KEY`, so the same value verifies events
+  and starts checkouts.
+- Set `PAYSTACK_PLAN_PRO/PREMIUM/VIP` to the plan codes (`PLN_...`) of three
+  monthly plans priced 19 / 49 / 199 USD. Checkout refuses without them rather
+  than taking a one-off payment that never renews.
 
 ## Smoke test after deploy
 

@@ -14,10 +14,12 @@ import {
   type LoginInput,
   type RegisterInput,
   type UpdateProfileInput,
+  type WorkspaceAccess,
 } from "@godeye/shared";
 import * as argon2 from "argon2";
 import { randomBytes } from "crypto";
 import { authenticator } from "otplib";
+import { WorkspaceAccessService } from "../billing/workspace-access.service";
 import { AuditService } from "../common/audit.service";
 import { CryptoService } from "../common/crypto.service";
 import { env } from "../common/env";
@@ -42,6 +44,9 @@ export interface SessionResult {
     type: string;
     hasProfile: boolean;
     requireApproval: boolean;
+    /** Trial clock and read-only state, so the app can say what is happening
+     *  before the first refused request rather than after it. */
+    access: WorkspaceAccess;
   };
   accessToken: string;
   refreshToken: string;
@@ -54,6 +59,7 @@ export class AuthService {
     private readonly jwt: JwtService,
     private readonly crypto: CryptoService,
     private readonly audit: AuditService,
+    private readonly access: WorkspaceAccessService,
   ) {}
 
   // ---------- Registration & login ----------
@@ -88,12 +94,19 @@ export class AuthService {
     });
 
     const membership = user.memberships[0];
+
+    // The workspace starts its 24 hours here, not on first publish and not on
+    // first login. Recorded as a TRIALING subscription with an end date, so the
+    // clock is a row anyone can read rather than an assumption about createdAt.
+    const trialEndsAt = await this.access.startTrial(membership.orgId);
+
     this.audit.log({
       userId: user.id,
       orgId: membership.orgId,
       action: "auth.register",
       ip: ctx.ip,
       userAgent: ctx.userAgent,
+      metadata: { trialEndsAt: trialEndsAt?.toISOString() ?? null },
     });
     return this.createSession(user, membership.org, membership.role, ctx, false);
   }
@@ -178,6 +191,7 @@ export class AuthService {
         type: org.type,
         hasProfile: !!org.businessProfile,
         requireApproval: org.requireApproval,
+        access: await this.access.state(org.id),
       },
     };
   }
@@ -498,12 +512,14 @@ export class AuthService {
       },
     });
 
-    const hasProfile =
-      hasProfileOverride ??
-      !!(await this.prisma.businessProfile.findUnique({
-        where: { orgId: org.id },
-        select: { id: true },
-      }));
+    const [hasProfile, access] = await Promise.all([
+      hasProfileOverride !== undefined
+        ? Promise.resolve(hasProfileOverride)
+        : this.prisma.businessProfile
+            .findUnique({ where: { orgId: org.id }, select: { id: true } })
+            .then((p) => !!p),
+      this.access.state(org.id),
+    ]);
 
     return {
       user: this.publicUser(user),
@@ -515,6 +531,7 @@ export class AuthService {
         type: org.type ?? "BUSINESS",
         hasProfile,
         requireApproval: org.requireApproval ?? false,
+        access,
       },
       accessToken,
       refreshToken,

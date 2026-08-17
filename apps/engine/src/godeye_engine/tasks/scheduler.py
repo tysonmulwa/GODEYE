@@ -18,6 +18,7 @@ from ..db import (
     ScheduledPost,
     SocialConnection,
     get_session,
+    locked_org_ids,
     utcnow,
 )
 from ..events import publish_event
@@ -80,7 +81,13 @@ APPROVAL_SATISFIED_STATUSES = ("APPROVED", "SCHEDULED", "PUBLISHED")
 
 
 def due_posts_query(now, stale_lock):
-    """Selects due, unclaimed posts — approval-gated orgs only release reviewed content."""
+    """Selects due, unclaimed posts — approval-gated orgs only release reviewed content.
+
+    A workspace whose trial ran out unpaid publishes nothing. Without this line
+    a customer could queue a month of posts during the 24 hours and have them
+    go out for free long after the workspace went read-only — the paywall would
+    hold in the browser and leak everywhere it actually costs money.
+    """
     return (
         select(ScheduledPost.c.id)
         .select_from(
@@ -97,6 +104,7 @@ def due_posts_query(now, stale_lock):
                     Organization.c.requireApproval.is_(False),
                     ContentItem.c.status.in_(APPROVAL_SATISFIED_STATUSES),
                 ),
+                ScheduledPost.c.orgId.notin_(locked_org_ids(now)),
             )
         )
         .with_for_update(skip_locked=True, of=ScheduledPost)

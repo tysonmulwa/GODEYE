@@ -1,5 +1,6 @@
 import { Controller, Get, Query } from "@nestjs/common";
 import { ApiOperation, ApiTags } from "@nestjs/swagger";
+import { env } from "./common/env";
 import { EngineService } from "./engine/engine.service";
 
 /**
@@ -23,7 +24,23 @@ export class HealthController {
   @ApiOperation({ summary: "Deployed build of the API and the engine" })
   async health(@Query("render") render?: string) {
     const sha = process.env.RAILWAY_GIT_COMMIT_SHA ?? "";
-    const api = { status: "ok", build: sha ? sha.slice(0, 8) : "unknown" };
+    const api = {
+      status: "ok",
+      build: sha ? sha.slice(0, 8) : "unknown",
+      // Whether this deploy can take money, without asking anyone to sign in.
+      // "Upgrade does nothing" and "the key is not set on this service" look
+      // identical from the browser, and the answer is one env var either way.
+      // Booleans only — never the keys, and never the plan codes.
+      payments: {
+        provider: "paystack",
+        secretKey: !!env.paystack.secretKey,
+        plans: {
+          PRO: !!env.paystack.plans.PRO,
+          PREMIUM: !!env.paystack.plans.PREMIUM,
+          VIP: !!env.paystack.plans.VIP,
+        },
+      },
+    };
 
     try {
       // ?render=1 queues a throwaway encode on a worker and reads the result

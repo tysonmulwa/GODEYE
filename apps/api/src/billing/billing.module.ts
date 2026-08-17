@@ -27,6 +27,7 @@ import { AccessTokenPayload, JwtAuthGuard } from "../common/jwt-auth.guard";
 import { PrismaService } from "../common/prisma.service";
 import { MinRole, RolesGuard } from "../common/roles.guard";
 import { ZodPipe } from "../common/zod.pipe";
+import { WorkspaceAccessService } from "./workspace-access.service";
 
 export interface PlanLimits {
   postsPerMonth: number;
@@ -58,9 +59,10 @@ export class BillingService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
+    private readonly access: WorkspaceAccessService,
   ) {}
 
-  /** The org's effective plan — CANCELED/absent subscriptions fall back to FREE. */
+  /** The org's effective plan — CANCELED/absent subscriptions fall back to the entry plan. */
   async effectivePlan(orgId: string) {
     const sub = await this.prisma.subscription.findUnique({
       where: { orgId },
@@ -69,8 +71,8 @@ export class BillingService {
     if (sub && sub.status !== "CANCELED") {
       return { plan: sub.plan, subscription: sub };
     }
-    const free = await this.prisma.plan.findUnique({ where: { code: "PRO" } });
-    return { plan: free, subscription: sub };
+    const entry = await this.prisma.plan.findUnique({ where: { code: "PRO" } });
+    return { plan: entry, subscription: sub };
   }
 
   private limitsOf(plan: { limits: unknown } | null): PlanLimits {
@@ -104,10 +106,11 @@ export class BillingService {
   }
 
   async overview(orgId: string) {
-    const [{ plan, subscription }, usage, plans] = await Promise.all([
+    const [{ plan, subscription }, usage, plans, access] = await Promise.all([
       this.effectivePlan(orgId),
       this.usage(orgId),
       this.prisma.plan.findMany({ orderBy: { priceMonthlyUsd: "asc" } }),
+      this.access.state(orgId),
     ]);
     return {
       plan: plan
@@ -115,6 +118,8 @@ export class BillingService {
         : { code: "PRO", name: "Pro", priceMonthlyUsd: "19" },
       subscriptionStatus: subscription?.status ?? null,
       currentPeriodEnd: subscription?.currentPeriodEnd?.toISOString() ?? null,
+      /** Trial clock and read-only state — the same answer the API enforces. */
+      access,
       limits: this.limitsOf(plan),
       usage,
       plans: plans.map((p) => ({
@@ -123,11 +128,9 @@ export class BillingService {
         priceMonthlyUsd: p.priceMonthlyUsd.toString(),
         limits: this.limitsOf(p),
       })),
-      stripeConfigured: !!env.stripe.secretKey,
       // What the billing page needs to know to show an upgrade button at all.
       // Reported as a boolean: the secret key must never leave the server.
-      paystackConfigured: !!env.paystack.secretKey,
-      paymentsConfigured: !!(env.paystack.secretKey || env.stripe.secretKey),
+      paymentsConfigured: !!env.paystack.secretKey,
     };
   }
 
@@ -152,16 +155,21 @@ export class BillingService {
     }
   }
 
-  // ---------- Paystack (activates when PAYSTACK_SECRET_KEY is set) ----------
+  // ---------- Paystack ----------
 
   /**
    * Start a Paystack subscription checkout.
    *
-   * Paystack works the opposite way round to Stripe: the amount lives on the
-   * plan, not on the request, so passing both would let the two disagree. Only
-   * the plan code is sent and Paystack bills what the plan says.
+   * The amount lives on the Paystack plan, not on this request: passing both
+   * would let the two disagree, and the customer would be charged the number
+   * nobody was looking at. Only the plan code is sent.
    */
-  async checkoutPaystack(orgId: string, userId: string, planCode: PlanCode) {
+  async checkout(orgId: string, userId: string, planCode: PlanCode) {
+    if (!env.paystack.secretKey) {
+      throw new BadRequestException(
+        "Payments are not configured on this server yet. Set PAYSTACK_SECRET_KEY.",
+      );
+    }
     const plan = env.paystack.plans[planCode];
     if (!plan) {
       throw new BadRequestException(
@@ -188,7 +196,7 @@ export class BillingService {
         plan,
         // Paystack appends its own query string, so the page has to tolerate
         // extra params. It already does: it reads only `billing`.
-        callback_url: `${env.webUrl}/billing?billing=success`,
+        callback_url: `${env.webUrl.split(",")[0]}/billing?billing=success`,
         // The only link back to the workspace. The webhook arrives on its own,
         // with no session, so without this there is no way to know which
         // organisation just paid.
@@ -256,21 +264,29 @@ export class BillingService {
         return;
       }
       const customer = (data.customer ?? {}) as Record<string, unknown>;
+      const renewsAt = this.parseDate(data.next_payment_date);
+      const fields = {
+        planId: plan.id,
+        status: "ACTIVE" as const,
+        providerCustomerId: (customer.customer_code as string) ?? null,
+        providerSubscriptionId: (data.subscription_code as string) ?? null,
+        // Only overwritten when the event says when the next charge is. Clearing
+        // it on a plain charge.success would erase the renewal date that the
+        // subscription.create event had already recorded.
+        ...(renewsAt ? { currentPeriodEnd: renewsAt } : {}),
+      };
       await this.prisma.subscription.upsert({
         where: { orgId },
-        create: {
-          orgId,
-          planId: plan.id,
-          status: "ACTIVE",
-          stripeCustomerId: (customer.customer_code as string) ?? null,
-          stripeSubscriptionId: (data.subscription_code as string) ?? null,
-        },
-        update: {
-          planId: plan.id,
-          status: "ACTIVE",
-          stripeCustomerId: (customer.customer_code as string) ?? null,
-          stripeSubscriptionId: (data.subscription_code as string) ?? null,
-        },
+        create: { orgId, ...fields },
+        update: fields,
+      });
+      // The workspace is paying as of this instant — it must not wait out a
+      // cached read-only decision before it can publish again.
+      this.access.invalidate(orgId);
+      this.audit.log({
+        orgId,
+        action: "billing.subscription_activated",
+        metadata: { planCode, provider: "paystack" },
       });
       this.logger.log(`Paystack activated ${planCode} for org ${orgId}`);
       return;
@@ -280,134 +296,25 @@ export class BillingService {
       const code = data.subscription_code as string | undefined;
       if (!code) return;
       const sub = await this.prisma.subscription.findFirst({
-        where: { stripeSubscriptionId: code },
+        where: { providerSubscriptionId: code },
       });
       if (sub) {
         await this.prisma.subscription.update({
           where: { id: sub.id },
           data: { status: "CANCELED" },
         });
+        this.access.invalidate(sub.orgId);
+        this.audit.log({ orgId: sub.orgId, action: "billing.subscription_canceled" });
         this.logger.log(`Paystack cancelled the subscription for org ${sub.orgId}`);
       }
     }
   }
 
-  // ---------- Stripe (activates when STRIPE_SECRET_KEY is set) ----------
-
-  async checkout(orgId: string, userId: string, planCode: PlanCode) {
-    // Paystack first when it is configured: it is the provider carrying Apple
-    // Pay for this merchant, and running both at once would let one workspace
-    // hold two live subscriptions for the same plan.
-    if (env.paystack.secretKey) {
-      return this.checkoutPaystack(orgId, userId, planCode);
-    }
-    if (!env.stripe.secretKey) {
-      throw new BadRequestException("Payments are not configured yet on this server");
-    }
-    const price = env.stripe.prices[planCode];
-    if (!price) {
-      throw new BadRequestException(`No Stripe price configured for the ${planCode} plan`);
-    }
-
-    const params = new URLSearchParams({
-      mode: "subscription",
-      client_reference_id: orgId,
-      // Back to the page they started from, which now exists and shows the new
-      // plan. It used to return to /settings, where nothing reported the
-      // outcome of the payment either way.
-      success_url: `${env.webUrl}/billing?billing=success`,
-      cancel_url: `${env.webUrl}/billing?billing=cancelled`,
-      "line_items[0][price]": price,
-      "line_items[0][quantity]": "1",
-      "metadata[orgId]": orgId,
-      "metadata[planCode]": planCode,
-      "subscription_data[metadata][orgId]": orgId,
-    });
-    const res = await fetch("https://api.stripe.com/v1/checkout/sessions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${env.stripe.secretKey}`,
-        "Content-Type": "application/x-www-form-urlencoded",
-      },
-      body: params.toString(),
-    });
-    const data = (await res.json()) as { url?: string; error?: { message?: string } };
-    if (!res.ok || !data.url) {
-      this.logger.error(`Stripe checkout failed: ${data.error?.message}`);
-      throw new BadRequestException(data.error?.message ?? "Could not start checkout");
-    }
-
-    this.audit.log({
-      orgId,
-      userId,
-      action: "billing.checkout_started",
-      metadata: { planCode },
-    });
-    return { url: data.url };
-  }
-
-  verifyStripeSignature(raw: Buffer | undefined, header: string | undefined): boolean {
-    if (!raw || !header || !env.stripe.webhookSecret) return false;
-    const parts = Object.fromEntries(
-      header.split(",").map((kv) => kv.split("=") as [string, string]),
-    );
-    const timestamp = parts["t"];
-    const provided = parts["v1"];
-    if (!timestamp || !provided) return false;
-    const expected = createHmac("sha256", env.stripe.webhookSecret)
-      .update(`${timestamp}.${raw.toString("utf8")}`)
-      .digest("hex");
-    try {
-      return timingSafeEqual(Buffer.from(expected), Buffer.from(provided));
-    } catch {
-      return false;
-    }
-  }
-
-  async handleStripeEvent(event: {
-    type: string;
-    data: { object: Record<string, unknown> };
-  }): Promise<void> {
-    const obj = event.data.object;
-    if (event.type === "checkout.session.completed") {
-      const orgId =
-        (obj.client_reference_id as string | null) ??
-        ((obj.metadata as Record<string, string> | null)?.orgId ?? null);
-      const planCode = (obj.metadata as Record<string, string> | null)?.planCode;
-      if (!orgId || !planCode) return;
-      const plan = await this.prisma.plan.findUnique({ where: { code: planCode } });
-      if (!plan) return;
-      await this.prisma.subscription.upsert({
-        where: { orgId },
-        update: {
-          planId: plan.id,
-          status: "ACTIVE",
-          stripeCustomerId: (obj.customer as string) ?? null,
-          stripeSubscriptionId: (obj.subscription as string) ?? null,
-        },
-        create: {
-          orgId,
-          planId: plan.id,
-          status: "ACTIVE",
-          stripeCustomerId: (obj.customer as string) ?? null,
-          stripeSubscriptionId: (obj.subscription as string) ?? null,
-        },
-      });
-      this.audit.log({ orgId, action: "billing.subscription_activated", metadata: { planCode } });
-      this.logger.log(`Org ${orgId} upgraded to ${planCode}`);
-    } else if (
-      event.type === "customer.subscription.deleted" ||
-      event.type === "customer.subscription.canceled"
-    ) {
-      const stripeSubscriptionId = obj.id as string;
-      const sub = await this.prisma.subscription.findFirst({ where: { stripeSubscriptionId } });
-      if (!sub) return;
-      await this.prisma.subscription.update({
-        where: { id: sub.id },
-        data: { status: "CANCELED" },
-      });
-      this.audit.log({ orgId: sub.orgId, action: "billing.subscription_canceled" });
-    }
+  /** Paystack sends dates as "2026-09-01T00:00:00.000Z" or "2026-09-01 00:00:00". */
+  private parseDate(value: unknown): Date | null {
+    if (typeof value !== "string" || !value.trim()) return null;
+    const parsed = new Date(value.replace(" ", "T"));
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
   }
 }
 
@@ -419,7 +326,7 @@ export class BillingController {
   constructor(private readonly billing: BillingService) {}
 
   @Get()
-  @ApiOperation({ summary: "Current plan, limits, and this month's usage" })
+  @ApiOperation({ summary: "Current plan, trial state, limits, and this month's usage" })
   overview(@CurrentAuth() auth: AccessTokenPayload) {
     return this.billing.overview(auth.orgId);
   }
@@ -427,7 +334,7 @@ export class BillingController {
   @Post("checkout")
   @MinRole("ADMIN")
   @Throttle({ default: { limit: 5, ttl: 60_000 } })
-  @ApiOperation({ summary: "Start a Stripe Checkout session for a paid plan" })
+  @ApiOperation({ summary: "Start a Paystack checkout for a paid plan" })
   checkout(
     @CurrentAuth() auth: AccessTokenPayload,
     @Body(new ZodPipe(checkoutSchema)) body: z.infer<typeof checkoutSchema>,
@@ -438,30 +345,10 @@ export class BillingController {
 
 @ApiTags("webhooks")
 @Controller("webhooks")
-export class StripeWebhookController {
-  private readonly logger = new Logger(StripeWebhookController.name);
+export class PaystackWebhookController {
+  private readonly logger = new Logger(PaystackWebhookController.name);
 
   constructor(private readonly billing: BillingService) {}
-
-  @Post("stripe")
-  @HttpCode(200)
-  @ApiOperation({ summary: "Stripe events (signature-verified)" })
-  async stripe(
-    @Req() req: RawBodyRequest<Request>,
-    @Headers("stripe-signature") signature: string | undefined,
-  ) {
-    if (!this.billing.verifyStripeSignature(req.rawBody, signature)) {
-      this.logger.warn("Stripe webhook with invalid signature rejected");
-      throw new BadRequestException("Invalid signature");
-    }
-    await this.billing.handleStripeEvent(
-      JSON.parse(req.rawBody!.toString("utf8")) as {
-        type: string;
-        data: { object: Record<string, unknown> };
-      },
-    );
-    return { received: true };
-  }
 
   /**
    * Paystack events.
@@ -493,8 +380,10 @@ export class StripeWebhookController {
 
 @Global()
 @Module({
-  controllers: [BillingController, StripeWebhookController],
-  providers: [BillingService, RolesGuard],
-  exports: [BillingService],
+  controllers: [BillingController, PaystackWebhookController],
+  // TrialLockInterceptor is not listed here: AppModule registers it as a global
+  // APP_INTERCEPTOR, and providing it twice would build two of them.
+  providers: [BillingService, WorkspaceAccessService, RolesGuard],
+  exports: [BillingService, WorkspaceAccessService],
 })
 export class BillingModule {}

@@ -2,6 +2,7 @@ import { BadRequestException, ConflictException, UnauthorizedException } from "@
 import { JwtService } from "@nestjs/jwt";
 import * as argon2 from "argon2";
 import { authenticator } from "otplib";
+import { WorkspaceAccessService } from "../billing/workspace-access.service";
 import { AuditService } from "../common/audit.service";
 import { CryptoService } from "../common/crypto.service";
 import { AuthService } from "./auth.service";
@@ -41,6 +42,7 @@ function makePrisma(): MockPrisma {
 describe("AuthService", () => {
   let prisma: MockPrisma;
   let service: AuthService;
+  let access: { startTrial: jest.Mock; state: jest.Mock };
 
   const org = { id: "org1", name: "Acme", slug: "acme" };
   const baseUser = {
@@ -55,11 +57,21 @@ describe("AuthService", () => {
   beforeEach(() => {
     prisma = makePrisma();
     const crypto = new CryptoService();
+    access = {
+      startTrial: jest.fn().mockResolvedValue(new Date("2026-01-02T00:00:00.000Z")),
+      state: jest.fn().mockResolvedValue({
+        status: "TRIALING",
+        locked: false,
+        trialEndsAt: "2026-01-02T00:00:00.000Z",
+        planCode: "PRO",
+      }),
+    };
     service = new AuthService(
       prisma as never,
       new JwtService({}),
       crypto,
       { log: jest.fn() } as unknown as AuditService,
+      access as unknown as WorkspaceAccessService,
     );
   });
 
@@ -89,6 +101,30 @@ describe("AuthService", () => {
     const createArgs = prisma.user.create.mock.calls[0][0];
     expect(createArgs.data.passwordHash).not.toContain("Str0ngPassw0rd!");
     await expect(argon2.verify(createArgs.data.passwordHash, "Str0ngPassw0rd!")).resolves.toBe(true);
+  });
+
+  it("puts a brand new workspace on its trial and reports it in the session", async () => {
+    prisma.user.findUnique.mockResolvedValue(null);
+    prisma.user.create.mockResolvedValue({
+      ...baseUser,
+      memberships: [{ orgId: org.id, role: "OWNER", org }],
+    });
+
+    const session = await service.register(
+      {
+        name: "Jane",
+        email: "jane@acme.com",
+        password: "Str0ngPassw0rd!",
+        accountType: "BUSINESS",
+        organizationName: "Acme",
+      },
+      {},
+    );
+
+    expect(access.startTrial).toHaveBeenCalledWith(org.id);
+    expect(session.organization.access).toEqual(
+      expect.objectContaining({ status: "TRIALING", locked: false }),
+    );
   });
 
   it("rejects duplicate email registration", async () => {

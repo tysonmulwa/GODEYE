@@ -1,8 +1,9 @@
 import { Module } from "@nestjs/common";
-import { APP_GUARD } from "@nestjs/core";
+import { APP_GUARD, APP_INTERCEPTOR } from "@nestjs/core";
 import { ThrottlerGuard, ThrottlerModule } from "@nestjs/throttler";
 import { AuthModule } from "./auth/auth.module";
 import { BillingModule } from "./billing/billing.module";
+import { TrialLockInterceptor } from "./billing/trial-lock.interceptor";
 import { BusinessProfileModule } from "./business-profile/business-profile.module";
 import { CommonModule } from "./common/common.module";
 import { ConnectionsModule } from "./connections/connections.module";
@@ -37,6 +38,12 @@ import { WebhooksModule } from "./webhooks/webhooks.module";
     WebhooksModule,
   ],
   controllers: [SiteVerificationController, HealthController],
-  providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
+  providers: [
+    { provide: APP_GUARD, useClass: ThrottlerGuard },
+    // Read-only once a workspace's trial ends unpaid. Global so a new
+    // controller is covered the day it is written rather than the day somebody
+    // remembers to decorate it.
+    { provide: APP_INTERCEPTOR, useClass: TrialLockInterceptor },
+  ],
 })
 export class AppModule {}

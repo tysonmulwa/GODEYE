@@ -228,13 +228,25 @@ generation (blocks once the monthly token budget is spent), connection creation 
 connections only), and member invites. The engine's autopilot is intentionally not
 gated per-slot (plans are already limited by cadence).
 
-**Stripe (optional)** — everything above works without Stripe. When `STRIPE_SECRET_KEY`,
-`STRIPE_WEBHOOK_SECRET`, and `STRIPE_PRICE_PRO/SCALE` are set: `POST /billing/checkout`
-creates a Checkout Session (plain HTTPS calls — no SDK dependency) and
-`POST /webhooks/stripe` (HMAC signature verified, timing-safe) activates the subscription
-on `checkout.session.completed` and downgrades on `customer.subscription.deleted`.
-The Settings page shows the plan, live usage bars, and upgrade buttons that enable
-themselves when Stripe is configured.
+**The 24-hour trial** — registration creates a `TRIALING` subscription on the Pro plan
+with `currentPeriodEnd` 24 hours out (`WorkspaceAccessService.startTrial`). Two things
+act on it: `state()` *computes* the answer from that timestamp, so a trial that ran out a
+second ago is already locked, and `sweep()` (every 15 minutes) *records* it, flipping
+expired trials to `PAST_DUE` and backfilling a subscription for any workspace that has
+none. `TrialLockInterceptor` is registered globally (`APP_INTERCEPTOR`) and refuses every
+mutating request from a locked workspace except `/auth`, `/billing`, `/webhooks` and
+`/health` — reading stays open, so nothing is lost, only paused. The workspaces GODEYE
+itself runs (`BILLING_EXEMPT_SLUGS`: godeye, patampoa, mjini-collection) are never billed
+and never locked.
+
+**Paystack** — the only payment provider. When `PAYSTACK_SECRET_KEY` and the
+`PAYSTACK_PLAN_*` codes are set, `POST /billing/checkout` initializes a transaction
+against the plan (plain HTTPS calls — no SDK dependency) carrying `orgId` in metadata,
+which is the only link back to the workspace when the webhook arrives with no session.
+`POST /webhooks/paystack` (HMAC SHA512 over the raw body, keyed by the secret key,
+timing-safe) activates the subscription on `charge.success` / `subscription.create` and
+cancels on `subscription.disable`. Without the keys, metering and the trial still work;
+the upgrade buttons hide rather than opening a checkout that cannot start.
 
 ## Repository layout
 

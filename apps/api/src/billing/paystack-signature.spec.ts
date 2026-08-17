@@ -1,7 +1,7 @@
 /**
  * Paystack webhook signature verification.
  *
- * This is the only thing standing between a stranger and a free SCALE plan.
+ * This is the only thing standing between a stranger and a free VIP plan.
  * A forged `charge.success` naming an orgId would activate a paid subscription
  * for a payment that never happened, so the check has to reject anything it
  * cannot prove.
@@ -25,7 +25,7 @@ describe("verifyPaystackSignature", () => {
   beforeAll(async () => {
     env.paystack.secretKey = SECRET;
     const { BillingService } = await import("./billing.module");
-    const service = new BillingService({} as never, {} as never);
+    const service = new BillingService({} as never, {} as never, {} as never);
     verify = service.verifyPaystackSignature.bind(service);
   });
 

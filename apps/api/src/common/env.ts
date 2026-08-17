@@ -130,8 +130,9 @@ export const env = {
     redirectUri: callbackUrl("linkedin", process.env.LINKEDIN_REDIRECT_URI),
   },
   /**
-   * Paystack. Preferred over Stripe when both are set, because it is the one
-   * that carries Apple Pay for this merchant.
+   * Paystack — the only payment provider. It is the one that carries Apple Pay
+   * for this merchant, and running a second processor alongside it would let a
+   * workspace hold two live subscriptions for the same plan.
    *
    * `plans` are Paystack plan codes (PLN_...), which is what makes a charge
    * recurring. Without them a subscription would be a single payment that
@@ -143,21 +144,15 @@ export const env = {
    * holding it can both move money and forge payment confirmations.
    */
   paystack: {
-    secretKey: process.env.PAYSTACK_SECRET_KEY ?? "",
-    publicKey: process.env.PAYSTACK_PUBLIC_KEY ?? "",
+    // Trimmed: a key pasted into a hosting dashboard often carries a trailing
+    // space, and it is used both as a bearer token and as an HMAC key — the
+    // second would fail every webhook signature with no hint as to why.
+    secretKey: (process.env.PAYSTACK_SECRET_KEY ?? "").trim(),
+    publicKey: (process.env.PAYSTACK_PUBLIC_KEY ?? "").trim(),
     plans: {
-      PRO: process.env.PAYSTACK_PLAN_PRO ?? "",
-      PREMIUM: process.env.PAYSTACK_PLAN_PREMIUM ?? "",
-      VIP: process.env.PAYSTACK_PLAN_VIP ?? "",
-    } as Record<string, string>,
-  },
-  stripe: {
-    secretKey: process.env.STRIPE_SECRET_KEY ?? "",
-    webhookSecret: process.env.STRIPE_WEBHOOK_SECRET ?? "",
-    prices: {
-      PRO: process.env.STRIPE_PRICE_PRO ?? "",
-      PREMIUM: process.env.STRIPE_PRICE_PREMIUM ?? "",
-      VIP: process.env.STRIPE_PRICE_VIP ?? "",
+      PRO: (process.env.PAYSTACK_PLAN_PRO ?? "").trim(),
+      PREMIUM: (process.env.PAYSTACK_PLAN_PREMIUM ?? "").trim(),
+      VIP: (process.env.PAYSTACK_PLAN_VIP ?? "").trim(),
     } as Record<string, string>,
   },
   /**

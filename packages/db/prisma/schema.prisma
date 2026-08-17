@@ -735,7 +735,7 @@ model WebhookEvent {
 }
 
 // ============================================================
-// Billing (schema now, Stripe wiring in a later phase)
+// Billing — a 24 hour trial, then Paystack
 // ============================================================
 
 model Plan {
@@ -756,16 +756,27 @@ enum SubscriptionStatus {
   CANCELED
 }
 
+/// A workspace's billing state. Every workspace has one from the moment it is
+/// created: TRIALING with `currentPeriodEnd` 24 hours out, which is what the
+/// read-only guard reads. Payment is Paystack's, and only Paystack's.
 model Subscription {
-  id                   String             @id @default(cuid())
-  orgId                String             @unique
-  planId               String
-  status               SubscriptionStatus @default(TRIALING)
-  stripeCustomerId     String?
-  stripeSubscriptionId String?
-  currentPeriodEnd     DateTime?
-  createdAt            DateTime           @default(now())
-  updatedAt            DateTime           @updatedAt
+  id     String             @id @default(cuid())
+  orgId  String             @unique
+  planId String
+  status SubscriptionStatus @default(TRIALING)
+
+  /// Paystack customer code (CUS_...) and subscription code (SUB_...).
+  /// The columns keep the names they were created with. Renaming a live column
+  /// buys nothing a field name does not, and would break the running API for
+  /// the minutes between the migration and the deploy — during which a
+  /// successful payment would fail to activate a plan.
+  providerCustomerId     String?   @map("stripeCustomerId")
+  providerSubscriptionId String?   @map("stripeSubscriptionId")
+  /// When the trial runs out, or when the paid period next renews.
+  currentPeriodEnd       DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   org  Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
   plan Plan         @relation(fields: [planId], references: [id])

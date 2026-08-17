@@ -22,8 +22,11 @@ from sqlalchemy import (
     String,
     Table,
     Text,
+    and_,
     cast,
     create_engine,
+    or_,
+    select,
     types,
 )
 from sqlalchemy.dialects.postgresql import ARRAY as PgArray
@@ -416,6 +419,60 @@ UsageRecord = Table(
     Column("periodStart", DateTime(timezone=False), nullable=False),
     Column("createdAt", DateTime(timezone=False)),
 )
+
+Subscription = Table(
+    "Subscription",
+    metadata,
+    Column("id", String, primary_key=True),
+    Column("orgId", String, nullable=False),
+    Column("planId", String, nullable=False),
+    # TRIALING | ACTIVE | PAST_DUE | CANCELED
+    Column("status", PgEnum("SubscriptionStatus"), nullable=False),
+    # When the 24 hour trial runs out, or when a paid period renews.
+    Column("currentPeriodEnd", DateTime(timezone=False)),
+)
+
+# The workspaces GODEYE itself runs: never billed, never locked.
+# Must match BILLING_EXEMPT_SLUGS in packages/shared/src/plans.ts — the API and
+# this worker have to agree on who is exempt, or one of them would stop
+# publishing for a workspace the other considers paid up.
+BILLING_EXEMPT_SLUGS = ("godeye", "patampoa", "mjini-collection")
+
+
+def locked_org_ids(now: datetime):
+    """Workspaces that may not publish or generate: the trial ran out unpaid.
+
+    Returns a SELECT of organisation ids, meant to be used as
+    ``Table.c.orgId.notin_(locked_org_ids(now))``.
+
+    The rule is the same one the API enforces in WorkspaceAccessService, and it
+    is repeated here rather than asked for over HTTP because Celery beat runs
+    every thirty seconds and must not depend on the API being up. Both sides
+    read the same two columns, so they cannot drift on anything but code.
+
+    A workspace with no subscription row at all is deliberately *not* locked:
+    those predate the trial and the API's sweeper is about to give them one.
+    Refusing to publish their scheduled posts in the meantime would be a silent
+    outage for customers who have done nothing wrong.
+    """
+    return (
+        select(Organization.c.id)
+        .select_from(
+            Organization.outerjoin(Subscription, Subscription.c.orgId == Organization.c.id)
+        )
+        .where(
+            Organization.c.slug.notin_(BILLING_EXEMPT_SLUGS),
+            Subscription.c.orgId.isnot(None),
+            or_(
+                Subscription.c.status.in_(("PAST_DUE", "CANCELED")),
+                and_(
+                    Subscription.c.status == "TRIALING",
+                    Subscription.c.currentPeriodEnd.isnot(None),
+                    Subscription.c.currentPeriodEnd <= now,
+                ),
+            ),
+        )
+    )
 
 _engine: Engine | None = None
 _session_factory: sessionmaker[Session] | None = None

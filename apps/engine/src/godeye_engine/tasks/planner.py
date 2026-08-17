@@ -31,6 +31,7 @@ from ..db import (
     ScheduledPost,
     SocialConnection,
     get_session,
+    locked_org_ids,
     new_id,
     utcnow,
 )
@@ -122,7 +123,13 @@ def plan_autopilot() -> int:
     with get_session() as session:
         plans = session.execute(
             select(PostingPlan).where(
-                PostingPlan.c.active.is_(True), PostingPlan.c.autoGenerate.is_(True)
+                PostingPlan.c.active.is_(True),
+                PostingPlan.c.autoGenerate.is_(True),
+                # A read-only workspace does not get its autopilot written for
+                # it. Generation is the expensive half of the product — leaving
+                # it running past the trial would spend model budget on an
+                # account that has stopped paying.
+                PostingPlan.c.orgId.notin_(locked_org_ids(now)),
             )
         ).mappings().all()
 

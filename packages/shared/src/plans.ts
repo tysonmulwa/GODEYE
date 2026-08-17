@@ -6,9 +6,9 @@
  * runtime. Kept apart, the marketing page eventually promises a number the
  * product refuses to honour — and a customer discovers it after paying.
  *
- * Prices are USD. GODEYE sells internationally and Stripe charges in the
- * currency of the Price object, so a figure quoted in any other currency is
- * one the customer is never actually charged.
+ * Prices are USD. GODEYE sells internationally and Paystack charges in the
+ * currency of the plan, so a figure quoted in any other currency is one the
+ * customer is never actually charged.
  */
 
 export interface PlanLimits {
@@ -77,6 +77,31 @@ export const TRIAL_HOURS = 24;
  * happens at the weekend.
  */
 export const BILLING_EXEMPT_SLUGS = ["godeye", "patampoa", "mjini-collection"];
+
+/**
+ * Whether a workspace may still write, and why.
+ *
+ * Computed by the API and handed to the browser with the session, so the app
+ * can say what is happening before the first refused request rather than after
+ * it. The browser is told, never trusted: the API refuses the write itself.
+ *
+ * - TRIALING — inside the 24 hours, everything works, `trialEndsAt` is set.
+ * - ACTIVE   — paying.
+ * - EXEMPT   — one of BILLING_EXEMPT_SLUGS; never billed, never locked.
+ * - LOCKED   — the trial ran out unpaid, or the subscription lapsed. Reading
+ *              stays open; anything that changes data is refused.
+ */
+export type WorkspaceAccessStatus = "TRIALING" | "ACTIVE" | "EXEMPT" | "LOCKED";
+
+export interface WorkspaceAccess {
+  status: WorkspaceAccessStatus;
+  /** True when writes are refused. Kept separate from `status` so the check at
+   *  each call site is a boolean, not a list of statuses to remember. */
+  locked: boolean;
+  /** ISO timestamp the trial ends. Null unless a trial is running. */
+  trialEndsAt: string | null;
+  planCode: PlanCode | null;
+}
 
 export const PLAN_FEATURES: { key: keyof PlanLimits; label: string }[] = [
   { key: "postsPerMonth", label: "posts per month" },

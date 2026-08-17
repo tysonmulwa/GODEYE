@@ -31,6 +31,7 @@ from ..db import (
     ScheduledPost,
     SocialConnection,
     get_session,
+    locked_org_ids,
     new_id,
     utcnow,
 )
@@ -51,7 +52,7 @@ POST_HARD_LIMIT_SEC = 5 * 60
 
 @app.task(name="godeye_engine.tasks.product_posts.plan_product_posts")
 def plan_product_posts() -> dict:
-    """One post per workspace that has auto-post on."""
+    """One post per workspace that has auto-post on — and is still paying."""
     with get_session() as session:
         rows = session.execute(
             select(
@@ -60,6 +61,7 @@ def plan_product_posts() -> dict:
             ).where(
                 BusinessProfile.c.productAutoPost.is_(True),
                 BusinessProfile.c.productImportConsentAt.isnot(None),
+                BusinessProfile.c.orgId.notin_(locked_org_ids(utcnow())),
             )
         ).mappings().all()
 
