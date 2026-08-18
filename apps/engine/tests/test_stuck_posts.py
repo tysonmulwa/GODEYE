@@ -1,7 +1,7 @@
 """Posts abandoned between being claimed and being published.
 
 dispatch_due_posts flips a post to PROCESSING before handing it to a worker. If
-that worker goes away mid-publish — a deploy is the ordinary way — the row stays
+that worker goes away mid-publish, a deploy is the ordinary way, the row stays
 PROCESSING. Three real posts sat that way for half an hour, showing "processing"
 with nothing working on them.
 """

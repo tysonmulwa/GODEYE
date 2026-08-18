@@ -1,4 +1,4 @@
-"""Dev runner — starts FastAPI, the Celery worker, and Celery Beat together.
+"""Dev runner, starts FastAPI, the Celery worker, and Celery Beat together.
 
 Usage:  python -m godeye_engine.run
 (Windows note: the worker uses --pool=solo, required for Celery on Windows.)

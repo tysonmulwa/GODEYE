@@ -1,4 +1,4 @@
-"""Realtime event publishing — the NestJS gateway forwards these to browsers."""
+"""Realtime event publishing, the NestJS gateway forwards these to browsers."""
 
 from __future__ import annotations
 
@@ -24,7 +24,7 @@ def _get_client() -> redis.Redis:
 
 
 def publish_event(org_id: str, event: dict[str, Any]) -> None:
-    """Fire-and-forget — realtime updates must never break a task."""
+    """Fire-and-forget, realtime updates must never break a task."""
     try:
         _get_client().publish(EVENTS_CHANNEL, json.dumps({"orgId": org_id, "event": event}))
     except Exception as e:  # noqa: BLE001

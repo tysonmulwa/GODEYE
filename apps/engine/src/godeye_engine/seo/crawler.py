@@ -1,4 +1,4 @@
-"""Polite same-domain crawler — collects the page facts the audit rules need."""
+"""Polite same-domain crawler, collects the page facts the audit rules need."""
 
 from __future__ import annotations
 
@@ -32,7 +32,7 @@ class PageData:
     word_count: int = 0
     images_total: int = 0
     images_missing_alt: int = 0
-    # src of each image lacking alt text — a count alone isn't actionable, the
+    # src of each image lacking alt text, a count alone isn't actionable, the
     # user needs to know which images to describe.
     images_without_alt: list[str] = field(default_factory=list)
     internal_links: list[str] = field(default_factory=list)
@@ -50,12 +50,12 @@ class CrawlResult:
     broken_links: dict[str, list[str]]  # broken URL -> pages that link to it
     has_robots_txt: bool = False
     has_sitemap_xml: bool = False
-    platform: str = "html"  # detected stack — see detect_platform()
+    platform: str = "html"  # detected stack, see detect_platform()
 
 
 # Ordered most-specific first: WooCommerce is WordPress, so it has to win before
 # the generic WordPress signals match. Covers the platforms small businesses
-# actually use across the US, UK and the EU — Shopware, PrestaShop and TYPO3 are
+# actually use across the US, UK and the EU. Shopware, PrestaShop and TYPO3 are
 # marginal globally but common in DE/FR, and a fix written for the wrong stack is
 # worse than no fix at all.
 PLATFORM_SIGNALS: list[tuple[str, tuple[str, ...]]] = [
@@ -183,7 +183,7 @@ def _fetch_locs(client: httpx.Client, url: str) -> list[str] | None:
     """<loc> entries from an XML sitemap, or None if the URL isn't a real sitemap.
 
     Guards against sites that answer /sitemap.xml with an HTML shell (a common
-    JS-storefront behaviour) — those have no ``<loc`` and are ignored.
+    JS-storefront behaviour), those have no ``<loc`` and are ignored.
     """
     try:
         resp = client.get(url)
@@ -209,7 +209,7 @@ def _discover_sitemaps(client: httpx.Client, base: str) -> list[str]:
 
 
 def _sitemap_urls(client: httpx.Client, base: str, limit: int = 80) -> list[str]:
-    """Page URLs from the site's sitemap(s) — follows one level of index nesting.
+    """Page URLs from the site's sitemap(s), follows one level of index nesting.
 
     Modern sites (Shopify, headless/JS storefronts) render navigation with
     JavaScript, so a static-HTML crawl finds almost no internal links. The XML
@@ -239,7 +239,7 @@ def fetch_pages(urls: list[str], limit: int = 25) -> dict[str, PageData]:
     """Fetch a specific set of URLs and parse each one, keyed by requested URL.
 
     Verification only cares about the handful of pages a fix touched, so it uses
-    this instead of ``crawl`` — a second full BFS would hammer the customer's
+    this instead of ``crawl``, a second full BFS would hammer the customer's
     site to re-check three meta tags. Unreachable URLs are simply absent from the
     result; the caller decides what a missing page means.
     """

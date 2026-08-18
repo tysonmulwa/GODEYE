@@ -143,7 +143,7 @@ class TestStoring:
         assert session.inserts[0]["price"] == Decimal("7499.00")
 
     def test_a_repeat_import_updates_rather_than_duplicating(self, run):
-        """A shop republishing the same page must not read as new arrivals —
+        """A shop republishing the same page must not read as new arrivals,
         what gets posted is chosen from this."""
         product = _product()
         existing = [

@@ -18,7 +18,7 @@ export class AuditService {
 
   constructor(private readonly prisma: PrismaService) {}
 
-  /** Fire-and-forget — auditing must never break the main request path. */
+  /** Fire-and-forget, auditing must never break the main request path. */
   log(entry: AuditEntry): void {
     this.prisma.auditLog
       .create({

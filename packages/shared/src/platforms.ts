@@ -1,4 +1,4 @@
-/** Platform registry — mirror of the Prisma `Platform` enum plus UI metadata. */
+/** Platform registry, mirror of the Prisma `Platform` enum plus UI metadata. */
 
 export const PLATFORMS = [
   "FACEBOOK",

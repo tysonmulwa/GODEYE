@@ -23,14 +23,14 @@ from godeye_engine.products.compliance import (
 
 
 class TestInventedScarcity:
-    """UCPD Annex I bans false claims of limited time or stock outright — no
+    """UCPD Annex I bans false claims of limited time or stock outright, no
     balancing test. An import gives us "in stock" or nothing, never a count or
     a deadline, so every one of these is necessarily made up."""
 
     @pytest.mark.parametrize(
         "caption",
         [
-            "Only 3 left in stock — grab yours",
+            "Only 3 left in stock, grab yours",
             "Almost sold out!",
             "Selling fast, don't miss out",
             "Last chance to own these",
@@ -147,7 +147,7 @@ class TestNormalCopyStillPasses:
     @pytest.mark.parametrize(
         "caption",
         [
-            "Full-grain leather, stitched by hand. £129 — link in bio.",
+            "Full-grain leather, stitched by hand. £129, link in bio.",
             "Our Chelsea boot in oxblood. Built to be resoled, not replaced.",
             "New in: the canvas tote, KSh 1,200.",
             "Three colours, one shape that goes with everything. €89.",
@@ -165,7 +165,7 @@ class TestPriceFormatting:
         assert format_price(Decimal("1234.56"), "EUR") == "1.234,56 €"
 
     def test_french_euro_groups_with_a_narrow_no_break_space(self):
-        """French typography groups with U+202F, not an ordinary space — and
+        """French typography groups with U+202F, not an ordinary space, and
         it must not break across lines in the middle of a number."""
         assert format_price(Decimal("1234.56"), "EUR", "fr") == "1 234,56 €"
 

@@ -1,7 +1,7 @@
 """SEO audit task: crawl → rules → generators → AI recommendations → fixes → store.
 
 The audit ends by writing SeoFix rows: one actionable, stack-aware change per
-finding. That is the difference between a report and a loop — findings describe,
+finding. That is the difference between a report and a loop, findings describe,
 fixes get applied and then verified by ``verify_fixes``.
 """
 
@@ -88,7 +88,7 @@ def run_site_audit(
         )
         if not result.pages:
             raise RuntimeError(
-                f"Could not crawl any pages from {url} — is the site reachable?"
+                f"Could not crawl any pages from {url}, is the site reachable?"
             )
 
         # 2. Rule-based audit + score
@@ -111,7 +111,7 @@ def run_site_audit(
                 result.start_url,
             )
 
-        # 4. AI recommendations — optional; audit still succeeds without an LLM key
+        # 4. AI recommendations, optional; audit still succeeds without an LLM key
         keywords = None
         meta_suggestions = None
         llm_cost = 0.0
@@ -129,7 +129,7 @@ def run_site_audit(
             llm_cost += llm1.cost_usd
             llm_meta = {"provider": llm1.provider, "model": llm1.model}
 
-            # Every page whose title or description the audit will flag — pages
+            # Every page whose title or description the audit will flag, pages
             # with a too-short or too-long description need a rewrite just as
             # much as pages with none, and without one their fix can only be
             # advice rather than a patch.
@@ -154,10 +154,10 @@ def run_site_audit(
                 _progress(agent_run_id, org_id, "meta", f"Rewriting {len(weak_pages[:10])} meta tag(s)")
                 meta_suggestions, llm2 = seo_agent.meta_suggestions(weak_pages, profile_for_ai)
                 llm_cost += llm2.cost_usd
-        except Exception as e:  # noqa: BLE001 — AI extras are best-effort
+        except Exception as e:  # noqa: BLE001. AI extras are best-effort
             logger.info("AI SEO recommendations skipped: %s", e)
 
-        # 5. Fixes — the actionable half. Findings say what is wrong; these say
+        # 5. Fixes, the actionable half. Findings say what is wrong; these say
         #    exactly what to change, written for the stack we detected.
         _progress(agent_run_id, org_id, "fixes", "Preparing fixes")
         built = fix_builder.build_fixes(
@@ -300,7 +300,7 @@ def _verify_file_fix(fix) -> tuple[bool, str]:
     """A FILE fix is done when the file is actually served from the site root."""
     status, body = crawler.fetch_text(fix["targetUrl"])
     if status != 200:
-        return False, f"Not reachable — {fix['targetUrl']} returned HTTP {status or 'no response'}"
+        return False, f"Not reachable, {fix['targetUrl']} returned HTTP {status or 'no response'}"
     if not body.strip():
         return False, f"{fix['targetUrl']} is empty"
     if fix["findingCode"] == "indexnow_key" and body.strip() != (fix["after"] or "").strip():
@@ -315,7 +315,7 @@ def verify_fixes(self, org_id: str, audit_id: str) -> dict:
     """Re-check applied fixes against the live site and record the verdict.
 
     Nothing is marked VERIFIED because we wrote it or because the user said they
-    did — only because the site now says so. The same audit rule that raised the
+    did, only because the site now says so. The same audit rule that raised the
     finding decides whether it is gone, so verification cannot drift from
     detection.
     """

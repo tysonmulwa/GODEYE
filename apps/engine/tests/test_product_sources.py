@@ -1,8 +1,8 @@
 """Finding a shop's products by the cheapest route it offers.
 
 The behaviour worth protecting is the verdict, not the count. "Nothing found"
-means two different things — a storefront we cannot read without a browser, and
-a site that does not sell anything — and only one of them is worth retrying.
+means two different things, a storefront we cannot read without a browser, and
+a site that does not sell anything, and only one of them is worth retrying.
 """
 
 from __future__ import annotations

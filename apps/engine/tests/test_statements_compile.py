@@ -1,14 +1,14 @@
 """Every write the scheduler makes, compiled against the real tables.
 
 Twice now a statement named a column its SQLAlchemy table did not define, and
-both times it shipped. SQLAlchemy does not ignore an unknown name — it raises
-CompileError — so the failure lands wherever that statement runs.
+both times it shipped. SQLAlchemy does not ignore an unknown name, it raises
+CompileError, so the failure lands wherever that statement runs.
 
 The worst one was in _finish. The post published, then recording it raised,
 the transaction rolled back, and task_acks_late redelivered the message. The
 post published again. And again. From outside that looked like duplicate
 posts, a status stuck on PROCESSING, and connection errors that never
-cleared — none of which pointed at a mistyped column name.
+cleared, none of which pointed at a mistyped column name.
 
 Compiling is enough to catch it and needs no database. Every test here would
 have failed on the code that shipped.

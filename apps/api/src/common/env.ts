@@ -50,7 +50,7 @@ function url(value: string | undefined, fallback: string): string {
  * Every one of these used to fall back to http://localhost:4000, so a
  * deployment that forgot one variable sent live customers to a callback on
  * their own laptop. Deriving from API_URL means production is right by
- * default and the variable exists only to override it — which some platforms
+ * default and the variable exists only to override it, which some platforms
  * need, since the URL must match what is registered with them exactly.
  */
 function callbackUrl(platform: string, override: string | undefined): string {
@@ -67,7 +67,7 @@ function callbackUrl(platform: string, override: string | undefined): string {
 /**
  * Registrable domain, used to decide whether two URLs are "same site".
  * Compares the last two labels, which is right for domains like
- * godeyeautomation.com but not for multi-part TLDs (foo.co.uk) — those would be
+ * godeyeautomation.com but not for multi-part TLDs (foo.co.uk), those would be
  * treated as cross-site, which is the safe direction to be wrong in.
  */
 function site(rawUrl: string): string {
@@ -96,7 +96,7 @@ export const env = {
   engineInternalSecret: process.env.ENGINE_INTERNAL_SECRET ?? "dev-engine-secret",
   /**
    * True when the browser would treat an API call from the web app as
-   * cross-site — which forces the session cookie to SameSite=None, and means
+   * cross-site, which forces the session cookie to SameSite=None, and means
    * browsers blocking third-party cookies will drop it. Serving both from one
    * registrable domain (app + api on godeyeautomation.com) makes this false and
    * allows the stricter, CSRF-protective Lax.
@@ -130,7 +130,7 @@ export const env = {
     redirectUri: callbackUrl("linkedin", process.env.LINKEDIN_REDIRECT_URI),
   },
   /**
-   * Paystack — the only payment provider. It is the one that carries Apple Pay
+   * Paystack, the only payment provider. It is the one that carries Apple Pay
    * for this merchant, and running a second processor alongside it would let a
    * workspace hold two live subscriptions for the same plan.
    *
@@ -145,7 +145,7 @@ export const env = {
    */
   paystack: {
     // Trimmed: a key pasted into a hosting dashboard often carries a trailing
-    // space, and it is used both as a bearer token and as an HMAC key — the
+    // space, and it is used both as a bearer token and as an HMAC key, the
     // second would fail every webhook signature with no hint as to why.
     secretKey: (process.env.PAYSTACK_SECRET_KEY ?? "").trim(),
     publicKey: (process.env.PAYSTACK_PUBLIC_KEY ?? "").trim(),
@@ -174,7 +174,7 @@ export const env = {
     /**
      * The currency a one-off month is charged in. KES by default, because
      * M-Pesa settles in shillings and a transaction carries exactly one
-     * currency — so the wallet channels and the price have to agree.
+     * currency, so the wallet channels and the price have to agree.
      */
     oneOffCurrency: (process.env.PAYSTACK_ONEOFF_CURRENCY ?? "KES").trim().toUpperCase(),
     /**
@@ -201,7 +201,7 @@ export const env = {
     redirectUri: callbackUrl("tiktok", process.env.TIKTOK_REDIRECT_URI),
   },
   /**
-   * Instagram API with Instagram Login — a separate Meta app product that
+   * Instagram API with Instagram Login, a separate Meta app product that
    * publishes to an Instagram Business/Creator account with NO linked Facebook
    * Page, which the Facebook-Login path requires. Kept apart from `meta`
    * because it has its own app credentials, OAuth host and API host.

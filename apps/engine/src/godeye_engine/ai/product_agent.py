@@ -2,7 +2,7 @@
 
 The interesting constraint is not tone, it is what may lawfully be said. A
 shop selling into the EU or UK cannot announce a discount without stating the
-30-day low, and cannot invent scarcity at all — and an imported catalogue
+30-day low, and cannot invent scarcity at all, and an imported catalogue
 supplies neither a price history nor a stock count. So the model is told what
 it must not reach for, and then the finished text is checked against the same
 rules deterministically, because being told is not the same as complying.
@@ -45,13 +45,13 @@ Never write any of the following. They are not stylistic preferences; each is
 prohibited by consumer law somewhere these posts will be read, and the shop
 carries the consequence.
 
-1. Any price reduction, discount, saving or sale claim — "20% off", "now
+1. Any price reduction, discount, saving or sale claim, "20% off", "now
    only", "save €30", "sale now on", "RRP". Announcing a reduction legally
    requires stating the lowest price of the previous 30 days in the EU and UK,
    and that history does not exist here. If you are given a recorded former
    price you may state it once as a plain fact, and only in the words allowed
    there; you are given it precisely when that is lawful for this shop.
-2. Any claim of limited stock or limited time — "only 3 left", "almost gone",
+2. Any claim of limited stock or limited time, "only 3 left", "almost gone",
    "selling fast", "hurry", "ends tonight", "while stocks last", "act now".
    Falsely stating limited availability is blacklisted outright. You are not
    given a stock count or a deadline, so any such claim would be invented.
@@ -59,7 +59,7 @@ carries the consequence.
    reviews, ratings or customer counts.
 
 Write the post someone could act on without opening the link. When you are
-given sizes, colours or a category, say them — those answer "will it fit me"
+given sizes, colours or a category, say them, those answer "will it fit me"
 and "does it come in black", and leaving them out makes the reader click to
 find out. Include the link if one is given.
 
@@ -217,7 +217,7 @@ def generate(product: dict[str, Any], profile: dict[str, Any], angle_index: int 
         try:
             llm = provider.complete(SYSTEM_PROMPT, prompt)
             data = _parse(llm.text)
-        except Exception as e:  # noqa: BLE001 — a plain post beats no post
+        except Exception as e:  # noqa: BLE001, a plain post beats no post
             logger.warning("Product copy generation failed: %s: %s", type(e).__name__, e)
             break
 

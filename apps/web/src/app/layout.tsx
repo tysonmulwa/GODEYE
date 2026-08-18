@@ -11,11 +11,11 @@ const michroma = Michroma({ subsets: ["latin"], weight: "400", variable: "--font
 
 export const metadata: Metadata = {
   // Everything below resolves against this, so a relative canonical or og:url
-  // still comes out absolute — which is the only form either is read in.
+  // still comes out absolute, which is the only form either is read in.
   metadataBase: new URL(SITE_URL),
   title: { default: SITE_NAME, template: `%s · ${SITE_NAME}` },
   description: SITE_DESCRIPTION,
-  // Says which address is the real one when a page is reachable several ways —
+  // Says which address is the real one when a page is reachable several ways,
   // with and without a trailing slash, with tracking parameters, http and
   // https. Without it those variants compete with each other.
   alternates: { canonical: "/" },
@@ -55,7 +55,7 @@ const organizationJsonLd = {
  * software, price or plan, so nothing could be shown as a product result. The
  * offers are built from the same catalogue that seeds the database and renders
  * the pricing page, so a price cannot be advertised here that nobody is
- * charged — which is the failure mode worth engineering against, since it is
+ * charged, which is the failure mode worth engineering against, since it is
  * both a bad search result and a false claim.
  */
 const softwareJsonLd = {

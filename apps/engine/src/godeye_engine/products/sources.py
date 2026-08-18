@@ -8,7 +8,7 @@ Three routes, tried in order of cost:
   Crawl           Follow the sitemap and on-page links to product pages, then
                   read the structured data each one publishes.
   Rendering       For storefronts that build their catalogue in the browser.
-                  Not done here — this reports that it is needed.
+                  Not done here, this reports that it is needed.
 
 The outcome carries a verdict as well as products, because "nothing found" has
 two very different meanings. A storefront we cannot read without running its
@@ -213,7 +213,7 @@ def import_from_site(url: str, limit: int = MAX_PRODUCT_PAGES) -> ImportResult:
                 detail=(
                     f"{origin} refused the request (HTTP {home.status_code}). Its CDN or "
                     f"firewall is turning away automated traffic. Allow the user agent "
-                    f"'{USER_AGENT}' through, and the import will work — GODEYE identifies "
+                    f"'{USER_AGENT}' through, and the import will work. GODEYE identifies "
                     f"itself rather than pretending to be a browser, so it can be allowed."
                 ),
             )
@@ -299,7 +299,7 @@ def _read_storefront_api(
         if backend is None:
             return None
         products = supabase_store.fetch_products(backend, origin, limit=limit)
-    except Exception as e:  # noqa: BLE001 — fall through to the other routes
+    except Exception as e:  # noqa: BLE001, fall through to the other routes
         logger.info("Storefront API route failed for %s: %s", origin, type(e).__name__)
         return None
 
@@ -315,7 +315,7 @@ def _read_rendered(origin: str, client: httpx.Client, limit: int) -> ImportResul
     """Try again with a browser. None means keep the plain-fetch verdict.
 
     The links a catalogue needs are themselves drawn by the JavaScript, so the
-    rendered landing page is what supplies them — discovering URLs from the
+    rendered landing page is what supplies them, discovering URLs from the
     empty shell first would find nothing to render.
     """
     from . import render

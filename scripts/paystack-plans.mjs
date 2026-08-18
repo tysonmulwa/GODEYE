@@ -4,7 +4,7 @@
  * Doing this by hand in the dashboard is where the mode trap lives: plan codes
  * belong to whichever side of the Test/Live switch was showing when the plan
  * was made, and a plan built in test mode is simply "not found" to a live key.
- * This script cannot make that mistake — it reads the mode off the key it was
+ * This script cannot make that mistake, it reads the mode off the key it was
  * given and creates the plans in that same mode, because that is the only mode
  * that key can see.
  *
@@ -21,7 +21,7 @@
  *
  * Currency: defaults to USD, which is what the catalogue quotes. Paystack only
  * accepts currencies your account has enabled, and a price in another currency
- * is NOT the dollar figure with a different symbol — 19 KES is not 19 USD. So
+ * is NOT the dollar figure with a different symbol, 19 KES is not 19 USD. So
  * any other currency has to state its own amounts, in major units:
  *
  *   node scripts/paystack-plans.mjs --currency KES --pro 2500 --premium 6400 --vip 26000
@@ -45,7 +45,7 @@ if (!secretKey) {
   console.error(
     "PAYSTACK_SECRET_KEY is not set.\n\n" +
       "  PAYSTACK_SECRET_KEY=sk_live_xxx node scripts/paystack-plans.mjs\n\n" +
-      "Use the same key the API runs with — plans are only visible to keys of\n" +
+      "Use the same key the API runs with, plans are only visible to keys of\n" +
       "the mode they were created in.",
   );
   process.exit(1);
@@ -86,7 +86,7 @@ function amountFor(plan) {
       `--currency ${currency} needs an explicit price per tier, in ${currency}:\n\n` +
         `  node scripts/paystack-plans.mjs --currency ${currency} --pro N --premium N --vip N\n\n` +
         `The catalogue quotes USD, and converting it here would invent a price\n` +
-        `nobody agreed to — a customer would be charged ${plan.priceMonthlyUsd} ${currency}.`,
+        `nobody agreed to, a customer would be charged ${plan.priceMonthlyUsd} ${currency}.`,
     );
   }
   const major = Number(override);
@@ -115,7 +115,7 @@ async function paystack(path, init) {
 const planName = (plan) => `GODEYE ${plan.name}`;
 
 async function main() {
-  console.log(`Paystack key is ${mode} mode — plans will be created in ${mode} mode.\n`);
+  console.log(`Paystack key is ${mode} mode, plans will be created in ${mode} mode.\n`);
 
   // One listing, so a re-run reuses what is already there instead of leaving a
   // dashboard full of near-identical plans nobody can tell apart.
@@ -166,7 +166,7 @@ async function main() {
   for (const [tier, code] of codes) console.log(`PAYSTACK_PLAN_${tier}=${code}`);
   console.log(
     `\nThe API checks all three at boot. Look for "Paystack plan PRO: ..." in the\n` +
-      `deploy log — a rejection there names the variable that is still wrong.`,
+      `deploy log, a rejection there names the variable that is still wrong.`,
   );
 }
 

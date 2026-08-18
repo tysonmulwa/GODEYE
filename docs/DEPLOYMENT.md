@@ -1,6 +1,6 @@
 # Deploying GODEYE to production
 
-GODEYE is **not a single app** — it's a frontend, an API, a Python automation
+GODEYE is **not a single app**, it's a frontend, an API, a Python automation
 engine, and supporting infrastructure. Vercel hosts the frontend; the rest need
 a host that runs persistent processes. This guide covers the whole picture.
 
@@ -17,7 +17,7 @@ a host that runs persistent processes. This guide covers the whole picture.
 
 > Why not all-Vercel? Vercel runs the Next.js frontend and short-lived
 > serverless functions. It cannot run the NestJS WebSocket server, the Celery
-> worker, or the Beat scheduler — those are always-on processes. Put the web on
+> worker, or the Beat scheduler, those are always-on processes. Put the web on
 > Vercel and the two backend services on a container host. **Railway is the
 > simplest** because one project can hold the API, the engine's three processes,
 > and Redis together.
@@ -27,21 +27,21 @@ a host that runs persistent processes. This guide covers the whole picture.
 Deploy the infrastructure first (DB, Redis, storage), then the API and engine,
 then the web (it needs the API's public URL).
 
-### 1. Secrets — generate fresh ones for production
+### 1. Secrets, generate fresh ones for production
 
 Do **not** reuse the dev values in `.env`. Generate new ones:
 
 ```bash
 # JWT_ACCESS_SECRET, JWT_REFRESH_SECRET, ENGINE_INTERNAL_SECRET
 openssl rand -hex 32
-# TOKEN_ENCRYPTION_KEY — must be exactly 32 bytes hex (64 chars)
+# TOKEN_ENCRYPTION_KEY, must be exactly 32 bytes hex (64 chars)
 openssl rand -hex 32
 ```
 
-`TOKEN_ENCRYPTION_KEY` encrypts every stored platform credential — if you lose
+`TOKEN_ENCRYPTION_KEY` encrypts every stored platform credential, if you lose
 or change it, all existing connections become undecryptable. Store it safely.
 
-### 2. Database — Supabase (already done)
+### 2. Database. Supabase (already done)
 
 Use the same Supabase project, or create a dedicated production one. Apply
 migrations against it:
@@ -54,63 +54,63 @@ DATABASE_URL="<prod pooler url>" pnpm --filter @godeye/db seed   # seeds plans +
 Use the **IPv4 session pooler** URL (`aws-0-<region>.pooler.supabase.com:5432`),
 URL-encoding any special characters in the password.
 
-### 3. Redis — Upstash
+### 3. Redis. Upstash
 
 Create a database at upstash.com → copy the `rediss://` URL → this is `REDIS_URL`
 for both the API and the engine.
 
-### 4. Object storage — Supabase Storage or Cloudflare R2
+### 4. Object storage. Supabase Storage or Cloudflare R2
 
 Create a bucket and set `STORAGE_BACKEND=s3` plus `S3_ENDPOINT`, `S3_ACCESS_KEY`,
 `S3_SECRET_KEY`, `S3_BUCKET`, `S3_REGION`, and `S3_PUBLIC_URL` (the public base
 for reading objects).
 
 **`STORAGE_BACKEND` must be `s3` in production.** The `local` backend stores media
-on the container's own filesystem — it disappears on every redeploy, isn't shared
+on the container's own filesystem, it disappears on every redeploy, isn't shared
 between the API and the worker, and its URLs aren't reachable by the platforms.
 Uploaded photos still publish to Facebook/Telegram (the engine uploads the bytes),
 but **Instagram only accepts a public `image_url`**, so IG images require real
 object storage with public read.
 
-### 5. API — Railway (or Render/Fly)
+### 5. API on Railway (or Render/Fly)
 
 The repo ships `apps/api/Dockerfile`. **The build context is the repo root** (the
 pnpm workspace must be visible), so keep the service's root directory at the repo
-root and point it at the Dockerfile — do **not** set root to `apps/api`.
+root and point it at the Dockerfile, do **not** set root to `apps/api`.
 
 - New service from the GitHub repo → set **Dockerfile path** `apps/api/Dockerfile`.
 - Start command: none needed (the image runs `node dist/main.js`).
 - **Env vars:** `NODE_ENV=production`, `DATABASE_URL`, `REDIS_URL`, all `JWT_*`,
   `TOKEN_ENCRYPTION_KEY`, `ENGINE_INTERNAL_SECRET`, `ENGINE_URL` (the engine's
-  private URL), `WEB_URL` (**your Vercel domain** — drives CORS + the session
+  private URL), `WEB_URL` (**your Vercel domain**, drives CORS + the session
   cookie), the `S3_*` set, and any platform keys (`REDDIT_*`, `META_*`,
   `LINKEDIN_*`, `PAYSTACK_*`).
-- `NODE_ENV=production` is required — it switches the refresh cookie to
+- `NODE_ENV=production` is required, it switches the refresh cookie to
   `SameSite=None; Secure` so login works across the Vercel↔API domain split.
 
-### 6. Engine — one image, three services
+### 6. Engine, one image, three services
 
 `apps/engine/Dockerfile` (context = repo root, includes ffmpeg). Deploy it as
 **three services sharing the same image**, overriding the start command on each:
 
 ```bash
-# 1. api — receives enqueue calls from NestJS (this is the only one with a port)
+# 1. api, receives enqueue calls from NestJS (this is the only one with a port)
 uvicorn godeye_engine.api:app --host 0.0.0.0 --port $PORT   # image default
-# 2. worker — runs the AI/publish jobs
+# 2. worker, runs the AI/publish jobs
 celery -A godeye_engine.celery_app worker --loglevel=info
-# 3. beat — fires due posts / autopilot every 30s
+# 3. beat, fires due posts / autopilot every 30s
 celery -A godeye_engine.celery_app beat --loglevel=info
 ```
 
 All three need the same env: `DATABASE_URL`, `REDIS_URL`, `ENGINE_INTERNAL_SECRET`
 (must match the API), an LLM key (`ANTHROPIC_API_KEY` or `OPENAI_API_KEY`),
-`GOOGLE_API_KEY` / image keys, and the `S3_*` set. Leave `FFMPEG_PATH` blank —
+`GOOGLE_API_KEY` / image keys, and the `S3_*` set. Leave `FFMPEG_PATH` blank,
 ffmpeg is on the image and found via PATH.
 
-**Without the worker and beat services nothing publishes** — the API accepts the
+**Without the worker and beat services nothing publishes**, the API accepts the
 schedule but no process ever dispatches it.
 
-### 7. Web — Vercel
+### 7. Web. Vercel
 
 - Import the GitHub repo. **Root Directory: `apps/web`** (Vercel then installs
   the pnpm workspace from the repo root automatically; `@godeye/shared` is
@@ -129,11 +129,11 @@ Put the web app and the API on the **same registrable domain**:
 | web | `godeyeautomation.com` | CNAME -> `cname.vercel-dns.com` (proxy **off**) |
 | api | `api.godeyeautomation.com` | CNAME -> the Railway-provided target (proxy **off**) |
 
-Set **DNS only** (grey cloud), not Cloudflare's orange-cloud proxy — Vercel and
+Set **DNS only** (grey cloud), not Cloudflare's orange-cloud proxy. Vercel and
 Railway terminate TLS themselves, and proxying causes redirect loops.
 
 This is not cosmetic. On split domains (`*.vercel.app` + `*.up.railway.app`)
-the session cookie is **third-party**, and browsers that block those drop it —
+the session cookie is **third-party**, and browsers that block those drop it,
 the session is lost on every page reload. One domain makes it first-party. The
 API detects this automatically by comparing `WEB_URL` and `API_URL`, and uses
 the stricter `SameSite=Lax` when they match, so **set `API_URL` too**.
@@ -146,7 +146,7 @@ the stricter `SameSite=Lax` when they match, so **set `API_URL` too**.
   - `REDDIT_REDIRECT_URI` = `https://<api>/connections/reddit/callback`
   - `META_REDIRECT_URI` = `https://<api>/connections/meta/callback`
   - `LINKEDIN_REDIRECT_URI` = `https://<api>/connections/linkedin/callback`
-- `GET https://<api>/health` reports `api.payments` — whether the secret key
+- `GET https://<api>/health` reports `api.payments`, whether the secret key
   and each plan code are set on *that* service. Check it before debugging an
   upgrade button: a key set in the wrong Railway service looks exactly like a
   broken checkout from the browser.

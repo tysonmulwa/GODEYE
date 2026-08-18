@@ -1,4 +1,4 @@
-"""Publisher base class — shared retry/backoff and result shape."""
+"""Publisher base class, shared retry/backoff and result shape."""
 
 from __future__ import annotations
 
@@ -30,7 +30,7 @@ def download_media(url: str) -> tuple[bytes, str] | None:
         response = httpx.get(url, timeout=30, follow_redirects=True)
     except httpx.HTTPError as e:
         # None is the caller's signal to fall back, but on its own it says
-        # nothing about why — which left a failed fetch indistinguishable from
+        # nothing about why, which left a failed fetch indistinguishable from
         # media that was never there.
         logger.warning("Media fetch failed for %s: %s: %s", url, type(e).__name__, e)
         return None
@@ -46,7 +46,7 @@ def slideshow_from_payload(
     """Render a photo post into a video carrying the workspace's track.
 
     None of these APIs can add music to a post after the fact, and each
-    network's own catalogue is reachable only from inside its app — so a photo
+    network's own catalogue is reachable only from inside its app, so a photo
     post published by an automation is silent unless the audio is already in
     the file. Rendering it here is what makes an unattended post arrive with
     sound.
@@ -90,7 +90,7 @@ def slideshow_from_payload(
             platform, length, len(images), len(music[0]) / 1_048_576,
         )
         return slideshow.build_slideshow(images, music[0], target_sec=length)
-    except Exception as e:  # noqa: BLE001 — a silent post beats no post
+    except Exception as e:  # noqa: BLE001, a silent post beats no post
         logger.warning(
             "%s slideshow build failed, posting photos instead: %s: %s",
             platform, type(e).__name__, e,
@@ -101,7 +101,7 @@ def slideshow_from_payload(
 def store_rendered_reel(video_bytes: bytes, org_id: str | None, platform: str) -> str | None:
     """Put a rendered Reel somewhere the network can fetch it.
 
-    Only Instagram needs this — Facebook and TikTok both accept the bytes —
+    Only Instagram needs this. Facebook and TikTok both accept the bytes,
     and it is why a render alone is not enough there.
 
     Returns None rather than raising, so a storage problem costs the sound
@@ -123,11 +123,11 @@ def store_rendered_reel(video_bytes: bytes, org_id: str | None, platform: str) -
 
 
 class PublishError(Exception):
-    """Permanent failure — do not retry (bad credentials, invalid content...)."""
+    """Permanent failure, do not retry (bad credentials, invalid content...)."""
 
 
 class TransientPublishError(Exception):
-    """Temporary failure — safe to retry (rate limit, 5xx, network)."""
+    """Temporary failure, safe to retry (rate limit, 5xx, network)."""
 
 
 @dataclass
@@ -146,11 +146,11 @@ class PostPayload:
     video_urls: list[str] | None = None  # videos (adapters that can't post video ignore these)
     # The workspace's licensed background track, when it has one. Photos are
     # rendered into a slideshow carrying it, rather than published as a silent
-    # still post — none of these APIs offer a way to add music afterwards, and
+    # still post, none of these APIs offer a way to add music afterwards, and
     # each network's own catalogue is reachable only from inside its app.
     music_url: str | None = None
-    # Owning workspace. Instagram will not accept an upload — it fetches the
-    # video from a URL — so a rendered Reel has to be stored somewhere public
+    # Owning workspace. Instagram will not accept an upload, it fetches the
+    # video from a URL, so a rendered Reel has to be stored somewhere public
     # first, under this workspace's prefix.
     org_id: str | None = None
     # How long that slideshow runs, chosen when the post was written.
@@ -158,7 +158,7 @@ class PostPayload:
     # Whether photos are rendered to video at all. TikTok ignores it: its API
     # takes no still post that can carry audio, so there is nothing to choose.
     # Everywhere else a carousel is a real format, and this is the choice
-    # between it and a Reel. Always subject to a track existing — a silent
+    # between it and a Reel. Always subject to a track existing, a silent
     # Reel is worse than the carousel it would replace.
     render_as_video: bool = True
 

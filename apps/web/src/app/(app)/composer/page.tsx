@@ -81,8 +81,8 @@ export default function ComposerPage() {
     queryKey: ["connections"],
     queryFn: () => api("/connections"),
   });
-  // A TikTok post with no track publishes silently. Nothing said so — not the
-  // composer, not the result — and the brand kit is per workspace, so having
+  // A TikTok post with no track publishes silently. Nothing said so, not the
+  // composer, not the result, and the brand kit is per workspace, so having
   // set a track on one says nothing about the one being posted from.
   const { data: brandKit } = useQuery<{ musicUrl: string | null }>({
     queryKey: ["brand-kit"],
@@ -98,7 +98,7 @@ export default function ComposerPage() {
     ),
   ];
 
-  // A single destination is the common case — pre-select it so the user can
+  // A single destination is the common case, pre-select it so the user can
   // generate straight away instead of hunting for a click target.
   useEffect(() => {
     const active = connections.filter((c) => c.status === "ACTIVE");

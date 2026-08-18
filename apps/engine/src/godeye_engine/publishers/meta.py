@@ -1,4 +1,4 @@
-"""Meta publishers — Facebook Page feed + Instagram Business (Graph API)."""
+"""Meta publishers. Facebook Page feed + Instagram Business (Graph API)."""
 
 from __future__ import annotations
 
@@ -106,7 +106,7 @@ class FacebookPublisher(BasePublisher):
     def _reel_bytes(self, payload: PostPayload) -> bytes | None:
         """Photos rendered into a Reel with the workspace's track, or None.
 
-        A photo album stays an album unless a track exists — a silent Reel is
+        A photo album stays an album unless a track exists, a silent Reel is
         worse than the carousel it would replace, and it reaches a different
         audience. An already-attached video keeps going to the feed, where the
         user put it deliberately.
@@ -227,7 +227,7 @@ IG_GRAPH = "https://graph.instagram.com/v21.0"
 # How long to wait for Instagram to ingest the media before giving up, and how
 # often to ask. Images usually finish in a few seconds. A Reel is a minute of
 # 1080x1920 that Instagram downloads and transcodes itself, and sixty seconds
-# was chosen when nothing here published video — too short to survive one.
+# was chosen when nothing here published video, too short to survive one.
 CONTAINER_TIMEOUT_SEC = 60
 REEL_CONTAINER_TIMEOUT_SEC = 300
 CONTAINER_POLL_SEC = 3
@@ -240,11 +240,11 @@ class InstagramPublisher(BasePublisher):
     """IG content publishing is a 2-step flow and REQUIRES media.
 
     Two connection shapes exist:
-      * Facebook Login  — a page token, called against the Facebook Graph host.
+      * Facebook Login , a page token, called against the Facebook Graph host.
         Legacy: GODEYE no longer requests instagram_content_publish, so no new
         connections take this shape and existing ones stop working once the
         token is re-authorized. Kept so they keep publishing until then.
-      * Instagram Login — the account's own token and graph.instagram.com, and
+      * Instagram Login, the account's own token and graph.instagram.com, and
         the only route offered now.
     `authMethod` on the stored credentials picks between them.
     """
@@ -255,7 +255,7 @@ class InstagramPublisher(BasePublisher):
     _PERMISSION_HINT = (
         "This Instagram account was connected through Facebook, which GODEYE no "
         "longer has permission to publish with. Reconnect it from Connections "
-        "using the Instagram button — it takes a few seconds and needs no "
+        "using the Instagram button, it takes a few seconds and needs no "
         "Facebook Page."
     )
 
@@ -268,7 +268,7 @@ class InstagramPublisher(BasePublisher):
         try:
             body = response.json().get("error", {})
             code, subcode = body.get("code"), body.get("error_subcode")
-        except Exception:  # noqa: BLE001 — a non-JSON body just isn't a scope error
+        except Exception:  # noqa: BLE001, a non-JSON body just isn't a scope error
             return error
         if code in (10, 190, 200) or subcode == 33:
             return PublishError(f"{error}. {self._PERMISSION_HINT}")
@@ -278,7 +278,7 @@ class InstagramPublisher(BasePublisher):
         # The message always said "image or video"; only images were accepted.
         if not payload.media_urls and not payload.video_urls:
             raise PublishError(
-                "Instagram requires an image or video — attach media to this post"
+                "Instagram requires an image or video, attach media to this post"
             )
         ig_user_id = credentials["igUserId"]
         legacy = credentials.get("authMethod") != "instagram_login"
@@ -335,7 +335,7 @@ class InstagramPublisher(BasePublisher):
 
         An already-attached video is used directly. Otherwise photos are
         rendered into one carrying the workspace's track, the same way TikTok
-        posts are — a still carousel cannot have sound, and Instagram's own
+        posts are, a still carousel cannot have sound, and Instagram's own
         audio library is reachable only from inside the app.
 
         Instagram will not accept an upload for Reels; it fetches video_url
@@ -357,7 +357,7 @@ class InstagramPublisher(BasePublisher):
         Instagram needs each image uploaded as its own container flagged
         is_carousel_item, and then a CAROUSEL container referencing them. Each
         child must finish ingesting before the parent is created, hence the wait
-        per child — the same "Media ID is not available" trap as a single post.
+        per child, the same "Media ID is not available" trap as a single post.
         """
         child_ids: list[str] = []
         for url in payload.media_urls[:CAROUSEL_LIMIT]:
@@ -389,7 +389,7 @@ class InstagramPublisher(BasePublisher):
 
         Container creation is asynchronous: Instagram downloads and processes the
         image before it can be published. Publishing too early fails with
-        "Media ID is not available" (code 9007) — flagged is_transient: false
+        "Media ID is not available" (code 9007), flagged is_transient: false
         even though it resolves on its own, so it must be waited out rather than
         retried as a whole post.
 
@@ -424,7 +424,7 @@ class InstagramPublisher(BasePublisher):
                 )
             time.sleep(CONTAINER_POLL_SEC)
 
-        # Still processing — worth another attempt rather than failing the post.
+        # Still processing, worth another attempt rather than failing the post.
         raise TransientPublishError(
             f"Instagram media still {last_status} after {timeout:.0f}s"
         )

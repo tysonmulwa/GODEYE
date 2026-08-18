@@ -1,4 +1,4 @@
-"""Content Agent unit tests — prompt assembly, parsing, limit enforcement."""
+"""Content Agent unit tests, prompt assembly, parsing, limit enforcement."""
 
 import json
 

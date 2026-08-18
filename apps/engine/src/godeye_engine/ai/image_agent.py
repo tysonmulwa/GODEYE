@@ -1,4 +1,4 @@
-"""Image Agent — turns a business profile + brief into a strong image prompt.
+"""Image Agent, turns a business profile + brief into a strong image prompt.
 
 Uses the text LLM to expand a short brief into a detailed, on-brand image
 generation prompt, then hands that to the image provider.

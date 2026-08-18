@@ -43,7 +43,7 @@ export class CryptoService {
     return JSON.parse(this.decrypt(payload)) as T;
   }
 
-  /** SHA-256 hex digest — used to store refresh tokens without their plaintext. */
+  /** SHA-256 hex digest, used to store refresh tokens without their plaintext. */
   sha256(value: string): string {
     return createHash("sha256").update(value).digest("hex");
   }

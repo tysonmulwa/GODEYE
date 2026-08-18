@@ -5,7 +5,7 @@ import { ApiExcludeController } from "@nestjs/swagger";
  * Serves platform domain-verification files from the API host.
  *
  * These are normally hosted on the marketing site, but a platform verifies the
- * exact host it is given — and the OAuth redirect URI points at the API
+ * exact host it is given, and the OAuth redirect URI points at the API
  * (api.<domain>), not the web app. Serving the token here lets that host be
  * verified without standing up a second static site.
  *
@@ -17,7 +17,7 @@ import { ApiExcludeController } from "@nestjs/swagger";
 export class SiteVerificationController {
   /**
    * Served at the host root and under the OAuth callback path, because TikTok
-   * checks the file directly beneath whichever URL prefix was registered — and
+   * checks the file directly beneath whichever URL prefix was registered, and
    * registering the callback URL as the prefix is the natural thing to do.
    */
   @Get(["tiktok:token.txt", "connections/tiktok/callback/tiktok:token.txt"])
@@ -30,7 +30,7 @@ export class SiteVerificationController {
       .map((t) => t.trim())
       .filter(Boolean);
     // Match against the filename so the route can't be used to fish for the
-    // token — you have to already know it.
+    // token, you have to already know it.
     if (!allowed.includes(token)) {
       throw new NotFoundException("Not found");
     }

@@ -1,10 +1,10 @@
 /**
- * GODEYE brand marks — the all-seeing eye set in a triangle.
+ * GODEYE brand marks, the all-seeing eye set in a triangle.
  *
  * `GodeyeMark`    raw stroke glyph in currentColor. Tuned to stay legible at
  *                 ~20px, so it carries only the triangle, eye and pupil.
  * `GodeyeEmblem`  the full crest: double triangle, radiating rays and an outer
- *                 ring. Detail only survives above ~64px — use it for hero
+ *                 ring. Detail only survives above ~64px, use it for hero
  *                 placements (auth pages, marketing), never in dense chrome.
  * `GodeyeBadge`   the mark on a gradient tile, for app chrome.
  * `GodeyeLockup`  badge + wordmark.
@@ -88,7 +88,7 @@ export function GodeyeEmblem({
           opacity={compact ? 0.9 : 0.65}
         />
 
-        {/* Double triangle — the outer keeps weight, the inner adds the etched line */}
+        {/* Double triangle, the outer keeps weight, the inner adds the etched line */}
         <path d="M100 30 L166 148 L34 148 Z" strokeWidth={compact ? 6 : 3.4} />
         <path
           d="M100 48 L150 140 L50 140 Z"
@@ -96,7 +96,7 @@ export function GodeyeEmblem({
           opacity={compact ? 0.8 : 0.55}
         />
 
-        {/* Circuit web — the geometry that makes this read as tech rather than
+        {/* Circuit web, the geometry that makes this read as tech rather than
             occult. Compact keeps only the trusses that survive ~26px. */}
         {compact ? (
           <g strokeWidth="2.6" opacity="0.7">
@@ -107,7 +107,7 @@ export function GodeyeEmblem({
           <g strokeWidth="1" opacity="0.4">
             <path d="M100 30 L100 140 M34 148 L150 140 M166 148 L50 140" />
             <path d="M50 140 L100 48 L150 140" />
-            {/* Corner trusses. Nothing between y 84-132 across the centre —
+            {/* Corner trusses. Nothing between y 84-132 across the centre,
                 the eye lives there and lines would cut through it. */}
             <path d="M34 148 L62 126 M166 148 L138 126" />
           </g>
@@ -202,7 +202,7 @@ export function GodeyeSpinner({
  * The whole screen while the app works out who you are.
  *
  * This is the first thing anyone sees on the URL, before any page has decided
- * what to render — so it was a generic grey spinner on white, which belongs to
+ * what to render, so it was a generic grey spinner on white, which belongs to
  * no product in particular. The crest costs the same and says whose app is
  * loading.
  *
@@ -229,7 +229,7 @@ export function GodeyeCrest({
   wordClass?: string;
   /**
    * The emblem is narrower than the wordmark, so centring the two leaves the
-   * emblem visibly indented when the crest sits in a left-aligned column —
+   * emblem visibly indented when the crest sits in a left-aligned column,
    * which is how it looked on the homepage. Centre it on centred layouts,
    * start it on left-aligned ones, so the two always share an edge.
    */

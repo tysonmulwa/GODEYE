@@ -1,4 +1,4 @@
-"""Fix generation, stack detection, and IndexNow — the apply/announce half of SEO."""
+"""Fix generation, stack detection, and IndexNow, the apply/announce half of SEO."""
 
 import pytest
 
@@ -60,7 +60,7 @@ def test_detect_platform(html, expected):
 
 
 def test_woocommerce_wins_over_wordpress():
-    """WooCommerce sites are WordPress sites — the more specific answer is the
+    """WooCommerce sites are WordPress sites, the more specific answer is the
     useful one, because the SEO fields live in a different place."""
     html = '<link href="/wp-content/plugins/woocommerce/x.css"><script src="/wp-includes/a.js">'
     assert crawler.detect_platform(html) == "woocommerce"
@@ -275,7 +275,7 @@ def test_indexnow_key_fix_is_included_when_a_key_is_given():
     assert len(built) == 1
     assert built[0].file_path == "abc123.txt"
     assert built[0].after == "abc123"
-    # We must not imply this reaches Google — it does not.
+    # We must not imply this reaches Google, it does not.
     assert "Google" in built[0].guidance
 
 

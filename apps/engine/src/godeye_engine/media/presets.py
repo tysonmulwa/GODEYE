@@ -1,4 +1,4 @@
-"""Image size presets — mirror of packages/shared/src/image-presets.ts."""
+"""Image size presets, mirror of packages/shared/src/image-presets.ts."""
 
 from __future__ import annotations
 

@@ -1,4 +1,4 @@
-"""Scheduler — Celery Beat scans due posts; publish tasks push them to platforms."""
+"""Scheduler. Celery Beat scans due posts; publish tasks push them to platforms."""
 
 from __future__ import annotations
 
@@ -48,7 +48,7 @@ PUBLISH_HARD_LIMIT_SEC = 10 * 60
 # a post can wait in the queue behind others for as long as they take. Counting
 # that wait as abandonment re-queued live work.
 #
-# Thirty minutes leaves room for a full queue of slow publishes — an Instagram
+# Thirty minutes leaves room for a full queue of slow publishes, an Instagram
 # Reel alone can spend five minutes being transcoded. The claim check in
 # publish_post is what actually prevents a duplicate; this only decides how
 # long a genuinely lost post waits.
@@ -81,11 +81,11 @@ APPROVAL_SATISFIED_STATUSES = ("APPROVED", "SCHEDULED", "PUBLISHED")
 
 
 def due_posts_query(now, stale_lock):
-    """Selects due, unclaimed posts — approval-gated orgs only release reviewed content.
+    """Selects due, unclaimed posts, approval-gated orgs only release reviewed content.
 
     A workspace whose trial ran out unpaid publishes nothing. Without this line
     a customer could queue a month of posts during the 24 hours and have them
-    go out for free long after the workspace went read-only — the paywall would
+    go out for free long after the workspace went read-only, the paywall would
     hold in the browser and leak everywhere it actually costs money.
     """
     return (
@@ -132,7 +132,7 @@ def dispatch_due_posts() -> int:
 
     for post_id in ids:
         # The claim time travels with the task. If this post gets re-queued
-        # before the task runs, its lockedAt moves and this copy stands down —
+        # before the task runs, its lockedAt moves and this copy stands down,
         # see publish_post.
         publish_post.delay(post_id, claimed_at=now.isoformat())
     if ids:
@@ -157,7 +157,7 @@ def publish_post(scheduled_post_id: str, claimed_at: str | None = None) -> dict:
         # PROCESSING is set when the row is claimed, not when a worker picks
         # the task up, so a post can sit in the queue behind others while
         # already marked as being worked on. The reaper reads that wait as
-        # abandonment, re-queues it, and then two copies of this task exist —
+        # abandonment, re-queues it, and then two copies of this task exist,
         # both find PROCESSING and both publish. That is how the same product
         # went out twice, thirteen minutes apart.
         #
@@ -237,7 +237,7 @@ def publish_post(scheduled_post_id: str, claimed_at: str | None = None) -> dict:
         return {"status": "waiting_for_image"}
 
     # A post with nothing attached cannot go to these two at all, and retrying
-    # it changes nothing — the same content comes back with the same nothing,
+    # it changes nothing, the same content comes back with the same nothing,
     # which is why "reschedule the failed post" kept failing identically. If
     # the workspace imported a catalogue, borrow a photograph from it here,
     # which is the last moment anything can still be done about it.
@@ -271,7 +271,7 @@ def publish_post(scheduled_post_id: str, claimed_at: str | None = None) -> dict:
         try:
             credentials = decrypt_credentials(connection["encryptedCredentials"])
         except Exception as e:  # noqa: BLE001
-            # AES-GCM raises InvalidTag, whose str() is empty — a failure with no
+            # AES-GCM raises InvalidTag, whose str() is empty, a failure with no
             # message at all. Almost always TOKEN_ENCRYPTION_KEY differing from
             # the one the API encrypted with, so say that instead of nothing.
             #
@@ -280,7 +280,7 @@ def publish_post(scheduled_post_id: str, claimed_at: str | None = None) -> dict:
             _mark_connection_error(connection["id"])
             raise PublishError(
                 "Could not decrypt the stored credentials for this connection. "
-                "Reconnect the account — it was connected with a different "
+                "Reconnect the account, it was connected with a different "
                 "TOKEN_ENCRYPTION_KEY than this server uses."
             ) from e
         result = get_publisher(platform).publish(credentials, payload)
@@ -347,8 +347,8 @@ def _build_payload(
 def _mark_connection_error(connection_id: str) -> None:
     """Flag a connection as unusable so the UI shows it needs reconnecting.
 
-    Used for failures that can't resolve by retrying — undecryptable
-    credentials, for example — where leaving the row ACTIVE would just fail
+    Used for failures that can't resolve by retrying, undecryptable
+    credentials, for example, where leaving the row ACTIVE would just fail
     every future post silently.
     """
     with get_session() as session:
@@ -401,7 +401,7 @@ def _record_failure(
             #
             # Every permanent failure used to stamp its message here, so the
             # text of whatever went wrong sat on the connection card in red
-            # until a later post happened to succeed — or, in practice, until
+            # until a later post happened to succeed, or, in practice, until
             # the user disconnected and reconnected to be rid of it. The
             # message belongs to the post: ScheduledPost.error above already
             # holds it, and the calendar is where someone looks to find out
@@ -536,12 +536,12 @@ def _finish(
             # A failure stamps the connection with its reason, and nothing used
             # to remove it. So a channel that failed once and published fine
             # ever after still showed the old error on Connections, long after
-            # the calendar had gone quiet — which reads as a broken channel.
+            # the calendar had gone quiet, which reads as a broken channel.
             #
             # A post going out is proof the connection works, so it is the
             # right moment to clear it. ERROR is lifted for the same reason:
             # whatever the objection was, it no longer holds. EXPIRED and
-            # DISCONNECTED are left alone — those say something about the
+            # DISCONNECTED are left alone, those say something about the
             # account rather than about this attempt.
             # Two plain statements rather than one with a CASE. status is a
             # Prisma-owned enum, and a bare 'ACTIVE' inside CASE compiles to
@@ -615,7 +615,7 @@ def reap_stuck_posts() -> dict:
     """Re-queue posts whose worker died between claiming them and publishing.
 
     dispatch_due_posts flips a post to PROCESSING before handing it to a worker.
-    If that worker goes away mid-publish — a deploy is the ordinary way — the
+    If that worker goes away mid-publish, a deploy is the ordinary way, the
     row stays PROCESSING and nothing brings it back. The stale-lock check in
     due_posts_query was meant to, but it is AND-ed with status == PENDING, and
     an abandoned post is never PENDING, so it could not fire. Three posts sat
@@ -625,7 +625,7 @@ def reap_stuck_posts() -> dict:
     that is not PROCESSING, so when Redis eventually redelivers the abandoned
     message it finds the post PUBLISHED and skips instead of posting twice.
     That ordering is why the window here is comfortably past the task's own
-    hard limit — a task still running would otherwise be re-queued underneath
+    hard limit, a task still running would otherwise be re-queued underneath
     itself, and then both copies really would publish.
     """
     now = utcnow()

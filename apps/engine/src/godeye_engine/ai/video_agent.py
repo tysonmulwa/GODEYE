@@ -1,4 +1,4 @@
-"""Video Agent — turns a brief into a structured short-video script.
+"""Video Agent, turns a brief into a structured short-video script.
 
 The script is a list of scenes; each scene carries narration (spoken by TTS),
 a visual prompt (rendered by the image provider), and optional on-screen text.

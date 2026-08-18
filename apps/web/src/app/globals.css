@@ -27,7 +27,7 @@
   --color-accent-border: var(--accent-border);
 }
 
-/* "Engineered" palette — cool gray ramp + one restrained indigo accent */
+/* "Engineered" palette, cool gray ramp + one restrained indigo accent */
 :root {
   --surface: #f6f7f9; /* canvas */
   --surface-2: #ffffff; /* cards */
@@ -59,7 +59,7 @@
   --glass-shadow-lifted: 0 2px 4px rgb(16 19 25 / 0.05), 0 18px 44px -10px rgb(16 19 25 / 0.16);
 
   /* The colour a pane of glass actually samples. Three washes rather than one
-     so the tint changes across the page — a single flat gradient blurs back to
+     so the tint changes across the page, a single flat gradient blurs back to
      something indistinguishable from a solid fill. */
   --wash-1: rgb(99 102 241 / 0.28);
   --wash-2: rgb(56 189 248 / 0.20);
@@ -111,7 +111,7 @@ body {
 }
 
 body {
-  /* The background lives in the glass section below — a shorthand here would
+  /* The background lives in the glass section below, a shorthand here would
      silently reset the washes it paints. */
   color: var(--ink);
   font-feature-settings: "cv02", "cv03", "cv04";
@@ -121,7 +121,7 @@ body {
 }
 
 /* iOS Safari zooms the page whenever a focused form control computes to under
-   16px, and never zooms back out — which is why tapping a field appears to
+   16px, and never zooms back out, which is why tapping a field appears to
    break the layout. The UI is 14px by design, so lift only the controls, and
    only on the narrow viewports where the behaviour exists.
 
@@ -160,7 +160,7 @@ body {
 
 /* A pane of glass.
    backdrop-filter is the whole effect and it is expensive, so it belongs on
-   surfaces that persist — cards, the sidebar, the header — not on every chip.
+   surfaces that persist, cards, the sidebar, the header, not on every chip.
    saturate lifts the colour the blur would otherwise wash out. */
 .glass {
   background: var(--glass);
@@ -191,7 +191,7 @@ body {
 }
 
 /* Pointing at a panel lifts it a little further off the page. Only where a
-   pointer exists — on a touch screen :hover sticks after a tap, so every card
+   pointer exists, on a touch screen :hover sticks after a tap, so every card
    you had touched would stay raised. */
 @media (hover: hover) {
   .glass-hover {

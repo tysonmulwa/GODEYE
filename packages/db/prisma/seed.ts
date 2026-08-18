@@ -6,7 +6,7 @@ const prisma = new PrismaClient();
 
 async function main() {
   // Plans. Defined in @godeye/shared so the database, the public pricing page
-  // and the limits the API enforces cannot drift apart — a marketing page
+  // and the limits the API enforces cannot drift apart, a marketing page
   // promising a number the product refuses is discovered only after payment.
   for (const p of PLANS) {
     await prisma.plan.upsert({
@@ -54,7 +54,7 @@ async function main() {
           website: "https://example.com",
           products: ["Single-origin beans", "Cold brew kits", "Subscriptions"],
           goals: ["Grow Instagram following", "Increase online sales", "Build brand awareness"],
-          brandVoice: "Warm, knowledgeable, a little playful — never corporate.",
+          brandVoice: "Warm, knowledgeable, a little playful, never corporate.",
           competitors: ["Java House", "Artcaffe"],
         },
       },

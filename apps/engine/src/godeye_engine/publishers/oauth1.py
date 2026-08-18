@@ -1,4 +1,4 @@
-"""Minimal OAuth 1.0a (HMAC-SHA1) request signing — used by the X (Twitter) adapter.
+"""Minimal OAuth 1.0a (HMAC-SHA1) request signing, used by the X (Twitter) adapter.
 
 Implements RFC 5849 signing for requests whose body is NOT form-encoded
 (JSON bodies are excluded from the signature base string, per spec).

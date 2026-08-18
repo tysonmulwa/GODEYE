@@ -1,7 +1,7 @@
 """Slideshow assembly, without needing ffmpeg on the machine running the tests.
 
 video.run is the only thing that touches the binary, so faking it leaves the
-real assembly logic — clip count, durations, whether music is attached — under
+real assembly logic, clip count, durations, whether music is attached, under
 test while the command builders are verified separately in test_video_ffmpeg.
 """
 
@@ -37,7 +37,7 @@ def _durations(calls: list[list[str]]) -> list[float]:
 
 def test_a_single_image_clears_tiktoks_minimum_with_room(calls):
     """Autopilot attaches one image per post, so this is the common path. It
-    once produced 3.2s against a 3.0s limit — a margin thinner than the
+    once produced 3.2s against a 3.0s limit, a margin thinner than the
     encoder's own accuracy."""
     slideshow.build_slideshow([b"img"], music=b"mp3")
     held = _durations(calls)[0]
@@ -55,7 +55,7 @@ def test_music_is_attached_as_a_final_pass(calls):
 
 
 def test_without_music_it_is_still_a_video(calls):
-    """Silent, but video — TikTok uploads video by file and photos only by URL
+    """Silent, but video. TikTok uploads video by file and photos only by URL
     from a verified domain, so the caller may still prefer this."""
     assert slideshow.build_slideshow([b"a"], music=None) == b"FAKEMP4"
     assert not any("-shortest" in args for args in calls)
@@ -83,7 +83,7 @@ class TestChosenLength:
             assert slides * each == pytest.approx(target)
 
     def test_images_repeat_to_fill_a_long_target(self, calls, monkeypatch):
-        # Captured as the list is built — the temp directory is gone by the
+        # Captured as the list is built, the temp directory is gone by the
         # time the call returns.
         joined: list[list[str]] = []
         real = video.concat_list_content
@@ -155,7 +155,7 @@ class TestPhotoArrivesAsItIs:
 
     def test_the_photo_is_fitted_whole_rather_than_cropped_to_fill(self):
         """Scaling to cover and cropping takes the top and bottom off a square
-        photo — not the picture the user chose."""
+        photo, not the picture the user chose."""
         foreground = self._chain("[fg]")
         assert "force_original_aspect_ratio=decrease" in foreground
         # The background is deliberately cropped to cover; the photo is not.
@@ -181,7 +181,7 @@ class TestEncodeFitsASmallContainer:
     """x264 was SIGKILLed one second into the first clip on the deployed
     worker. It reserves frame buffers per thread plus a lookahead queue before
     encoding anything, sized from the host's core count rather than the
-    container's share — so the encode has to bound that explicitly."""
+    container's share, so the encode has to bound that explicitly."""
 
     def _commands(self):
         return [

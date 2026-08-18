@@ -36,7 +36,7 @@ export class WebhooksController {
     throw new BadRequestException("Verification failed");
   }
 
-  /** Meta event delivery — HMAC-validated with the app secret. */
+  /** Meta event delivery. HMAC-validated with the app secret. */
   @Post("meta")
   @HttpCode(200)
   async receiveMeta(

@@ -131,7 +131,7 @@ def attach_imported_photo(org_id: str, content_id: str, now) -> bool:
 
     A workspace that imported its catalogue owns real pictures of the things it
     sells, and they cost nothing to reuse. Without one an autopilot post is
-    bare text, which TikTok and Instagram refuse outright — so the choice is
+    bare text, which TikTok and Instagram refuse outright, so the choice is
     not between a good image and a plain post, it is between a post and none.
 
     Rotates on how often each product has been used, so a run of posts does not
@@ -161,7 +161,7 @@ def attach_imported_photo(org_id: str, content_id: str, now) -> bool:
                 kind="IMAGE",
                 source="IMPORTED",
                 # The shop hosts this picture, so there is no object of ours
-                # behind it — but the column is NOT NULL, so it records where
+                # behind it, but the column is NOT NULL, so it records where
                 # the file actually lives rather than an empty string.
                 storageKey=product["imageUrl"],
                 url=product["imageUrl"],

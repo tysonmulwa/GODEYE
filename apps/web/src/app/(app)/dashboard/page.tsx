@@ -66,7 +66,7 @@ const timeShort = (iso: string) =>
     minute: "2-digit",
   });
 
-/** Posts per day for the last 7 days — real sparkline data from the schedule. */
+/** Posts per day for the last 7 days, real sparkline data from the schedule. */
 function weeklySeries(posts: ScheduledPost[]): number[] {
   const days = Array.from({ length: 7 }, (_, i) => {
     const d = new Date();

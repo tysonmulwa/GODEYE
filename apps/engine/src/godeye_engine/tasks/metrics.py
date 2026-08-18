@@ -51,7 +51,7 @@ def collect_metrics() -> int:
             publisher = get_publisher(row.platform)
             credentials = decrypt_credentials(row.encryptedCredentials)
             value = publisher.get_metrics(credentials, row.externalPostId)
-        except Exception as e:  # noqa: BLE001 — one bad post must not stop the sweep
+        except Exception as e:  # noqa: BLE001, one bad post must not stop the sweep
             logger.debug("Metrics fetch failed for %s (%s): %s", row.id, row.platform, e)
             continue
         if value is None:

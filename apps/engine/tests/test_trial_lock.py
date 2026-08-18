@@ -1,4 +1,4 @@
-"""The paywall, where it actually costs money — pure query checks, no DB.
+"""The paywall, where it actually costs money, pure query checks, no DB.
 
 A read-only workspace is enforced in the API by an interceptor, but the worker
 never goes through the API. It reads the database on its own every thirty
@@ -53,7 +53,7 @@ class TestLockedOrgIds:
 
     def test_a_card_subscription_is_never_locked_on_its_renewal_date(self):
         # ACTIVE appears in the SQL now, but only alongside "no subscription
-        # code" — a card's renewal date is a date Paystack retries, not a
+        # code", a card's renewal date is a date Paystack retries, not a
         # deadline. Locking a paying customer over a slow webhook is the worse
         # of the two mistakes.
         sql = literal_sql(locked_org_ids(NOW))

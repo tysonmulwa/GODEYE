@@ -1,4 +1,4 @@
-import "./common/env"; // must be first — loads the repo-root .env
+import "./common/env"; // must be first, loads the repo-root .env
 
 import { Logger } from "@nestjs/common";
 import { NestFactory } from "@nestjs/core";
@@ -18,7 +18,7 @@ async function bootstrap() {
   //
   // This used to sit after the body parsers, and that ordering hid a real bug
   // for weeks. A malformed JSON body is rejected by the parser itself, which
-  // returns 400 before any CORS header has been attached — and a response
+  // returns 400 before any CORS header has been attached, and a response
   // without Access-Control-Allow-Origin is the one thing a browser refuses to
   // show you, so the console said "blocked by CORS policy" while the server
   // had actually said "that is not valid JSON". The same masking applied to
@@ -46,7 +46,7 @@ async function bootstrap() {
       if (allowedOrigins.includes(origin.replace(/\/$/, ""))) {
         return callback(null, true);
       }
-      // Name the rejected origin — a CORS failure in the browser never says why.
+      // Name the rejected origin, a CORS failure in the browser never says why.
       corsLogger.warn(`Blocked origin: ${origin} (set WEB_URL to include it)`);
       return callback(new Error(`Origin not allowed by CORS: ${origin}`), false);
     },
@@ -65,13 +65,13 @@ async function bootstrap() {
 
   const swagger = new DocumentBuilder()
     .setTitle("GODEYE API")
-    .setDescription("AI Marketing Operating System — API")
+    .setDescription("AI Marketing Operating System API")
     .setVersion("0.1.0")
     .addBearerAuth()
     .build();
   SwaggerModule.setup("api/docs", app, SwaggerModule.createDocument(app, swagger));
 
-  // Bind 0.0.0.0, not localhost — a container host can't reach a loopback-only
+  // Bind 0.0.0.0, not localhost, a container host can't reach a loopback-only
   // listener, and the deploy gets killed as unhealthy.
   await app.listen(env.apiPort, "0.0.0.0");
   new Logger("Bootstrap").log(

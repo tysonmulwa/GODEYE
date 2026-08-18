@@ -1,4 +1,4 @@
-"""Best-time detection — fallback heuristics and data-driven ranking."""
+"""Best-time detection, fallback heuristics and data-driven ranking."""
 
 from godeye_engine import intel
 
@@ -21,7 +21,7 @@ class TestFallback:
 
 class TestDataDriven:
     def test_ranks_hours_by_average_engagement(self, monkeypatch):
-        # 20:00 clearly best, then 09:00, then 13:00 — enough data points to trust
+        # 20:00 clearly best, then 09:00, then 13:00, enough data points to trust
         data = {
             9: [10, 12, 11],
             13: [3, 4, 2],

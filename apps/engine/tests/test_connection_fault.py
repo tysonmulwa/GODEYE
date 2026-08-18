@@ -3,7 +3,7 @@
 Every permanent publish failure used to be stamped onto the connection, so a
 post rejected for having no image put a red line on a healthy Instagram
 account. It stayed there until a later post happened to succeed, or the user
-disconnected and reconnected — which is what they ended up doing.
+disconnected and reconnected, which is what they ended up doing.
 """
 
 from godeye_engine.tasks.scheduler import _is_connection_fault
@@ -13,7 +13,7 @@ class TestPostFaults:
     """These describe one post. The channel is fine and must stay clean."""
 
     def test_missing_media(self):
-        assert not _is_connection_fault("Instagram requires an image or video — attach one")
+        assert not _is_connection_fault("Instagram requires an image or video, attach one")
 
     def test_caption_too_long(self):
         assert not _is_connection_fault("Caption exceeds the 2200 character limit")
@@ -48,7 +48,7 @@ class TestConnectionFaults:
         # The message _publish raises when TOKEN_ENCRYPTION_KEY does not match.
         assert _is_connection_fault(
             "Could not decrypt the stored credentials for this connection. "
-            "Reconnect the account — it was connected with a different "
+            "Reconnect the account, it was connected with a different "
             "TOKEN_ENCRYPTION_KEY than this server uses."
         )
 

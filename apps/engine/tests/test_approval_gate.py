@@ -1,4 +1,4 @@
-"""Approval workflow gating (Phase 6) — pure query/logic checks, no DB."""
+"""Approval workflow gating (Phase 6), pure query/logic checks, no DB."""
 
 from datetime import datetime, timedelta
 

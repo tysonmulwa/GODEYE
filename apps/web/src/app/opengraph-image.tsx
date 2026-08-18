@@ -4,7 +4,7 @@ import { SITE_NAME } from "@/lib/site";
 /**
  * The picture that appears when someone shares the site.
  *
- * twitter:card is summary_large_image, which promises one — without it the
+ * twitter:card is summary_large_image, which promises one, without it the
  * platform picks something off the page, and on a page with no photographs it
  * picks nothing and renders a bare grey box. Generated here rather than
  * committed as a file so it cannot drift from the wording on the page.
@@ -15,7 +15,7 @@ import { SITE_NAME } from "@/lib/site";
  *
  * No `runtime = "edge"` export, deliberately. The site is served by a
  * Cloudflare Worker, so this already runs on the edge and the marker buys
- * nothing — but it makes Next emit a separate edge function, which the
+ * nothing, but it makes Next emit a separate edge function, which the
  * OpenNext adapter refuses to bundle:
  *
  *   app/opengraph-image/route cannot use the edge runtime.

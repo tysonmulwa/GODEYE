@@ -6,7 +6,7 @@ const metaLogger = new Logger("MetaClient");
 
 /**
  * Thin HTTP clients used to VALIDATE credentials when a user connects a
- * platform. Publishing itself happens in the Python engine — these only
+ * platform. Publishing itself happens in the Python engine, these only
  * confirm the credentials work and fetch display metadata.
  */
 
@@ -39,7 +39,7 @@ export async function validateTelegram(
   );
   if (!chat.ok) throw new BadRequestException("Telegram chat not found or bot not a member");
 
-  // A bot can't message itself — reject pointing the chat at the bot.
+  // A bot can't message itself, reject pointing the chat at the bot.
   const botUsername = String(me.result.username ?? "").toLowerCase();
   const chatUsername = String(chat.result.username ?? "").toLowerCase();
   if (chat.result.id === me.result.id || (chatUsername && chatUsername === botUsername)) {
@@ -147,7 +147,7 @@ export async function redditExchangeCode(code: string): Promise<RedditAccount> {
   }
   if (!token.refresh_token) {
     throw new BadRequestException(
-      "Reddit did not return a refresh token — re-try the authorization (duration=permanent).",
+      "Reddit did not return a refresh token, re-try the authorization (duration=permanent).",
     );
   }
   const me = await getJson("https://oauth.reddit.com/api/v1/me", {
@@ -223,7 +223,7 @@ export function metaAuthorizeUrl(state: string): string {
     response_type: "code",
     // Facebook Login covers Pages only. Instagram has its own button and its
     // own API (Instagram Login → graph.instagram.com), which reaches every IG
-    // Business account including ones attached to a Page — so requesting
+    // Business account including ones attached to a Page, so requesting
     // instagram_basic/instagram_content_publish here bought no extra reach and
     // doubled the App Review surface. Do not add them back without also
     // restoring the permissions in the Meta app, or Meta rejects this whole
@@ -242,7 +242,7 @@ export async function metaExchangeCode(code: string): Promise<string> {
   // Build with URLSearchParams, exactly as metaAuthorizeUrl does. Meta compares
   // redirect_uri between the dialog and this exchange as raw strings, and the
   // two encoders disagree on some characters (a space becomes "+" here and
-  // "%20" with encodeURIComponent) — enough to fail with "Error validating
+  // "%20" with encodeURIComponent), enough to fail with "Error validating
   // verification code".
   const params = new URLSearchParams({
     client_id: env.meta.appId,
@@ -411,7 +411,7 @@ export async function instagramExchangeCode(code: string): Promise<InstagramAcco
  *
  * No Instagram lookup happens here any more. Reading a Page's linked
  * instagram_business_account requires instagram_basic, which we deliberately no
- * longer request — Instagram is connected through its own button. Keeping the
+ * longer request. Instagram is connected through its own button. Keeping the
  * call would spend a request per Page to be told we lack permission.
  */
 export async function metaListPages(userToken: string): Promise<MetaPage[]> {
@@ -427,7 +427,7 @@ export async function metaListPages(userToken: string): Promise<MetaPage[]> {
   );
   if (pages.length === 0) {
     metaLogger.log(
-      "Facebook returned no Pages for this user — they may administer none, or " +
+      "Facebook returned no Pages for this user, they may administer none, or " +
         "may not have granted access to any during the dialog.",
     );
   }
@@ -473,7 +473,7 @@ export function oauth1Header(params: {
   consumerSecret: string;
   /** Absent for the request-token step, which has no token yet. */
   token?: string;
-  /** Empty string for the request-token step — the & separator is still required. */
+  /** Empty string for the request-token step, the & separator is still required. */
   tokenSecret?: string;
   /** oauth_callback or oauth_verifier, which are signed like any other parameter. */
   extra?: Record<string, string>;
@@ -588,7 +588,7 @@ export interface XAccount {
 /**
  * Step three: trade the verifier the customer came back with for the lasting
  * token pair. OAuth 1.0a tokens do not expire, so there is no refresh to
- * schedule — they end only when the account revokes them.
+ * schedule, they end only when the account revokes them.
  */
 export async function xExchangeVerifier(
   oauthToken: string,

@@ -3,7 +3,7 @@ import { PUBLIC_PAGES } from "@/lib/public-pages";
 import { SITE_DESCRIPTION, SITE_NAME, SITE_URL } from "@/lib/site";
 
 /**
- * /llms.txt — what GODEYE is, in plain text, for assistants that read it.
+ * /llms.txt, what GODEYE is, in plain text, for assistants that read it.
  *
  * People increasingly ask an assistant "what should I use to schedule social
  * posts" rather than typing it into a search box, and an assistant answers
@@ -16,7 +16,7 @@ import { SITE_DESCRIPTION, SITE_NAME, SITE_URL } from "@/lib/site";
  */
 export const dynamic = "force-static";
 
-// Every plan is paid — the entry point is the trial, not a free tier.
+// Every plan is paid, the entry point is the trial, not a free tier.
 const usd = (n: number) => `$${n} per month`;
 
 export function GET(): Response {
@@ -49,7 +49,7 @@ from that account's own results, and reports what happened.
   developer keys to obtain.
 - Renders still photographs into video with licensed audio, which TikTok
   requires and which reaches further than a still elsewhere.
-- Reads a shop's own website — names, prices, sizes, colours and photographs —
+- Reads a shop's own website, names, prices, sizes, colours and photographs,
   and writes posts from the catalogue.
 - Audits the business's website for what holds its rankings back, writes the
   fixes, and re-crawls to confirm each one took effect.

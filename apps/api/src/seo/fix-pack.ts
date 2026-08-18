@@ -57,7 +57,7 @@ const PLATFORM_LABEL: Record<string, string> = {
 const SEVERITY_ORDER: Record<string, number> = { critical: 0, warning: 1, info: 2 };
 
 const SEVERITY_HEADING: Record<string, string> = {
-  critical: "Critical — fix these first",
+  critical: "Critical, fix these first",
   warning: "Worth fixing",
   info: "Polish",
 };
@@ -80,7 +80,7 @@ export function renderFixPack(audit: AuditRow, fixes: FixRow[]): string {
   const platform = audit.platform ? (PLATFORM_LABEL[audit.platform] ?? audit.platform) : null;
 
   const out: string[] = [];
-  out.push(`# SEO fix pack — ${host}`);
+  out.push(`# SEO fix pack, ${host}`);
   out.push("");
   out.push(
     [
@@ -96,7 +96,7 @@ export function renderFixPack(audit: AuditRow, fixes: FixRow[]): string {
 
   const actionable = fixes.filter((f) => f.status !== "DISMISSED");
   if (actionable.length === 0) {
-    out.push("No outstanding fixes — every issue found in this audit has been handled.");
+    out.push("No outstanding fixes, every issue found in this audit has been handled.");
     out.push("");
     return out.join("\n");
   }
@@ -105,9 +105,9 @@ export function renderFixPack(audit: AuditRow, fixes: FixRow[]): string {
   out.push("");
   out.push(
     platform
-      ? `Each fix below names where it goes in ${platform}. Work down from Critical — ` +
+      ? `Each fix below names where it goes in ${platform}. Work down from Critical, ` +
           "the order is by how much it costs you to leave it alone."
-      : "Work down from Critical — the order is by how much it costs you to leave it alone.",
+      : "Work down from Critical, the order is by how much it costs you to leave it alone.",
   );
   out.push("");
   out.push(
@@ -118,7 +118,7 @@ export function renderFixPack(audit: AuditRow, fixes: FixRow[]): string {
   out.push("");
   out.push(
     "Once you have made these changes, mark them applied in GODEYE. It re-crawls the " +
-      "pages and confirms each one actually took effect — a fix nobody re-checked is a " +
+      "pages and confirms each one actually took effect, a fix nobody re-checked is a " +
       "claim, not a result.",
   );
   out.push("");
@@ -140,7 +140,7 @@ export function renderFixPack(audit: AuditRow, fixes: FixRow[]): string {
     out.push("");
     out.push(
       fix.kind === "FILE"
-        ? `**File:** \`${fix.filePath}\` — served from \`${fix.targetUrl}\``
+        ? `**File:** \`${fix.filePath}\`, served from \`${fix.targetUrl}\``
         : `**Page:** ${fix.targetUrl}`,
     );
     out.push("");
@@ -163,7 +163,7 @@ export function renderFixPack(audit: AuditRow, fixes: FixRow[]): string {
 
   // Full file bodies, so the pack stands alone without the separate downloads.
   if (audit.robotsTxt || audit.sitemapXml) {
-    out.push("## Appendix — generated files");
+    out.push("## Appendix, generated files");
     out.push("");
     if (audit.robotsTxt) {
       out.push("### robots.txt");
@@ -184,7 +184,7 @@ export function renderFixPack(audit: AuditRow, fixes: FixRow[]): string {
   out.push(
     "Search engines take days to weeks to reflect changes. GODEYE notifies the ones " +
       "that accept instant submissions (Bing, Yandex, Seznam, Naver) via IndexNow as " +
-      "soon as a fix is verified. Google operates no equivalent — there the sitemap " +
+      "soon as a fix is verified. Google operates no equivalent, there the sitemap " +
       "is the route, and patience is the rest of it.",
   );
   out.push("");

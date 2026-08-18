@@ -126,7 +126,7 @@ export class EngineService {
     return this.post("/storage/upload", payload);
   }
 
-  /** OAuth1 signing lives in the engine — it validates X credentials for us. */
+  /** OAuth1 signing lives in the engine, it validates X credentials for us. */
   async validateX(credentials: {
     apiKey: string;
     apiSecret: string;
@@ -151,7 +151,7 @@ export class EngineService {
     checks?: Record<string, string>;
     /** One entry per live Celery worker. Empty means nothing is publishing. */
     workers?: { node: string; build: string; ffmpeg?: string }[];
-    /** Only present when asked for — it encodes video to get the answer. */
+    /** Only present when asked for, it encodes video to get the answer. */
     render?: Record<string, unknown>;
   }> {
     return this.get(`/health${render ? `?render=${encodeURIComponent(render)}` : ""}`);
@@ -181,13 +181,13 @@ export class EngineService {
     try {
       res = await fetch(`${env.engineUrl}${path}`, init);
     } catch (e) {
-      // Log the underlying cause — "unreachable" alone can't distinguish a
+      // Log the underlying cause, "unreachable" alone can't distinguish a
       // wrong ENGINE_URL from an engine that just died mid-request.
       const cause = e instanceof Error ? e.message : String(e);
       this.logger.error(`Engine unreachable at ${env.engineUrl}${path}: ${cause}`);
       throw new ServiceUnavailableException(
         env.nodeEnv === "production"
-          ? "The automation engine is unreachable. It may be restarting — try again in a moment."
+          ? "The automation engine is unreachable. It may be restarting, try again in a moment."
           : "The automation engine is not running. Start it with: cd apps/engine && python -m godeye_engine.run",
       );
     }

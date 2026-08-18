@@ -416,7 +416,7 @@ export class AuthService {
       throw new NotFoundException("This invitation is no longer valid");
     }
     if (invitation.expiresAt < new Date()) {
-      throw new BadRequestException("This invitation has expired — ask for a new one");
+      throw new BadRequestException("This invitation has expired, ask for a new one");
     }
     return invitation;
   }

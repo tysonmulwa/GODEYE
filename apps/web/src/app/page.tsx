@@ -15,7 +15,7 @@ import { RedirectIfSignedIn } from "./redirect-if-signed-in";
  * The homepage, rendered on the server.
  *
  * It used to be a client component that showed a spinner and redirected, so a
- * crawler saw two words of loading text — which is exactly what the audit
+ * crawler saw two words of loading text, which is exactly what the audit
  * reported, and why the site could not rank for anything. Signing in still
  * takes you straight to your workspace, but the page underneath is now
  * something a person or a search engine can actually read.

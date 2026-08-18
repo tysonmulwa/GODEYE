@@ -1,4 +1,4 @@
-# GODEYE — Architecture
+# GODEYE. Architecture
 
 ## System overview
 
@@ -40,7 +40,7 @@
 1. **Hybrid backend.** NestJS owns the product API (auth, RBAC, billing later);
    Python owns automation (AI, scraping, publishing) where the ecosystem is strongest.
    Cross-service contract = internal HTTP (enqueue) + shared Postgres (state) +
-   Redis pub/sub (events). No shared code between languages — the DB schema is the contract.
+   Redis pub/sub (events). No shared code between languages, the DB schema is the contract.
 
 2. **Prisma is the single schema owner.** The Python engine maps the same tables with
    SQLAlchemy Core using Prisma's exact table/column names. Migrations only ever run
@@ -107,8 +107,8 @@ token expiry.
 
 1. **Image Agent** (`ai/image_agent.py`) expands the brief into a detailed prompt
    via the text LLM (deterministic fallback if no text key).
-2. **Image provider** (`ai/image_provider.py`) generates the pixels — OpenAI
-   `gpt-image-1` (default) or Google Imagen — at the nearest supported size.
+2. **Image provider** (`ai/image_provider.py`) generates the pixels. OpenAI
+   `gpt-image-1` (default) or Google Imagen, at the nearest supported size.
 3. **Pillow** (`media/branding.py`) center-crops/resizes to the exact platform
    **preset** (`media/presets.py`, mirrors `packages/shared/image-presets.ts`) and
    optionally composites the org's **brand kit** logo + accent bar.
@@ -118,7 +118,7 @@ token expiry.
 5. A `media_asset.created` realtime event updates the composer live.
 
 At publish time the scheduler loads `MediaAsset` URLs for the content item and
-passes them to the publisher (`PostPayload.media_urls`) — so Telegram (`sendPhoto`),
+passes them to the publisher (`PostPayload.media_urls`), so Telegram (`sendPhoto`),
 Discord (embeds), Facebook (`/photos`), and **Instagram** (which *requires* media)
 post with the image. Autopilot plans with `generateImages` queue an image per post
 automatically.
@@ -160,16 +160,16 @@ built by pure, unit-tested command builders. The task verifies ffmpeg exists
 `POST /seo/audit` → `SeoAudit` row + `AgentRun(agent=SEO)` → engine `run_site_audit`
 task (`apps/engine/src/godeye_engine/tasks/seo.py`):
 
-1. **Crawler** (`seo/crawler.py`) — polite BFS over same-domain pages (0.5s delay,
+1. **Crawler** (`seo/crawler.py`), polite BFS over same-domain pages (0.5s delay,
    custom UA, max 20 pages): titles, metas, canonicals, headings, alt coverage,
    word counts, link graph, response times, OG/JSON-LD flags, plus robots.txt /
    sitemap.xml presence and broken-link detection.
-2. **Rule engine** (`seo/audit.py`) — ~16 checks across content, technical, and
+2. **Rule engine** (`seo/audit.py`), ~16 checks across content, technical, and
    structured data; severities weight a 0-100 score with per-issue-type caps so
    one systemic problem can't zero the site.
-3. **Generators** (`seo/generators.py`) — a ready-to-publish `sitemap.xml` (noindex
+3. **Generators** (`seo/generators.py`), a ready-to-publish `sitemap.xml` (noindex
    pages excluded) and `robots.txt`, downloadable from the audit.
-4. **SEO Agent** (`ai/seo_agent.py`) — LLM keyword clusters grouped by intent and
+4. **SEO Agent** (`ai/seo_agent.py`). LLM keyword clusters grouped by intent and
    meta title/description rewrites for weak pages; JSON-LD Organization/LocalBusiness
    markup is built deterministically from the business profile. AI extras are
    best-effort: without an LLM key the crawl, rules, score, and artifacts still work.
@@ -213,29 +213,29 @@ publishing:
 
 ## Billing & plan limits (Phase 7)
 
-**Plans** (`Plan` rows, seeded): FREE ($0 — 30 posts/mo, 100K AI tokens, 3 channels,
+**Plans** (`Plan` rows, seeded): FREE ($0, 30 posts/mo, 100K AI tokens, 3 channels,
 1 seat), PRO ($49), SCALE ($199). An org's effective plan comes from its `Subscription`
 (CANCELED or missing → FREE).
 
-**Metering** (`BillingService.usage`, computed live — no counters to drift):
+**Metering** (`BillingService.usage`, computed live, no counters to drift):
 posts = `ScheduledPost` rows created this calendar month; AI tokens = sum of
 `AgentRun` input+output tokens this month; channels = non-disconnected
 `SocialConnection`s; seats = memberships + pending invitations.
 
-**Enforcement** — `assertWithinLimit(orgId, metric)` throws 403 with an upgrade hint from
+**Enforcement**, `assertWithinLimit(orgId, metric)` throws 403 with an upgrade hint from
 four choke points: scheduling (`/schedule`, counts one per destination), content
 generation (blocks once the monthly token budget is spent), connection creation (new
 connections only), and member invites. The engine's autopilot is intentionally not
 gated per-slot (plans are already limited by cadence).
 
-**The 24-hour trial** — registration creates a `TRIALING` subscription on the Pro plan
+**The 24-hour trial**, registration creates a `TRIALING` subscription on the Pro plan
 with `currentPeriodEnd` 24 hours out (`WorkspaceAccessService.startTrial`). Two things
 act on it: `state()` *computes* the answer from that timestamp, so a trial that ran out a
 second ago is already locked, and `sweep()` (every 15 minutes) *records* it, flipping
 expired trials to `PAST_DUE` and backfilling a subscription for any workspace that has
 none. `TrialLockInterceptor` is registered globally (`APP_INTERCEPTOR`) and refuses every
 mutating request from a locked workspace except `/auth`, `/billing`, `/webhooks` and
-`/health` — reading stays open, so nothing is lost, only paused. The workspaces GODEYE
+`/health`, reading stays open, so nothing is lost, only paused. The workspaces GODEYE
 itself runs (`BILLING_EXEMPT_SLUGS`: godeye, patampoa, mjini-collection) are never billed
 and never locked.
 
@@ -245,17 +245,17 @@ produce authorisations Paystack cannot charge again, so they buy one month at a 
 `POST /billing/checkout {mode: "once"}` initializes a plain transaction with
 `channels` and no plan, priced in KES from the shared catalogue (M-Pesa settles in
 shillings and a transaction carries one currency). `charge.success` with
-`metadata.mode === "once"` sets `currentPeriodEnd` a month past whichever is later —
-now, or the end already paid for — and leaves `providerSubscriptionId` null. That null
+`metadata.mode === "once"` sets `currentPeriodEnd` a month past whichever is later,
+now, or the end already paid for, and leaves `providerSubscriptionId` null. That null
 is load-bearing: it is how the guard, the sweeper and the engine tell a month that ends
 from a card that renews. A bought month locks the workspace the instant it runs out; a
 card subscription past its renewal date is left alone, because Paystack retries a failed
-charge and its webhook is what cancels — locking a paying customer over a slow webhook
+charge and its webhook is what cancels, locking a paying customer over a slow webhook
 is the worse of the two errors.
 
-**Paystack** — the only payment provider. When `PAYSTACK_SECRET_KEY` and the
+**Paystack**, the only payment provider. When `PAYSTACK_SECRET_KEY` and the
 `PAYSTACK_PLAN_*` codes are set, `POST /billing/checkout` initializes a transaction
-against the plan (plain HTTPS calls — no SDK dependency) carrying `orgId` in metadata,
+against the plan (plain HTTPS calls, no SDK dependency) carrying `orgId` in metadata,
 which is the only link back to the workspace when the webhook arrives with no session.
 `POST /webhooks/paystack` (HMAC SHA512 over the raw body, keyed by the secret key,
 timing-safe) activates the subscription on `charge.success` / `subscription.create` and

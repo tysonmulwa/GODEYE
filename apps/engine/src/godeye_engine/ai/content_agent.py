@@ -1,4 +1,4 @@
-"""Content Agent v1 — turns a business profile + goal into platform-ready posts."""
+"""Content Agent v1, turns a business profile + goal into platform-ready posts."""
 
 from __future__ import annotations
 

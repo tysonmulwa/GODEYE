@@ -1,4 +1,4 @@
-"""Best-time detection — engagement-driven with per-platform heuristic fallbacks."""
+"""Best-time detection, engagement-driven with per-platform heuristic fallbacks."""
 
 from __future__ import annotations
 

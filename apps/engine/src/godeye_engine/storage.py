@@ -1,13 +1,13 @@
-"""Object storage — stores media and returns a public URL.
+"""Object storage, stores media and returns a public URL.
 
 Two backends, chosen by ``STORAGE_BACKEND``:
 
-* ``s3``    — MinIO in dev, S3 in production. The dev bucket is download-public
+* ``s3``   . MinIO in dev, S3 in production. The dev bucket is download-public
               (see infra/docker/docker-compose.yml); in production front it with
               CloudFront or presigned URLs.
-* ``local`` — the filesystem, served back by the engine at ``/media/<key>``.
+* ``local``, the filesystem, served back by the engine at ``/media/<key>``.
               Lets media work in dev without Docker/MinIO. The URL is only
-              reachable locally, so external platforms can't fetch it — use S3
+              reachable locally, so external platforms can't fetch it, use S3
               (or Supabase Storage) for real publishing.
 """
 
@@ -65,7 +65,7 @@ def ensure_bucket() -> None:
     client = _client()
     try:
         client.head_bucket(Bucket=settings.s3_bucket)
-    except Exception:  # noqa: BLE001 — create on first use if missing
+    except Exception:  # noqa: BLE001, create on first use if missing
         client.create_bucket(Bucket=settings.s3_bucket)
 
 
@@ -148,7 +148,7 @@ def upload_bytes(key: str, data: bytes, content_type: str) -> str:
             ContentType=content_type,
             ContentLength=len(data),
         )
-    except Exception as e:  # noqa: BLE001 — re-raised with the detail botocore drops
+    except Exception as e:  # noqa: BLE001, re-raised with the detail botocore drops
         raise RuntimeError(describe_upload_failure(e)) from e
     return public_url(key)
 

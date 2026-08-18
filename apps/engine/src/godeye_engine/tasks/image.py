@@ -1,4 +1,4 @@
-"""Image generation task — Image Agent → provider → brand overlay → storage → MediaAsset."""
+"""Image generation task. Image Agent → provider → brand overlay → storage → MediaAsset."""
 
 from __future__ import annotations
 
@@ -149,7 +149,7 @@ def generate_image(
                 # Decides whether to leave room for a headline, or fill the frame.
                 preset_id=preset_id,
             )
-        except Exception as e:  # noqa: BLE001 — text LLM optional for images
+        except Exception as e:  # noqa: BLE001, text LLM optional for images
             # Warning, not info. This is the difference between a photograph of
             # the business and a picture of nothing in particular, and it went
             # unnoticed at info level while the run was recorded SUCCEEDED.

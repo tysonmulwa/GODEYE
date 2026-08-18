@@ -7,7 +7,7 @@ import { GodeyeCrest } from "@/components/logo";
  *
  * Written for two readers: a business deciding whether to connect an account,
  * and a TikTok reviewer checking that every requested scope is explained and
- * used. The review that prompted this page asked for exactly that — "all
+ * used. The review that prompted this page asked for exactly that, "all
  * selected products and scopes must be clearly demonstrated" and "a valid
  * official website that houses information about your services".
  */
@@ -41,14 +41,14 @@ const SCOPES = [
     scope: "video.upload",
     used: "To send a draft to your TikTok inbox instead",
     detail:
-      "Some businesses would rather add the final touches in the TikTok app. That path sends the video to your inbox as a draft for you to finish and publish yourself. TikTok treats it as a separate permission from direct publishing, so both are requested — but only one is used per post, according to the setting you choose.",
+      "Some businesses would rather add the final touches in the TikTok app. That path sends the video to your inbox as a draft for you to finish and publish yourself. TikTok treats it as a separate permission from direct publishing, so both are requested, but only one is used per post, according to the setting you choose.",
   },
 ];
 
 const STEPS = [
   {
     title: "You press Connect",
-    body: "From the Connections page inside GODEYE. Nothing is asked of you beforehand — no developer account, no keys, no tokens to copy.",
+    body: "From the Connections page inside GODEYE. Nothing is asked of you beforehand, no developer account, no keys, no tokens to copy.",
   },
   {
     title: "TikTok asks you to authorize",

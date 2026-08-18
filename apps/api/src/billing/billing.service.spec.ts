@@ -126,7 +126,7 @@ describe("BillingService", () => {
     const realKey = env.paystack.secretKey;
     const realPlan = env.paystack.plans.PRO;
 
-    /** The plan, then the transaction — in the order checkout calls them. */
+    /** The plan, then the transaction, in the order checkout calls them. */
     const respond = (...bodies: unknown[]) => {
       const fetchMock = jest.fn();
       for (const body of bodies) {
@@ -158,7 +158,7 @@ describe("BillingService", () => {
         reference: null,
       });
 
-      // The plan is read first — Paystack answers "Invalid Amount Sent" to an
+      // The plan is read first. Paystack answers "Invalid Amount Sent" to an
       // initialize that carries no amount, however valid the plan code is.
       expect(fetchMock.mock.calls[0][0]).toBe("https://api.paystack.co/plan/PLN_pro_code");
       const body = JSON.parse(fetchMock.mock.calls[1][1].body);
@@ -216,7 +216,7 @@ describe("BillingService", () => {
     expect(args.update.providerCustomerId).toBe("CUS_1");
     expect(args.update.providerSubscriptionId).toBe("SUB_1");
     expect(args.update.currentPeriodEnd).toEqual(new Date("2026-09-01T00:00:00.000Z"));
-    // The workspace is paying now — it must not wait out a cached lock decision.
+    // The workspace is paying now, it must not wait out a cached lock decision.
     expect(access.invalidate).toHaveBeenCalledWith("org1");
   });
 

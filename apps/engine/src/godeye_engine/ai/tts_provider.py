@@ -1,4 +1,4 @@
-"""Text-to-speech — OpenAI TTS (voiceovers for generated videos)."""
+"""Text-to-speech. OpenAI TTS (voiceovers for generated videos)."""
 
 from __future__ import annotations
 

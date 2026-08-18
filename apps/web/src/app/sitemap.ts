@@ -4,7 +4,7 @@ import { SITE_URL } from "@/lib/site";
 
 /**
  * Lists the pages worth indexing, so search engines find them without
- * following links — which matters most on a site whose navigation is drawn by
+ * following links, which matters most on a site whose navigation is drawn by
  * JavaScript, as this one's is.
  *
  * The list itself lives in lib/public-pages.ts rather than here, because when

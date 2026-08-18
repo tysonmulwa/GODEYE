@@ -58,7 +58,7 @@ def serving(monkeypatch, routes):
     """Make supabase_store's own client speak to canned responses.
 
     It builds its client with auth headers, so the factory is replaced rather
-    than the transport handed in — that is what it actually calls.
+    than the transport handed in, that is what it actually calls.
 
     The real class is captured first: supabase_store.httpx is the httpx module
     itself, so the replacement would otherwise call itself forever.

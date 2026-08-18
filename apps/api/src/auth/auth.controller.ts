@@ -171,7 +171,7 @@ export class AuthController {
   @Post("accept-invitation")
   @HttpCode(200)
   @Throttle({ default: { limit: 10, ttl: 60_000 } })
-  @ApiOperation({ summary: "Accept an invite — creates the account if the email is new" })
+  @ApiOperation({ summary: "Accept an invite, creates the account if the email is new" })
   async acceptInvitation(
     @Body(new ZodPipe(acceptInvitationSchema)) body: z.infer<typeof acceptInvitationSchema>,
     @Req() req: Request,
@@ -207,7 +207,7 @@ export class AuthController {
   @Post("mfa/setup")
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
-  @ApiOperation({ summary: "Begin TOTP MFA setup — returns otpauth:// URL for authenticator apps" })
+  @ApiOperation({ summary: "Begin TOTP MFA setup, returns otpauth:// URL for authenticator apps" })
   setupMfa(@CurrentAuth() auth: AccessTokenPayload) {
     return this.auth.setupMfa(auth.sub);
   }
@@ -228,7 +228,7 @@ export class AuthController {
   @ApiBearerAuth()
   @Throttle({ default: { limit: 5, ttl: 60_000 } })
   @ApiOperation({
-    summary: "Turn MFA off — needs the account password and a current code",
+    summary: "Turn MFA off, needs the account password and a current code",
   })
   async disableMfa(
     @CurrentAuth() auth: AccessTokenPayload,

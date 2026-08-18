@@ -1,4 +1,4 @@
-"""Video Agent — prompt assembly and script normalization."""
+"""Video Agent, prompt assembly and script normalization."""
 
 import json
 

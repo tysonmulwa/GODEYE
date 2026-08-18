@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from ..config import get_settings
 
 # USD per generated image (approximate, medium quality, 1024x1024) for cost
-# accounting only — this doesn't gate billing, it's the number that shows up in
+# accounting only, this doesn't gate billing, it's the number that shows up in
 # AgentRun.costUsd and the images_generated UsageRecord. Actual cost varies with
 # quality tier and size, neither of which this app currently requests explicitly
 # (OpenAI defaults apply). Recheck against OpenAI's own pricing page if this
@@ -44,7 +44,7 @@ def price_for(model: str) -> float:
     """Price a model name, tolerating OpenAI's dated snapshots.
 
     Pinning a snapshot ("gpt-image-2-2026-04-21") is normal practice, and it
-    would otherwise miss the table and silently bill at the default — which is
+    would otherwise miss the table and silently bill at the default, which is
     the kind of wrong number nobody notices until margins look odd. Longest
     prefix wins so "gpt-image-1-mini" isn't matched by "gpt-image-1".
     """
@@ -88,7 +88,7 @@ def generate_image(prompt: str, provider_size: str) -> ImageResult:
         return _google(prompt, provider_size)
 
     raise RuntimeError(
-        "No image provider configured — set OPENAI_API_KEY (or GOOGLE_API_KEY with "
+        "No image provider configured, set OPENAI_API_KEY (or GOOGLE_API_KEY with "
         "IMAGE_PROVIDER=google) in .env to enable image generation"
     )
 

@@ -194,7 +194,7 @@ model SocialConnection {
   status               ConnectionStatus @default(ACTIVE)
   displayName          String
   externalId           String? // page id / channel id / username on the platform
-  // AES-256-GCM encrypted JSON blob of tokens/credentials — never stored in plaintext
+  // AES-256-GCM encrypted JSON blob of tokens/credentials, never stored in plaintext
   encryptedCredentials String           @db.Text
   scopes               String[]         @default([])
   metadata             Json?
@@ -258,7 +258,7 @@ model BusinessProfile {
 model Product {
   id           String    @id @default(cuid())
   orgId        String
-  /// The product's own page. Natural key with orgId — a shop does not sell the
+  /// The product's own page. Natural key with orgId, a shop does not sell the
   /// same thing at two URLs, and re-importing must update rather than duplicate.
   sourceUrl    String
   title        String
@@ -343,7 +343,7 @@ model ContentItem {
   // they are. Per post rather than per workspace: length is a creative choice
   // that changes with the content, not a setting you fix once.
   slideshowSeconds Int      @default(30)
-  // TikTok ignores this — its API takes no still post that can carry audio.
+  // TikTok ignores this, its API takes no still post that can carry audio.
   // Everywhere else a still carousel is a legitimate format worth keeping.
   renderAsVideo    Boolean  @default(true)
   aiGenerated Boolean       @default(false)
@@ -599,7 +599,7 @@ model SeoAudit {
   schemaMarkup    Json?
   sitemapXml      String? @db.Text
   robotsTxt       String? @db.Text
-  // Detected site stack — "wordpress" | "shopify" | "wix" | "nextjs" | "html"…
+  // Detected site stack, "wordpress" | "shopify" | "wix" | "nextjs" | "html"…
   // Drives which set of apply-instructions each fix carries.
   platform        String?
   error           String? @db.Text
@@ -612,7 +612,7 @@ model SeoAudit {
   @@index([orgId, createdAt])
 }
 
-/// How a fix reaches the live site. FIX_PACK is the universal fallback — we hand
+/// How a fix reaches the live site. FIX_PACK is the universal fallback, we hand
 /// the user the exact patch and they paste it. The others write for them and are
 /// added one at a time; the SeoFix contract is identical for all of them.
 enum FixChannel {
@@ -640,7 +640,7 @@ enum FixKind {
   HEAD_TAG // snippet for <head>: title, description, canonical, OG, JSON-LD
   FILE // whole file at the site root: robots.txt, sitemap.xml, IndexNow key
   ATTRIBUTE // attribute on existing markup, e.g. img alt text
-  MANUAL // needs a human decision or infra change — we can't hand over a patch
+  MANUAL // needs a human decision or infra change, we can't hand over a patch
 }
 
 /// One actionable change derived from an audit finding.
@@ -656,13 +656,13 @@ model SeoFix {
   kind        FixKind
   channel     FixChannel @default(FIX_PACK)
   status      FixStatus  @default(PROPOSED)
-  severity    String // critical | warning | info — mirrors the finding
+  severity    String // critical | warning | info, mirrors the finding
   targetUrl   String // page (or site root, for FILE fixes) the change applies to
   title       String // short human label, e.g. "Add a meta description"
   // What is on the page today; null when nothing is there yet. Kept so an
   // automated channel can revert exactly what it wrote.
   before      String?    @db.Text
-  // The literal replacement — the tag, the attribute value, the file body.
+  // The literal replacement, the tag, the attribute value, the file body.
   // Null for MANUAL fixes, which carry guidance only.
   after       String?    @db.Text
   filePath    String? // FILE fixes: "robots.txt", "sitemap.xml"
@@ -735,7 +735,7 @@ model WebhookEvent {
 }
 
 // ============================================================
-// Billing — a 24 hour trial, then Paystack
+// Billing, a 24 hour trial, then Paystack
 // ============================================================
 
 model Plan {
@@ -768,7 +768,7 @@ model Subscription {
   /// Paystack customer code (CUS_...) and subscription code (SUB_...).
   /// The columns keep the names they were created with. Renaming a live column
   /// buys nothing a field name does not, and would break the running API for
-  /// the minutes between the migration and the deploy — during which a
+  /// the minutes between the migration and the deploy, during which a
   /// successful payment would fail to activate a plan.
   providerCustomerId     String?   @map("stripeCustomerId")
   providerSubscriptionId String?   @map("stripeSubscriptionId")

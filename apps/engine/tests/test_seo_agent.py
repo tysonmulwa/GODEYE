@@ -1,4 +1,4 @@
-"""SEO Agent — keyword parsing, meta suggestions, deterministic schema markup."""
+"""SEO Agent, keyword parsing, meta suggestions, deterministic schema markup."""
 
 import json
 

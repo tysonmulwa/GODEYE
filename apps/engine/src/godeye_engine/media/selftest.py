@@ -5,7 +5,7 @@ fails the publisher falls back to a silent photo carousel and the post still
 goes out. Reproducing it meant asking someone to publish again and read a
 container log.
 
-This runs the same encode — same resolution, same codec, same filters — on
+This runs the same encode, same resolution, same codec, same filters, on
 inputs it makes itself, so it needs no workspace data and no credentials, and
 it can be triggered on demand. It answers one question: can this container do
 the work, or is the environment the reason posts arrive silent.
@@ -26,7 +26,7 @@ def _test_image(seed: int, width: int = 1280, height: int = 1280) -> bytes:
     """A JPEG that costs about what a photograph costs to encode.
 
     Flat colour compresses to nothing and would let a container that cannot
-    handle a real image still pass. Per-pixel noise is the opposite mistake —
+    handle a real image still pass. Per-pixel noise is the opposite mistake,
     it is far harder to encode than any photo, so a slow machine fails the test
     while handling real posts fine.
 

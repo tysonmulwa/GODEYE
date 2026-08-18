@@ -1,4 +1,4 @@
-"""Discord publisher — bot REST API channel messages."""
+"""Discord publisher, bot REST API channel messages."""
 
 from __future__ import annotations
 

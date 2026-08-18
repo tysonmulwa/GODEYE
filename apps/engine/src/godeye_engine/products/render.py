@@ -5,14 +5,14 @@ an empty shell. Reading those needs a real browser.
 
 That browser is deliberately not in this image. The worker here was killed by
 the kernel for memory while encoding a five second video, and Chromium is far
-heavier than ffmpeg — putting it in the same container would trade a feature
+heavier than ffmpeg, putting it in the same container would trade a feature
 nobody has yet for publishing, which everybody uses. So rendering is a request
 to something else.
 
 The contract is Browserless's /content endpoint: POST {"url": ...} and get the
 rendered HTML back. It is worth targeting specifically because it is one
-container anyone can run — `docker run ghcr.io/browserless/chromium`, or a
-second Railway service beside this one — so nobody is required to buy a hosted
+container anyone can run, `docker run ghcr.io/browserless/chromium`, or a
+second Railway service beside this one, so nobody is required to buy a hosted
 scraping product to use the feature, and the hosted ones speak it too.
 
 Playwright is supported as well for anyone who does want it in-process, and is
@@ -129,6 +129,6 @@ def _render_playwright(url: str) -> Rendered:
                 return Rendered(html=page.content())
             finally:
                 browser.close()
-    except Exception as e:  # noqa: BLE001 — an unreadable site is a report
+    except Exception as e:  # noqa: BLE001, an unreadable site is a report
         logger.warning("Playwright render of %s failed: %s: %s", url, type(e).__name__, e)
         return Rendered(html=None, detail=f"The browser could not load the page ({type(e).__name__}).")

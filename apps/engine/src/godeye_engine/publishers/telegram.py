@@ -1,4 +1,4 @@
-"""Telegram publisher — Bot API sendMessage / sendPhoto."""
+"""Telegram publisher. Bot API sendMessage / sendPhoto."""
 
 from __future__ import annotations
 

@@ -59,7 +59,7 @@ class TestPrices:
         assert parse_price(45.5) == Decimal("45.5")
 
     def test_text_that_is_not_a_price_returns_nothing(self):
-        for junk in (None, "", "Call for pricing", "—"):
+        for junk in (None, "", "Call for pricing", ", "):
             assert parse_price(junk) is None
 
     def test_a_negative_price_is_not_a_price(self):
@@ -103,7 +103,7 @@ class TestJsonLd:
 
     def test_an_aggregate_offer_reports_the_low_price(self):
         """A range has to become one number, and the low one is the honest
-        headline — it is what the shop advertises as 'from'."""
+        headline, it is what the shop advertises as 'from'."""
         html = """<script type="application/ld+json">
         {"@type":"Product","name":"Tee","offers":{"@type":"AggregateOffer",
          "lowPrice":"12.00","highPrice":"20.00","priceCurrency":"GBP"}}
@@ -197,7 +197,7 @@ class TestClientRendered:
 
     def test_a_server_rendered_shop_is_not_sent_off_to_be_rendered_again(self):
         """A real WooCommerce product page came to 117 KB with 1127 characters
-        of body text — the weight is markup, not prose. Short text plus a
+        of body text, the weight is markup, not prose. Short text plus a
         script tag matched it, and would have cost a headless render per page
         for a shop that was already perfectly readable."""
         html = (

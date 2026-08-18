@@ -2,7 +2,7 @@ import { oauth1Header } from "./platform-clients";
 
 /**
  * X is the only platform here still on OAuth 1.0a, and a request signed even
- * slightly wrong comes back as a bare 401 with an empty body — no field name,
+ * slightly wrong comes back as a bare 401 with an empty body, no field name,
  * no reason. That makes the signature the one piece of this flow worth
  * pinning, because getting it wrong is silent.
  *

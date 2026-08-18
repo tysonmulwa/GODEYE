@@ -1,4 +1,4 @@
-"""Autopilot planner slot computation (pure logic — no DB)."""
+"""Autopilot planner slot computation (pure logic, no DB)."""
 
 from datetime import datetime
 from typing import ClassVar

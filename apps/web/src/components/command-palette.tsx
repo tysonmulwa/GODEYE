@@ -43,8 +43,8 @@ interface Plan {
 
 /**
  * Global quick-search / command palette. Opens on ⌘K / Ctrl+K (or a
- * `godeye:open-search` event). Searches the app's pages plus live data —
- * connected channels, scheduled posts, and autopilot plans — and navigates to
+ * `godeye:open-search` event). Searches the app's pages plus live data,
+ * connected channels, scheduled posts, and autopilot plans, and navigates to
  * the relevant page on Enter/click. Esc or a backdrop click closes it.
  */
 export function CommandPalette({ items }: { items: CommandItem[] }) {
@@ -160,7 +160,7 @@ export function CommandPalette({ items }: { items: CommandItem[] }) {
 
   useEffect(() => setActive(0), [query]);
 
-  // Must run before the early return below — hooks can't be conditional.
+  // Must run before the early return below, hooks can't be conditional.
   useScrollLock(open);
 
   if (!open) return null;

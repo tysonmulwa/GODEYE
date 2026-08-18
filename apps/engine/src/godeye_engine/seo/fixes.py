@@ -50,7 +50,7 @@ class Fix:
 # --------------------------------------------------------------------------
 
 # Platforms group into families that share an editing model. Naming the actual
-# screen ("Yoast → SEO title") is the whole point — generic advice like "update
+# screen ("Yoast → SEO title") is the whole point, generic advice like "update
 # your meta tags" is what the user already had before they bought the product.
 FAMILY: dict[str, str] = {
     "wordpress": "wordpress",
@@ -108,7 +108,7 @@ GUIDE: dict[str, dict[str, str]] = {
         "meta": (
             "Edit the page, scroll to the Yoast SEO (or Rank Math / AIOSEO) box below "
             "the editor, and paste this into the SEO title and meta description "
-            "fields. Do not paste raw HTML there — use the text between the tags."
+            "fields. Do not paste raw HTML there, use the text between the tags."
         ),
         "jsonld": (
             "Yoast and Rank Math both output schema automatically. If you are not "
@@ -131,14 +131,14 @@ GUIDE: dict[str, dict[str, str]] = {
         "meta": (
             "Open the product, collection or page in Shopify admin, scroll to Search "
             "engine listing and click Edit. Paste the title and description into "
-            "those two fields — text only, not the HTML tags."
+            "those two fields, text only, not the HTML tags."
         ),
         "jsonld": (
             "Online Store → Themes → ⋯ → Edit code → layout/theme.liquid, and paste "
             "this just before </head>."
         ),
         "root_file": (
-            "Shopify generates /sitemap.xml for you — do not upload one. robots.txt "
+            "Shopify generates /sitemap.xml for you, do not upload one. robots.txt "
             "is editable via Themes → Edit code → templates/robots.txt.liquid."
         ),
         "img_alt": (
@@ -154,13 +154,13 @@ GUIDE: dict[str, dict[str, str]] = {
             "the title and description fields."
         ),
         "jsonld": (
-            "Add it as a custom code block in the site header — Wix: Settings → "
+            "Add it as a custom code block in the site header. Wix: Settings → "
             "Custom Code; Squarespace: Settings → Advanced → Code Injection → "
             "Header; Webflow: Project Settings → Custom Code → Head."
         ),
         "root_file": (
             "These platforms generate and serve robots.txt and sitemap.xml "
-            "themselves — you cannot upload your own, and you should not try. Use "
+            "themselves, you cannot upload your own, and you should not try. Use "
             "the built-in editor (Wix: SEO Tools → Robots.txt Editor; Squarespace "
             "and Webflow: Settings → SEO) if you need to change robots rules."
         ),
@@ -171,7 +171,7 @@ GUIDE: dict[str, dict[str, str]] = {
     },
     "cms": {
         "meta": (
-            "Edit the node/article and fill in its metadata fields — Drupal: the "
+            "Edit the node/article and fill in its metadata fields. Drupal: the "
             "Metatag section (or Metatag module); Joomla: Publishing tab → Meta "
             "Description / Browser Page Title; TYPO3: page properties → Metadata."
         ),
@@ -189,7 +189,7 @@ GUIDE: dict[str, dict[str, str]] = {
     },
     "ecommerce": {
         "meta": (
-            "Open the product or CMS page in admin and fill in its SEO fields — "
+            "Open the product or CMS page in admin and fill in its SEO fields, "
             "Magento: Search Engine Optimization section; PrestaShop: SEO & URLs "
             "tab; Shopware: SEO section; BigCommerce: product → SEO. Paste the text "
             "only, not the tags."
@@ -201,7 +201,7 @@ GUIDE: dict[str, dict[str, str]] = {
         ),
         "root_file": (
             "Most of these generate a sitemap for you (Magento: Marketing → SEO & "
-            "Search → Site Map). robots.txt is usually editable in admin — Magento: "
+            "Search → Site Map). robots.txt is usually editable in admin. Magento: "
             "Content → Design → Configuration → Search Engine Robots. Prefer the "
             "admin setting over uploading a file."
         ),
@@ -218,7 +218,7 @@ GUIDE: dict[str, dict[str, str]] = {
         ),
         "jsonld": (
             "Render this as a <script type=\"application/ld+json\"> in your document "
-            "head — for a framework, in the root layout so it appears on every page."
+            "head, for a framework, in the root layout so it appears on every page."
         ),
         "root_file": (
             "Drop the file in your public/static directory (Next.js: public/; Astro "
@@ -275,7 +275,7 @@ def _title_fix(ctx: _Context, finding: Finding) -> None:
     page = ctx.pages_by_url.get(finding.page)
     suggested = (ctx.meta_by_url.get(finding.page) or {}).get("suggestedTitle")
     if not suggested and page:
-        # No AI suggestion available — derive something honest from the page's own
+        # No AI suggestion available, derive something honest from the page's own
         # H1 rather than inventing a claim about the business.
         heading = (page.h1s or [None])[0]
         if heading:
@@ -416,7 +416,7 @@ def _jsonld_fix(ctx: _Context, finding: Finding, schema_json: str) -> None:
             after=f'<script type="application/ld+json">\n{schema_json}\n</script>',
             guidance=(
                 "Describes your business in the format search engines read "
-                "directly. It is what qualifies a site for rich results — star "
+                "directly. It is what qualifies a site for rich results, star "
                 "ratings, opening hours, breadcrumbs. Check the values below are "
                 "accurate before publishing; incorrect structured data can get rich "
                 "results withdrawn.\n\n" + guidance_for(ctx.platform, "jsonld")
@@ -507,7 +507,7 @@ MANUAL_GUIDANCE: dict[str, tuple[str, str]] = {
     "multiple_h1": (
         "Use a single H1",
         "The H1 states what the page is about. Several of them dilute that "
-        "signal. Keep the most accurate one and demote the rest to H2 or H3 — "
+        "signal. Keep the most accurate one and demote the rest to H2 or H3, "
         "this is a markup change, the text stays visible.",
     ),
     "thin_content": (
@@ -532,7 +532,7 @@ def build_fixes(
     """One actionable fix per finding, written for the detected stack.
 
     Findings we cannot hand over a patch for become MANUAL fixes rather than
-    being dropped — the user still needs to know, and pretending we have a patch
+    being dropped, the user still needs to know, and pretending we have a patch
     we don't would be worse than saying so.
     """
     ctx = _Context(
@@ -602,7 +602,7 @@ def build_fixes(
                     "moment a page changes, instead of waiting weeks to be "
                     "re-crawled. Hosting this file at the site root is how those "
                     "engines confirm you control the domain. The file contains the "
-                    "key and nothing else — no trailing newline required.\n\n"
+                    "key and nothing else, no trailing newline required.\n\n"
                     "Google is deliberately not on that list: it operates no "
                     "general instant-indexing API, so for Google the sitemap "
                     "remains the route.\n\n"

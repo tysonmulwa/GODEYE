@@ -31,7 +31,7 @@ export class MembersController {
   @Post("invitations")
   @MinRole("ADMIN")
   @Throttle({ default: { limit: 10, ttl: 60_000 } })
-  @ApiOperation({ summary: "Invite a teammate — returns a one-time invite link" })
+  @ApiOperation({ summary: "Invite a teammate, returns a one-time invite link" })
   invite(
     @CurrentAuth() auth: AccessTokenPayload,
     @Body(new ZodPipe(inviteMemberSchema)) body: InviteMemberInput,

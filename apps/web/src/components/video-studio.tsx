@@ -125,7 +125,7 @@ export function VideoStudio({
     e.target.value = "";
     if (!file) return;
     // The upload travels as base64 JSON, which inflates ~33% against the API's
-    // 30 MB body limit — so the practical ceiling is around 20 MB.
+    // 30 MB body limit, so the practical ceiling is around 20 MB.
     if (file.size > MAX_VIDEO_BYTES) {
       setError(
         `${file.name} is ${Math.round(file.size / 1_000_000)} MB, keep uploads under ` +

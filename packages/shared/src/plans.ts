@@ -4,7 +4,7 @@
  * These numbers appear in three places that must agree: the database (seeded
  * from here), the public pricing page, and the limits the API enforces at
  * runtime. Kept apart, the marketing page eventually promises a number the
- * product refuses to honour — and a customer discovers it after paying.
+ * product refuses to honour, and a customer discovers it after paying.
  *
  * Every tier carries two prices for one month: dollars for the card
  * subscription that renews itself, and shillings for the wallet channels.
@@ -112,10 +112,10 @@ export const BILLING_EXEMPT_SLUGS = ["godeye", "patampoa", "mjini-collection"];
  * can say what is happening before the first refused request rather than after
  * it. The browser is told, never trusted: the API refuses the write itself.
  *
- * - TRIALING — inside the 24 hours, everything works, `trialEndsAt` is set.
- * - ACTIVE   — paying.
- * - EXEMPT   — one of BILLING_EXEMPT_SLUGS; never billed, never locked.
- * - LOCKED   — the trial ran out unpaid, or the subscription lapsed. Reading
+ * - TRIALING, inside the 24 hours, everything works, `trialEndsAt` is set.
+ * - ACTIVE  , paying.
+ * - EXEMPT  , one of BILLING_EXEMPT_SLUGS; never billed, never locked.
+ * - LOCKED  , the trial ran out unpaid, or the subscription lapsed. Reading
  *              stays open; anything that changes data is refused.
  */
 export type WorkspaceAccessStatus = "TRIALING" | "ACTIVE" | "EXEMPT" | "LOCKED";

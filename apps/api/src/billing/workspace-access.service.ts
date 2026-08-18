@@ -15,7 +15,7 @@ const TRIAL_MS = TRIAL_HOURS * 3600 * 1000;
  *
  * Every write in the product asks this question, so it cannot be a database
  * round trip each time. Thirty seconds is short enough that a workspace which
- * has just paid is writing again almost immediately — and the payment webhook
+ * has just paid is writing again almost immediately, and the payment webhook
  * clears the entry itself, so in practice it is instant.
  */
 const CACHE_TTL_MS = 30_000;
@@ -60,7 +60,7 @@ export interface SweepResult {
  *    support question has to re-derive the truth from a timestamp.
  *
  * The workspaces GODEYE itself runs (BILLING_EXEMPT_SLUGS) are never billed and
- * never locked — locking one would shut the owner out of their own product.
+ * never locked, locking one would shut the owner out of their own product.
  */
 @Injectable()
 export class WorkspaceAccessService implements OnModuleInit, OnModuleDestroy {
@@ -95,7 +95,7 @@ export class WorkspaceAccessService implements OnModuleInit, OnModuleDestroy {
    * this twice must never hand out a second 24 hours.
    *
    * Never throws. It is called from the middle of registration, and an
-   * unseeded Plan table is not a reason to refuse somebody an account — the
+   * unseeded Plan table is not a reason to refuse somebody an account, the
    * sweeper backfills a missing subscription on its next pass.
    */
   async startTrial(orgId: string): Promise<Date | null> {
@@ -127,7 +127,7 @@ export class WorkspaceAccessService implements OnModuleInit, OnModuleDestroy {
 
   // ---------- The read-only decision ----------
 
-  /** Forget a cached decision — call after anything that changes what it would be. */
+  /** Forget a cached decision, call after anything that changes what it would be. */
   invalidate(orgId: string): void {
     this.cache.delete(orgId);
   }
@@ -156,7 +156,7 @@ export class WorkspaceAccessService implements OnModuleInit, OnModuleDestroy {
 
     const value = this.decide(org);
     // A decision is never cached past the moment it would change. Without this,
-    // a trial expiring in two seconds would keep writing for another thirty —
+    // a trial expiring in two seconds would keep writing for another thirty,
     // and the same applies to the last minute of a month somebody bought.
     const trialEnd = value.trialEndsAt ? Date.parse(value.trialEndsAt) : Infinity;
     const boughtMonthEnd =
@@ -196,7 +196,7 @@ export class WorkspaceAccessService implements OnModuleInit, OnModuleDestroy {
 
     const sub = org.subscription;
     // Workspaces that predate the trial have no subscription row. They are left
-    // writing until the sweeper gives them one — locking somebody out because a
+    // writing until the sweeper gives them one, locking somebody out because a
     // backfill has not run yet would be a bug they experience as a betrayal.
     if (!sub) {
       return { status: "TRIALING", locked: false, trialEndsAt: null, planCode: null };
@@ -217,7 +217,7 @@ export class WorkspaceAccessService implements OnModuleInit, OnModuleDestroy {
       // A month bought outright ends when it ends: there is no card to charge,
       // so nothing will extend it and the workspace goes read-only until the
       // next payment. A card subscription is left alone even a few days past
-      // its renewal date — Paystack retries a failed charge, and its webhook
+      // its renewal date. Paystack retries a failed charge, and its webhook
       // is what cancels. Locking a paying customer because a webhook was slow
       // is the worse error of the two.
       const boughtMonth = !sub.providerSubscriptionId;
@@ -256,7 +256,7 @@ export class WorkspaceAccessService implements OnModuleInit, OnModuleDestroy {
   /**
    * Write down what the clock already says.
    *
-   * Idempotent, so running it twice — or on two instances at once — changes
+   * Idempotent, so running it twice, or on two instances at once, changes
    * nothing the second time.
    */
   async sweep(now = new Date()): Promise<SweepResult> {
@@ -270,7 +270,7 @@ export class WorkspaceAccessService implements OnModuleInit, OnModuleDestroy {
     });
 
     // Months bought outright with a wallet. Nothing renews them, so once the
-    // date passes the workspace has stopped paying — the same state an expired
+    // date passes the workspace has stopped paying, the same state an expired
     // trial lands in. Card subscriptions are untouched here: theirs is a
     // renewal date, not a deadline, and Paystack's own webhook cancels them.
     const lapsed = await this.prisma.subscription.updateMany({

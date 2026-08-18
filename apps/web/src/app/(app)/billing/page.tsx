@@ -74,7 +74,7 @@ function money(currency: string, major: number): string {
   }).format(major);
 }
 
-/** "23 hours", "45 minutes" — the same wording the trial strip uses. */
+/** "23 hours" or "45 minutes", the same wording the trial strip uses. */
 function trialRemaining(endsAt: string | null): string {
   const ms = endsAt ? Date.parse(endsAt) - Date.now() : 0;
   if (!Number.isFinite(ms) || ms <= 0) return "no time";
@@ -124,7 +124,7 @@ export default function BillingPage() {
 
   const checkout = useMutation({
     mutationFn: ({ planCode, mode }: { planCode: string; mode: "subscription" | "once" }) =>
-      // The body is the object itself. api() serialises it — passing a string
+      // The body is the object itself. api() serialises it, passing a string
       // here stringified it twice, and the API received a quoted blob instead
       // of a plan code, so every upgrade failed validation.
       api<{ url: string; reference: string | null }>("/billing/checkout", {
@@ -151,9 +151,9 @@ export default function BillingPage() {
    *
    * The webhook is what actually grants the month, and it arrives on its own a
    * second or two after the customer confirms on their phone. Rather than ask
-   * Paystack whether that particular reference succeeded — which would need its
+   * Paystack whether that particular reference succeeded, which would need its
    * own idempotency, since crediting a month twice for one payment is worse
-   * than waiting — the page simply watches for its own billing state to change.
+   * than waiting, the page simply watches for its own billing state to change.
    */
   const paidFingerprint = data
     ? `${data.plan.code}|${data.subscriptionStatus}|${data.currentPeriodEnd}`
@@ -168,7 +168,7 @@ export default function BillingPage() {
   const paidOnPhone = !!payOnPhone && before !== null && paidFingerprint !== before;
 
   // Poll only while somebody is standing in front of the QR, and stop the
-  // moment the payment shows up — a success dialog has nothing left to wait for.
+  // moment the payment shows up, a success dialog has nothing left to wait for.
   useEffect(() => {
     if (!payOnPhone || paidOnPhone) return;
     const id = setInterval(
@@ -223,7 +223,7 @@ export default function BillingPage() {
 
       {banner === "success" && (
         <p className="mb-4 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-600 dark:text-emerald-400">
-          Payment received. Your new plan is active — it can take a few seconds to appear here.
+          Payment received. Your new plan is active, it can take a few seconds to appear here.
         </p>
       )}
       {banner === "cancelled" && (
@@ -258,12 +258,12 @@ export default function BillingPage() {
                   <h2 className="text-sm font-semibold">
                     {data.access.locked
                       ? "This workspace is read-only"
-                      : `Free trial — ${trialRemaining(data.access.trialEndsAt)} left`}
+                      : `Free trial, ${trialRemaining(data.access.trialEndsAt)} left`}
                   </h2>
                   <p className="mt-1 text-[13px] leading-relaxed text-ink-2">
                     {data.access.locked
                       ? "Your free trial has ended, so publishing, generating and editing are paused. Everything you have made is still here. Choosing a plan below turns it all back on straight away."
-                      : "Everything is switched on until then — publishing included. Choose a plan before the clock runs out and nothing pauses."}
+                      : "Everything is switched on until then, publishing included. Choose a plan before the clock runs out and nothing pauses."}
                   </p>
                 </div>
               </div>
@@ -301,7 +301,7 @@ export default function BillingPage() {
             {data.plans.map((p) => {
               // A trial runs on the Pro plan, so matching on the plan code
               // alone marked Pro as "current" and left a trialing workspace
-              // with no way to actually buy it — only the two dearer tiers.
+              // with no way to actually buy it, only the two dearer tiers.
               // Nothing is current until something has been paid for.
               const paying = data.access.status === "ACTIVE" || data.access.status === "EXEMPT";
               const current = paying && p.code === data.plan.code;
@@ -343,7 +343,7 @@ export default function BillingPage() {
                       </Button>
 
                       {/* The wallet path. Paystack can only re-charge a card, so
-                          M-Pesa and Apple Pay buy one month at a time — offering
+                          M-Pesa and Apple Pay buy one month at a time, offering
                           them as a subscription would take the money once and
                           then let the workspace lock while the customer believed
                           they were paying. Priced in shillings because M-Pesa
@@ -414,7 +414,7 @@ export default function BillingPage() {
 
           <p className="mt-6 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-ink-3">
             <ExternalLink size={12} />
-            <span>Payments are handled by Paystack — card,</span>
+            <span>Payments are handled by Paystack, card,</span>
             <ApplePayMark />
             <span>
               and M-Pesa. GODEYE never sees or stores your card details. A card subscription

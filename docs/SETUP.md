@@ -1,4 +1,4 @@
-# GODEYE — Setup Guide
+# GODEYE. Setup Guide
 
 ## Prerequisites
 
@@ -30,11 +30,11 @@ cp .env.example .env
 
 Then edit `.env`:
 
-- `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET` — random strings (`openssl rand -hex 32`)
-- `TOKEN_ENCRYPTION_KEY` — **exactly 64 hex chars** (`openssl rand -hex 32`); encrypts all
+- `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET`, random strings (`openssl rand -hex 32`)
+- `TOKEN_ENCRYPTION_KEY`, **exactly 64 hex chars** (`openssl rand -hex 32`); encrypts all
   stored platform credentials. Changing it invalidates existing connections.
-- `ENGINE_INTERNAL_SECRET` — any random string; shared between API and engine
-- `ANTHROPIC_API_KEY` — from https://console.anthropic.com (the Content Agent needs this;
+- `ENGINE_INTERNAL_SECRET`, any random string; shared between API and engine
+- `ANTHROPIC_API_KEY`, from https://console.anthropic.com (the Content Agent needs this;
   `OPENAI_API_KEY` works as a fallback provider)
 - **Image generation** (optional): Anthropic can't generate images, so set
   `OPENAI_API_KEY` and keep `IMAGE_PROVIDER=openai` to enable AI images via
@@ -73,13 +73,13 @@ pip install -e ".[dev]"
 
 ## 5. Run everything
 
-Terminal 1 — web + API:
+Terminal 1, web + API:
 
 ```bash
 pnpm dev
 ```
 
-Terminal 2 — engine (FastAPI :8000 + Celery worker + Beat):
+Terminal 2, engine (FastAPI :8000 + Celery worker + Beat):
 
 ```bash
 cd apps/engine && .venv\Scripts\activate
@@ -129,25 +129,25 @@ Open http://localhost:3000 · API docs at http://localhost:4000/api/docs
 4. Put the Client ID / Client Secret in `.env`, then connect via the OAuth button in GODEYE.
    Tokens last ~60 days; the connection stores its expiry and will show as EXPIRED to reconnect.
 
-### Meta — Facebook Pages + Instagram (requires a Meta developer app)
+### Meta. Facebook Pages + Instagram (requires a Meta developer app)
 1. https://developers.facebook.com → Create App (type **Business**).
 2. Add the **Facebook Login for Business** product. Set Valid OAuth Redirect URI to
    `http://localhost:4000/connections/meta/callback` (must match `META_REDIRECT_URI`).
 3. Copy the App ID / App Secret into `.env` (`META_APP_ID`, `META_APP_SECRET`).
-4. While the app is in **Development mode**, only users with a role on the app can connect —
+4. While the app is in **Development mode**, only users with a role on the app can connect,
    add yourself as admin/tester. Live publishing to arbitrary users requires App Review for:
    `pages_manage_posts`, `pages_read_engagement`, `instagram_basic`,
    `instagram_content_publish`, `business_management`.
 5. Instagram must be a **Business/Creator account linked to a Facebook Page**.
-   Note: Instagram publishing requires an image — available once image generation ships (Phase 3).
+   Note: Instagram publishing requires an image, available once image generation ships (Phase 3).
 
 ---
 
 ## Tests
 
 ```bash
-pnpm --filter @godeye/api test        # Jest — auth, crypto, scheduling
-cd apps/engine && python -m pytest    # engine — agent, publishers, crypto interop
+pnpm --filter @godeye/api test        # Jest, auth, crypto, scheduling
+cd apps/engine && python -m pytest    # engine, agent, publishers, crypto interop
 ```
 
 ## Troubleshooting

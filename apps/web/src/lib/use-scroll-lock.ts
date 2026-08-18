@@ -7,8 +7,8 @@ import { useEffect } from "react";
  *
  * The app shell lets the document scroll on phones (a fixed-height shell is
  * re-measured as the address bar collapses, which makes the page appear to
- * shake). The cost of that choice is that anything drawn over the page — a
- * drawer, a dialog, the command palette — would otherwise let the content slide
+ * shake). The cost of that choice is that anything drawn over the page, a
+ * drawer, a dialog, the command palette, would otherwise let the content slide
  * around underneath it, so every overlay has to hold the page still itself.
  *
  * Restores the previous value rather than clearing it, so nested overlays

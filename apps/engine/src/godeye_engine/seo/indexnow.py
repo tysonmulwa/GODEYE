@@ -1,11 +1,11 @@
-"""IndexNow — tell search engines a URL changed, instead of waiting to be crawled.
+"""IndexNow, tell search engines a URL changed, instead of waiting to be crawled.
 
 A single POST notifies Bing, Yandex, Seznam and Naver at once (they share the
 protocol and forward submissions between themselves). Turnaround is hours rather
 than the weeks an organic re-crawl can take, and it costs nothing.
 
-Google is not a participant. It runs no general instant-indexing API — the
-Indexing API is restricted to JobPosting and BroadcastEvent — so for Google the
+Google is not a participant. It runs no general instant-indexing API, the
+Indexing API is restricted to JobPosting and BroadcastEvent, so for Google the
 sitemap remains the only legitimate route. Any tool claiming to push pages into
 Google on demand is misrepresenting what it does.
 
@@ -85,7 +85,7 @@ def submit(org_id: str, site_url: str, urls: list[str]) -> dict:
             "submitted": 0,
             "status": "unverified",
             "reason": (
-                f"Publish {key}.txt at the site root first — search engines use it "
+                f"Publish {key}.txt at the site root first, search engines use it "
                 "to confirm you control this domain."
             ),
             "key": key,

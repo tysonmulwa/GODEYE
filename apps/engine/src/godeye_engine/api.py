@@ -1,4 +1,4 @@
-"""Internal FastAPI app — only the NestJS API talks to this (shared secret)."""
+"""Internal FastAPI app, only the NestJS API talks to this (shared secret)."""
 
 from __future__ import annotations
 
@@ -99,20 +99,20 @@ def health(render: str = "") -> dict:
     except Exception as e:  # noqa: BLE001
         checks["redis"] = f"error: {e}"
 
-    # This process does not publish anything — the worker does, from the same
+    # This process does not publish anything, the worker does, from the same
     # image but its own deploy. Report the workers too, or a green /health can
     # sit on top of a queue nobody is consuming.
     build = sha[:8] if sha else "unknown"
     workers = worker_builds()
     errors = [w["error"] for w in workers if w.get("error")]
     # "unknown" is the absence of an answer, so it must never satisfy a
-    # comparison — two unknowns once matched each other and reported ok while
+    # comparison, two unknowns once matched each other and reported ok while
     # the broker was refusing connections.
     mismatched = [w for w in workers if w["build"] != build or build == "unknown"]
     if errors:
         checks["workers"] = f"error: {'; '.join(errors)}"
     elif not workers:
-        checks["workers"] = "error: no worker responded — nothing is consuming the queue"
+        checks["workers"] = "error: no worker responded, nothing is consuming the queue"
     elif mismatched:
         detail = ", ".join(f"{w['node']}={w['build']}" for w in mismatched)
         checks["workers"] = f"error: cannot confirm workers match this build ({build}): {detail}"
@@ -159,7 +159,7 @@ def health(render: str = "") -> dict:
         if stored is None:
             queued = start_render_selftest()
             result["render"] = {
-                "status": "running" if queued else "could not queue — is a worker up?",
+                "status": "running" if queued else "could not queue, is a worker up?",
                 "hint": "ask again in a minute for the result",
             }
             checks["render"] = "ok (pending)" if queued else "error: could not queue"
@@ -268,7 +268,7 @@ class IndexNowRequest(BaseModel):
 
 @app.post("/seo/indexnow", dependencies=[Depends(verify_internal_secret)])
 def submit_indexnow(request: IndexNowRequest) -> dict:
-    """Submit changed URLs to IndexNow. Synchronous — it is two HTTP calls, and
+    """Submit changed URLs to IndexNow. Synchronous, it is two HTTP calls, and
     the user deserves to hear 'accepted' or 'publish the key file first' now
     rather than in a notification later."""
     from .seo import indexnow
@@ -384,7 +384,7 @@ def store_upload(request: StoreUploadRequest) -> dict:
 
 @app.get("/media/{key:path}")
 def serve_media(key: str) -> FileResponse:
-    """Serve a locally-stored object (STORAGE_BACKEND=local). Public by design —
+    """Serve a locally-stored object (STORAGE_BACKEND=local). Public by design,
     images must be viewable without the internal secret."""
     from .storage import _is_local, local_path
 
@@ -423,6 +423,6 @@ def get_best_times(orgId: str, platform: str, timezone: str = "UTC") -> dict:
     try:
         points = intel.engagement_by_hour(orgId, platform, timezone)
         data_driven = sum(len(v) for v in points.values()) >= intel.MIN_DATA_POINTS
-    except Exception:  # noqa: BLE001 — fall back silently if the DB is unreachable
+    except Exception:  # noqa: BLE001, fall back silently if the DB is unreachable
         pass
     return {"platform": platform, "timezone": timezone, "times": times, "dataDriven": data_driven}

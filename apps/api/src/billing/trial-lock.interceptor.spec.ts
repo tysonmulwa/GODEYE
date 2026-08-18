@@ -41,7 +41,7 @@ describe("TrialLockInterceptor", () => {
     });
   });
 
-  it.each(["GET", "HEAD", "OPTIONS"])("still allows %s — read-only, not shut", async (method) => {
+  it.each(["GET", "HEAD", "OPTIONS"])("still allows %s, read-only, not shut", async (method) => {
     const ctx = contextFor({ method, path: "/content", auth: { orgId: "org1" } });
     await expect(interceptor.intercept(ctx, next)).resolves.toBeDefined();
     expect(access.state).not.toHaveBeenCalled();

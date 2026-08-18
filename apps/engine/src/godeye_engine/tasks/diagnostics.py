@@ -61,7 +61,7 @@ def render_selftest_task() -> dict:
     logger.info("Render self-test: %s", result)
     try:
         _redis().set(RENDER_RESULT_KEY, json.dumps(result), ex=RESULT_TTL_SEC)
-    except Exception as e:  # noqa: BLE001 — the log still carries it
+    except Exception as e:  # noqa: BLE001, the log still carries it
         logger.warning("Could not store the render self-test result: %s", e)
     return result
 

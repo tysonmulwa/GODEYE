@@ -3,7 +3,7 @@ import { GodeyeLockup } from "@/components/logo";
 
 /**
  * Public legal pages. Deliberately outside (app), so they're reachable without
- * an account — Meta, Google and app stores fetch these URLs unauthenticated
+ * an account. Meta, Google and app stores fetch these URLs unauthenticated
  * during review.
  */
 export default function LegalLayout({ children }: { children: React.ReactNode }) {

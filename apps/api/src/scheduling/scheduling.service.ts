@@ -31,7 +31,7 @@ export class SchedulingService {
     });
     if (org.requireApproval && content.status !== "APPROVED") {
       throw new BadRequestException(
-        "This organization requires approval before publishing — submit the content for review first",
+        "This organization requires approval before publishing, submit the content for review first",
       );
     }
 
@@ -160,7 +160,7 @@ export class SchedulingService {
    * useless when the failure was caused by the content itself.
    *
    * The body edit applies to the underlying content item, so sibling posts of
-   * the same content see it too — that is the same object, not a copy.
+   * the same content see it too, that is the same object, not a copy.
    */
   async editPending(
     orgId: string,
@@ -171,10 +171,10 @@ export class SchedulingService {
     const post = await this.prisma.scheduledPost.findFirst({ where: { id, orgId } });
     if (!post) throw new NotFoundException("Scheduled post not found");
     if (post.status === "PUBLISHED") {
-      throw new BadRequestException("This post is already published — it can't be edited here");
+      throw new BadRequestException("This post is already published, it can't be edited here");
     }
     if (post.status === "PROCESSING") {
-      throw new BadRequestException("This post is publishing right now — try again in a moment");
+      throw new BadRequestException("This post is publishing right now, try again in a moment");
     }
 
     if (input.body !== undefined) {

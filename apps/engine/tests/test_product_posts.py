@@ -41,7 +41,7 @@ class TestSelectionRules:
 class TestTheRowsItWrites:
     """Compiled against the real tables. Source-inspection tests missed that
     this insert named a column the table does not have and omitted two it
-    requires — it would have failed on the first auto-post."""
+    requires, it would have failed on the first auto-post."""
 
     def test_the_media_row_matches_the_table(self):
         from godeye_engine.db import MediaAsset

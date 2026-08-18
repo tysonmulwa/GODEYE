@@ -1,4 +1,4 @@
-"""ffmpeg command builders (pure — no ffmpeg binary needed)."""
+"""ffmpeg command builders (pure, no ffmpeg binary needed)."""
 
 import pytest
 

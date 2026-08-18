@@ -1,7 +1,7 @@
 """Generating a post about a product.
 
 The guarantee under test is that nothing unlawful reaches a feed, no matter
-what the model returns — the prompt asks, the filter decides.
+what the model returns, the prompt asks, the filter decides.
 """
 
 from __future__ import annotations

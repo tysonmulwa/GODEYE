@@ -56,7 +56,7 @@ describe("ProductsService", () => {
     });
 
     it("keeps the original consent date when other settings are saved", async () => {
-      // Re-saving must not look like fresh consent — the date is the record of
+      // Re-saving must not look like fresh consent, the date is the record of
       // when the user actually agreed.
       const agreedAt = new Date("2026-08-01T10:00:00Z");
       prisma.businessProfile.findUnique.mockResolvedValue({

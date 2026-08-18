@@ -1,4 +1,4 @@
-"""Autopilot planner — turns PostingPlans into generated, scheduled content.
+"""Autopilot planner, turns PostingPlans into generated, scheduled content.
 
 Every 5 minutes Beat runs plan_autopilot: for each active plan with
 autoGenerate, it computes upcoming publish slots (preferred times, or
@@ -126,7 +126,7 @@ def plan_autopilot() -> int:
                 PostingPlan.c.active.is_(True),
                 PostingPlan.c.autoGenerate.is_(True),
                 # A read-only workspace does not get its autopilot written for
-                # it. Generation is the expensive half of the product — leaving
+                # it. Generation is the expensive half of the product, leaving
                 # it running past the trial would spend model budget on an
                 # account that has stopped paying.
                 PostingPlan.c.orgId.notin_(locked_org_ids(now)),
@@ -158,7 +158,7 @@ def plan_autopilot() -> int:
 
         # The rotation cursor has to survive the run, not restart with it.
         # enumerate() alone counts from zero every time the planner wakes, and
-        # a run usually finds a single new slot — so index was almost always 0
+        # a run usually finds a single new slot, so index was almost always 0
         # and every autopilot post came from the first topic and the first
         # goal. The list looked like a rotation and behaved like a constant.
         #
@@ -324,7 +324,7 @@ def autopilot_generate(plan_id: str, slot_iso: str, slot_index: int = 0) -> dict
     else:
         # No generated image does not have to mean no image. A workspace that
         # imported its catalogue already has real photographs of the things it
-        # sells, and a post without one goes out as bare text — on TikTok and
+        # sells, and a post without one goes out as bare text, on TikTok and
         # Instagram that means it cannot go out at all.
         attach_imported_photo(plan["orgId"], content_id, now)
 

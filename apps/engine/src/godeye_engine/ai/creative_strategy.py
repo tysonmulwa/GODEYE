@@ -30,8 +30,8 @@ from dataclasses import dataclass
 # this business has recently had, so a run of posts does not settle into one
 # shape.
 # Categories that photograph how the business works rather than what the
-# customer gets. They are legitimate creatives — for a post that is actually
-# about process, a founder, or a lesson — and a trap otherwise.
+# customer gets. They are legitimate creatives, for a post that is actually
+# about process, a founder, or a lesson, and a trap otherwise.
 #
 # The failure that produced this set: an overhead desk with a content calendar,
 # a notebook, coffee and a hand placing a photograph. Beautiful, and a picture
@@ -93,7 +93,7 @@ CREATIVE_CATEGORIES = (
 )
 
 # Why the picture should work on someone. Inferred from the business and the
-# post rather than drawn at random — the drawn one is a fallback.
+# post rather than drawn at random, the drawn one is a fallback.
 MARKETING_ANGLES = (
     "transformation",
     "aspiration",
@@ -214,7 +214,7 @@ def choose_category(
     """A creative category this business has not just had.
 
     Mirrors how the image agent picks a shot type, but excludes what was used
-    recently — the whole point is that consecutive posts are different ideas,
+    recently, the whole point is that consecutive posts are different ideas,
     not the same idea from a new angle.
 
     Process categories are withheld unless the post is actually about process.
@@ -298,7 +298,7 @@ def recent_categories(prompts: list[str] | None) -> list[str]:
 def validate(strategy: CreativeStrategy, recent: list[str] | None = None) -> list[str]:
     """Structural complaints about a strategy, empty when it is worth rendering.
 
-    Deliberately cheap and deliberately not a judgement of the picture — nothing
+    Deliberately cheap and deliberately not a judgement of the picture, nothing
     here has seen an image. It catches the failures that are visible in the
     plan itself: repeating the idea just used, and a hook that says nothing.
     """

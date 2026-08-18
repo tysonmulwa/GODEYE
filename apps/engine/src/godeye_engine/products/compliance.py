@@ -1,7 +1,7 @@
 """What a product post may and may not say, for shops selling into the EU/UK.
 
 This is not house style. Three rules below are law in every EU member state,
-and a post that breaks them exposes the shop — our customer — not us:
+and a post that breaks them exposes the shop, our customer, not us:
 
   Omnibus Directive, Article 6a
       Any announcement of a price reduction must state the lowest price the
@@ -85,8 +85,8 @@ DISCOUNT_PATTERNS: list[tuple[re.Pattern, str]] = [
     (re.compile(r"\bRRP\b"), "a reference price we do not hold"),
 ]
 
-SCARCITY_RULE = "UCPD Annex I — invented scarcity or deadline"
-DISCOUNT_RULE = "Omnibus Art. 6a — price reduction without the 30-day low"
+SCARCITY_RULE = "UCPD Annex I, invented scarcity or deadline"
+DISCOUNT_RULE = "Omnibus Art. 6a, price reduction without the 30-day low"
 
 
 _CAMEL_BOUNDARY = re.compile(r"(?<=[a-z0-9])(?=[A-Z])")
@@ -122,7 +122,7 @@ def price_comparison_allowed(location: str | None, prior_price=None, price=None)
 
     The shop must not sell into a market where Article 6a applies. There,
     announcing a reduction requires the lowest price of the previous 30 days,
-    and a catalogue carries today's price and a "was" figure — which is not
+    and a catalogue carries today's price and a "was" figure, which is not
     the same thing and does not satisfy it.
 
     And the shop must actually have recorded a former price that is higher
@@ -156,7 +156,7 @@ def check(text: str, allow_price_comparison: bool = False) -> list[Violation]:
     market and a real former price on record.
 
     Invented scarcity is refused regardless. That is not a jurisdiction
-    question — we are not given a stock count or a deadline anywhere, so the
+    question, we are not given a stock count or a deadline anywhere, so the
     claim would be made up whoever is reading it.
     """
     # Checked as written and as read: a claim does not stop being a claim for
@@ -256,13 +256,13 @@ def format_price(amount: Decimal | float | int | None, currency: str | None,
     if position != "prefix":
         return f"{body} {symbol}"
     # A word-shaped symbol takes a space; a single glyph does not. "KSh 8,500"
-    # and "CHF 1'234", but "£129" and "$99" — running the letters into the
+    # and "CHF 1'234", but "£129" and "$99", running the letters into the
     # digits reads as a typo.
     separator = " " if symbol[-1].isalpha() else ""
     return f"{symbol}{separator}{body}"
 
 
-# Plenty of shops store a price without storing a currency — their own site
+# Plenty of shops store a price without storing a currency, their own site
 # knows which one it means because it only ever sells in one. A bare "8500" in
 # a caption does not, so the workspace's own stated location fills the gap.
 _CURRENCY_BY_PLACE: list[tuple[tuple[str, ...], str]] = [
@@ -294,7 +294,7 @@ def currency_for_location(location: str | None) -> str | None:
     """The currency a shop in this place almost certainly quotes in.
 
     A guess, so it is only ever a fallback for a shop that did not record one.
-    Nothing here changes the number — only how it is labelled — and labelling
+    Nothing here changes the number, only how it is labelled, and labelling
     it wrongly is still better than publishing a bare figure with no unit.
     """
     if not location:
@@ -310,7 +310,7 @@ def currency_for_location(location: str | None) -> str | None:
 # storefront_api belongs here: it is the value the shop's own pages render to
 # customers, read from the same API those pages call, so it carries exactly the
 # standing of a price in the page's structured data. The Shopify feed is the
-# odd one out — that figure is a store configuration setting, not necessarily
+# odd one out, that figure is a store configuration setting, not necessarily
 # what anybody is shown.
 TAX_INCLUSIVE_SOURCES = {"jsonld", "microdata", "opengraph", "storefront_api"}
 

@@ -95,7 +95,7 @@ export default function PricingPage() {
         </p>
         <p className="mt-3 text-[15px] leading-relaxed text-ink-2">
           Every new workspace starts with{" "}
-          <span className="font-semibold text-ink">{TRIAL_HOURS} hours of full access</span> — no
+          <span className="font-semibold text-ink">{TRIAL_HOURS} hours of full access</span>, no
           card, no preview mode, real posts on your real accounts.
         </p>
       </header>

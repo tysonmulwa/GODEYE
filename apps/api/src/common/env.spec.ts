@@ -9,7 +9,7 @@
  */
 // env.ts loads the repo-root .env on import, and that file sets several
 // *_REDIRECT_URI values for local development. Deleting them from process.env
-// is not enough — dotenv simply puts them back during the require, and the
+// is not enough, dotenv simply puts them back during the require, and the
 // test then measures the developer's machine instead of the code.
 jest.mock("dotenv", () => ({ config: () => ({ parsed: {} }) }));
 
@@ -76,7 +76,7 @@ describe("OAuth callback URLs", () => {
   /**
    * Paystack plan codes belong to one mode. A plan created with the dashboard
    * switched to Test is invisible to a live key, and Paystack reports that as
-   * "plan not found" — indistinguishable from a mistyped code.
+   * "plan not found", indistinguishable from a mistyped code.
    */
   describe("Paystack mode", () => {
     it("reads live and test from the key's own prefix", () => {

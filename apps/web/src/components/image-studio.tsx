@@ -34,13 +34,13 @@ interface MediaAsset {
 
 /**
  * X caps a post at 4 images and is the tightest of the platforms we publish to,
- * so it sets the ceiling — a post that fits everywhere.
+ * so it sets the ceiling, a post that fits everywhere.
  */
 const MAX_IMAGES = 4;
 
 /**
  * Image generation for a content item. Generates via the Image Agent, polls the
- * run, and shows the result — which the engine attaches to the content so it
+ * run, and shows the result, which the engine attaches to the content so it
  * publishes with the post.
  */
 export function ImageStudio({
@@ -62,7 +62,7 @@ export function ImageStudio({
   const [error, setError] = useState<string | null>(null);
   const queryClient = useQueryClient();
 
-  // Everything attached to this post — uploads and generated images alike, so
+  // Everything attached to this post, uploads and generated images alike, so
   // the count and the grid reflect what will actually publish.
   const { data: attached = [] } = useQuery<MediaAsset[]>({
     queryKey: ["media", contentItemId],

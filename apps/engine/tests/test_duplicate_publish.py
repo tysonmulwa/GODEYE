@@ -1,7 +1,7 @@
 """Not publishing the same post twice.
 
 A real product went out twice, thirteen minutes apart. PROCESSING is written
-when dispatch claims a row, not when a worker starts the task — and the worker
+when dispatch claims a row, not when a worker starts the task, and the worker
 runs two at a time, so a post can sit in the queue behind others while already
 marked as being worked on. The reaper read that wait as abandonment, re-queued
 it, and both copies of the task found PROCESSING and published.
@@ -80,7 +80,7 @@ class TestTheClaimSurvivesTheDatabase:
 
     lockedAt is TIMESTAMP(3) and utcnow() carries microseconds, so a claim
     dispatched at .885898 comes back as .885000. Compared with ==, that is
-    every task deciding it had been superseded by itself — publishing stopped
+    every task deciding it had been superseded by itself, publishing stopped
     entirely, and the first version of these tests missed it because they used
     a whole-second timestamp Postgres would never have altered.
     """

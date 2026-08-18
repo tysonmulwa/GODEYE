@@ -73,7 +73,7 @@ export class SeoService {
     // Ownership gate: if the URL isn't the org's registered website, ask the user
     // to confirm before scanning a site they don't own. Plan-based limits on how
     // many sites a workspace may add (e.g. premium 2, vip 3) are intentionally
-    // NOT enforced yet — kept inactive while billing is still under test.
+    // NOT enforced yet, kept inactive while billing is still under test.
     const ownedHost = hostOf(profile?.website);
     const requestedHost = hostOf(url);
     const isForeign = !!ownedHost && !!requestedHost && ownedHost !== requestedHost;
@@ -218,7 +218,7 @@ export class SeoService {
       orderBy: { createdAt: "asc" },
     });
     // Severity is a string, and "critical" < "info" < "warning" alphabetically,
-    // which is not the order a human wants to read them in — so rank in code.
+    // which is not the order a human wants to read them in, so rank in code.
     const rank: Record<string, number> = { critical: 0, warning: 1, info: 2 };
     return rows
       .sort((a, b) => (rank[a.severity] ?? 3) - (rank[b.severity] ?? 3))
@@ -242,7 +242,7 @@ export class SeoService {
   }
 
   /**
-   * Move a fix through the loop. VERIFIED is deliberately not settable here —
+   * Move a fix through the loop. VERIFIED is deliberately not settable here,
    * only a re-crawl that no longer reports the finding can award it.
    */
   async updateFixStatus(
@@ -274,7 +274,7 @@ export class SeoService {
     return { id: updated.id, status: updated.status };
   }
 
-  /** Same transition for a batch — "I've done all of these" is the common case. */
+  /** Same transition for a batch, "I've done all of these" is the common case. */
   async bulkUpdateFixStatus(
     orgId: string,
     userId: string,
@@ -314,7 +314,7 @@ export class SeoService {
     });
     if (pending === 0) {
       throw new BadRequestException(
-        "Nothing to verify yet — mark the fixes you've made as applied first",
+        "Nothing to verify yet, mark the fixes you've made as applied first",
       );
     }
 
@@ -353,7 +353,7 @@ export class SeoService {
 
   /**
    * Push URLs to IndexNow. With no explicit list, submits the pages whose fixes
-   * are verified — those are the ones we know actually changed.
+   * are verified, those are the ones we know actually changed.
    */
   async submitIndexNow(orgId: string, auditId: string, userId: string, urls?: string[]) {
     const audit = await this.prisma.seoAudit.findFirst({
@@ -373,7 +373,7 @@ export class SeoService {
     }
     if (targets.length === 0) {
       throw new BadRequestException(
-        "No verified pages to submit yet — apply some fixes and verify them first",
+        "No verified pages to submit yet, apply some fixes and verify them first",
       );
     }
 

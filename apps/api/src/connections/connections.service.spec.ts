@@ -15,7 +15,7 @@ import { ConnectionsService } from "./connections.service";
  * It sat on two workspaces for days, in red, beside a badge reading ACTIVE,
  * describing an attempt nobody remembered.
  */
-describe("ConnectionsService — which errors are worth showing", () => {
+describe("ConnectionsService, which errors are worth showing", () => {
   let service: ConnectionsService;
   let prisma: { socialConnection: { findMany: jest.Mock } };
 

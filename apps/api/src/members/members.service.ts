@@ -158,7 +158,7 @@ export class MembersService {
     return { userId: targetUserId, role: input.role };
   }
 
-  /** Remove a teammate (must outrank them) — or leave the org yourself (non-owners). */
+  /** Remove a teammate (must outrank them), or leave the org yourself (non-owners). */
   async remove(auth: AccessTokenPayload, targetUserId: string) {
     const target = await this.membership(auth.orgId, targetUserId);
     if (targetUserId === auth.sub) {

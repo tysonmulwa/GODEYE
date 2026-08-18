@@ -3,7 +3,7 @@
 A shop built as a single-page app fetches its catalogue from somewhere, and on
 a large number of custom storefronts that somewhere is Supabase. The address
 and the anonymous key are compiled into the JavaScript every visitor already
-downloads — they have to be, or the site could not load — and the key is
+downloads, they have to be, or the site could not load, and the key is
 publishable by design, with row-level security deciding what it may read.
 
 So for these shops there is a route that is better than rendering in every

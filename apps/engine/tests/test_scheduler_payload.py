@@ -1,4 +1,4 @@
-"""Payload assembly for the publish task (pure logic — no DB)."""
+"""Payload assembly for the publish task (pure logic, no DB)."""
 
 from godeye_engine.tasks.scheduler import _build_payload
 

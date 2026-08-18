@@ -1,4 +1,4 @@
-"""TikTok publisher — Content Posting API (direct post).
+"""TikTok publisher. Content Posting API (direct post).
 
 TikTok takes video or a photo carousel, and posting is asynchronous: /init returns a
 publish_id, we upload the bytes, and TikTok processes them before the post
@@ -6,7 +6,7 @@ appears. We poll until it leaves the processing states so a failure surfaces
 here rather than silently never appearing on the account.
 
 Video uses source=FILE_UPLOAD, which needs no domain verification. Photos have
-no upload option — TikTok will only pull them from a URL — so a photo post
+no upload option. TikTok will only pull them from a URL, so a photo post
 requires the media host to be a verified domain or URL prefix on the app.
 """
 
@@ -66,7 +66,7 @@ TITLE_LIMIT = 90
 PHOTO_LIMIT = 35
 
 # A single chunk may be up to 64 MB. Larger videos need a multi-chunk upload,
-# which isn't implemented — we fail with a clear message instead.
+# which isn't implemented, we fail with a clear message instead.
 MAX_SINGLE_CHUNK = 64 * 1024 * 1024
 UPLOAD_TIMEOUT_SEC = 300
 
@@ -75,7 +75,7 @@ class TikTokPublisher(BasePublisher):
     def _publish(self, credentials: dict[str, Any], payload: PostPayload) -> PublishResult:
         if not payload.video_urls and not payload.media_urls:
             raise PublishError(
-                "TikTok needs media — attach a video or photos to this post "
+                "TikTok needs media, attach a video or photos to this post "
                 "(text-only posts aren't supported by the API)"
             )
         token = credentials["accessToken"]
@@ -185,7 +185,7 @@ class TikTokPublisher(BasePublisher):
     def _slideshow_from_photos(self, payload: PostPayload) -> bytes | None:
         """Render the attached images into a video with the workspace's track.
 
-        Shared with the Reels publishers — the reason is the same everywhere,
+        Shared with the Reels publishers, the reason is the same everywhere,
         and TikTok is only the network where it was needed first.
         """
         return slideshow_from_payload(payload, "TikTok", PHOTO_LIMIT)
@@ -194,7 +194,7 @@ class TikTokPublisher(BasePublisher):
         """Post images as a TikTok photo carousel.
 
         Photos go through a different endpoint to video, and unlike video they
-        have no upload option — TikTok will only pull them from a URL, and that
+        have no upload option. TikTok will only pull them from a URL, and that
         URL must sit under a domain or prefix verified on the developer app. So
         the media host itself has to be verified; bytes can't be sent instead.
         """
@@ -487,7 +487,7 @@ class TikTokPublisher(BasePublisher):
                 )
             time.sleep(PUBLISH_POLL_SEC)
 
-        # Still processing — retry rather than discard the post.
+        # Still processing, retry rather than discard the post.
         raise TransientPublishError(
             f"TikTok still reports {status} after {PUBLISH_TIMEOUT_SEC}s"
         )

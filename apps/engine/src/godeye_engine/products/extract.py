@@ -8,8 +8,8 @@ Three sources, in order of how much they can be trusted:
              What Shopify, WooCommerce, BigCommerce and most Western storefronts
              emit by default, and the only one that carries a currency reliably.
   Microdata  the same vocabulary expressed as itemprop attributes. Older themes.
-  OpenGraph  og:type=product. Coarse — one product per page, no stock, and the
-             price is often missing — but present when nothing else is.
+  OpenGraph  og:type=product. Coarse, one product per page, no stock, and the
+             price is often missing, but present when nothing else is.
 
 Nothing here renders JavaScript. A storefront that builds its catalogue in the
 browser returns an empty shell to a plain fetch, and the honest answer for those
@@ -293,8 +293,8 @@ def from_opengraph(html: str, base_url: str) -> list[Product]:
 def extract_products(html: str, base_url: str) -> list[Product]:
     """Every product this page describes, best source first.
 
-    The three sources overlap — a Shopify page emits JSON-LD and OpenGraph for
-    the same item — so later sources only fill gaps the earlier ones left.
+    The three sources overlap, a Shopify page emits JSON-LD and OpenGraph for
+    the same item, so later sources only fill gaps the earlier ones left.
     """
     products = from_jsonld(html, base_url)
     seen: set[str] = set()

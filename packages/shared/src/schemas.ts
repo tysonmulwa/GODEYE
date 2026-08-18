@@ -219,7 +219,7 @@ export const runSeoAuditSchema = z.object({
   maxPages: z.number().int().min(1).max(50).default(20),
   // Set true to scan a site that isn't the org's registered website (the UI asks
   // for confirmation first). Plan-based limits on how many sites you can add are
-  // intentionally not enforced yet — see SeoService.runAudit.
+  // intentionally not enforced yet, see SeoService.runAudit.
   allowForeign: z.boolean().default(false),
 });
 export type RunSeoAuditInput = z.infer<typeof runSeoAuditSchema>;
@@ -273,7 +273,7 @@ export type ImportProductsInput = z.infer<typeof importProductsSchema>;
 
 export const renderOptionsSchema = z.object({
   slideshowSeconds: slideshowLengthSchema,
-  // TikTok ignores this — its API takes no still post that can carry audio.
+  // TikTok ignores this, its API takes no still post that can carry audio.
   // Everywhere else it picks between a still carousel and a Reel.
   renderAsVideo: z.boolean().default(true),
 });

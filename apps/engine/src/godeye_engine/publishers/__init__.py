@@ -1,4 +1,4 @@
-"""Publisher registry — maps a Platform enum value to its adapter."""
+"""Publisher registry, maps a Platform enum value to its adapter."""
 
 from __future__ import annotations
 

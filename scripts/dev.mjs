@@ -4,7 +4,7 @@
  * `pnpm dev` brings up the whole stack.
  *
  * The engine is a separate Python project (not a pnpm workspace member), so it
- * can't be started by turbo — this launcher bridges that. If the engine's venv
+ * can't be started by turbo, this launcher bridges that. If the engine's venv
  * isn't set up, it's skipped with a hint and web+api still run.
  *
  * Prerequisites for the engine to actually do work: Redis running, and an
@@ -30,10 +30,10 @@ function spawnProc(cmd, args, opts = {}) {
   return p;
 }
 
-// web + api — turbo already labels its own output per app
+// web + api, turbo already labels its own output per app
 spawnProc("pnpm", ["exec", "turbo", "run", "dev", "--parallel"], { stdio: "inherit" });
 
-// engine (Python) — only when its venv exists
+// engine (Python), only when its venv exists
 if (existsSync(venvPython)) {
   const engine = spawnProc(venvPython, ["-m", "godeye_engine.run"], {
     cwd: join(root, "apps", "engine"),
@@ -48,7 +48,7 @@ if (existsSync(venvPython)) {
   engine.stdout.on("data", relay);
   engine.stderr.on("data", relay);
 } else {
-  console.log(`\x1b[35m[engine]\x1b[0m skipped — no Python venv at ${venvPython}`);
+  console.log(`\x1b[35m[engine]\x1b[0m skipped, no Python venv at ${venvPython}`);
   console.log(
     `\x1b[35m[engine]\x1b[0m set it up:  cd apps/engine && python -m venv .venv && ` +
       `${isWin ? ".venv\\Scripts\\activate" : "source .venv/bin/activate"} && pip install -e ".[dev]"`,

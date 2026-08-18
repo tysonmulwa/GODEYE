@@ -26,7 +26,7 @@ import { useScrollLock } from "@/lib/use-scroll-lock";
 const seenTrialKey = (orgId: string) => `godeye:trial-welcome:${orgId}`;
 const seenLockKey = (orgId: string) => `godeye:trial-lock:${orgId}`;
 
-/** "23 hours", "45 minutes", "under a minute" — never "23.4h". */
+/** "23 hours", "45 minutes" or "under a minute". Never "23.4h". */
 function remaining(endsAt: string): string {
   const ms = Date.parse(endsAt) - Date.now();
   if (!Number.isFinite(ms) || ms <= 0) return "no time";
@@ -174,7 +174,7 @@ export function TrialNotice() {
               <>Your free trial has ended. This workspace is read-only until you choose a plan.</>
             ) : (
               <>
-                Free trial —{" "}
+                Free trial,{" "}
                 <span className="font-mono font-semibold">
                   {remaining(access.trialEndsAt as string)}
                 </span>{" "}
@@ -209,7 +209,7 @@ export function TrialNotice() {
             <span className="font-semibold text-ink">{organization.name}</span> is on the full
             product until{" "}
             <span className="font-mono">{endsAtLabel(access.trialEndsAt)}</span>. Write posts,
-            generate the images and video, connect your channels and publish for real — none of it
+            generate the images and video, connect your channels and publish for real, none of it
             is a preview, and no card is needed to begin.
           </p>
           <p>
@@ -236,7 +236,7 @@ export function TrialNotice() {
         >
           <p>
             This workspace is read-only for now. Your posts, drafts, connected channels and history
-            are all still here — you can read everything, but publishing, generating and editing are
+            are all still here, you can read everything, but publishing, generating and editing are
             paused.
           </p>
           <p>Choosing a plan turns it all back on straight away.</p>

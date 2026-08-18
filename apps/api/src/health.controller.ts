@@ -30,11 +30,11 @@ export class HealthController {
       // Whether this deploy can take money, without asking anyone to sign in.
       // "Upgrade does nothing" and "the key is not set on this service" look
       // identical from the browser, and the answer is one env var either way.
-      // Booleans only — never the keys, and never the plan codes.
+      // Booleans only, never the keys, and never the plan codes.
       payments: {
         provider: "paystack",
         secretKey: !!env.paystack.secretKey,
-        // Test or live, from the key's prefix — never the key. Plan codes are
+        // Test or live, from the key's prefix, never the key. Plan codes are
         // scoped to a mode, so a plan built on one side of that switch is
         // invisible to a key from the other, and this is the fastest way to
         // see it.
@@ -49,7 +49,7 @@ export class HealthController {
 
     try {
       // ?render=1 queues a throwaway encode on a worker and reads the result
-      // on a later call — the encode outlives the request, so it cannot be
+      // on a later call, the encode outlives the request, so it cannot be
       // answered inline. ?render=refresh discards a cached result first.
       // Opt-in: it costs real CPU, and it is the only way to tell a container
       // that has ffmpeg from one that can finish a render.

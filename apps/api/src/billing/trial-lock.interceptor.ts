@@ -17,7 +17,7 @@ const READ_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
  *
  * `/billing` is the important one: locking somebody out of the page that takes
  * their money would make the lock permanent. `/auth` covers signing out,
- * refreshing a session and changing a password — a payment problem is not a
+ * refreshing a session and changing a password, a payment problem is not a
  * reason to trap someone in their account. `/webhooks` carries no session at
  * all and is how a payment arrives in the first place.
  */
@@ -33,8 +33,8 @@ const OPEN_PREFIXES = ["/auth", "/billing", "/webhooks", "/health"];
  * the exceptions are written down above.
  *
  * It is an interceptor and not a guard because guards registered globally run
- * *before* the controller's own JwtAuthGuard, so `req.auth` — the only thing
- * that says which workspace is calling — would not exist yet. Interceptors run
+ * *before* the controller's own JwtAuthGuard, so `req.auth`, the only thing
+ * that says which workspace is calling, would not exist yet. Interceptors run
  * after every guard, and throwing from one still refuses the request before the
  * handler is reached.
  */
@@ -65,7 +65,7 @@ export class TrialLockInterceptor implements NestInterceptor {
         code: "WORKSPACE_LOCKED",
         message:
           "Your free trial has ended, so this workspace is read-only. " +
-          "Choose a plan on the Billing page to start publishing again — " +
+          "Choose a plan on the Billing page to start publishing again, " +
           "everything you have already made is still here.",
       });
     }

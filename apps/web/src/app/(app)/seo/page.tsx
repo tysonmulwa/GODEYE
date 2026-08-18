@@ -154,7 +154,7 @@ export default function SeoPage() {
       queryClient.invalidateQueries({ queryKey: ["seo-audits"] });
     },
     onError: (e) => {
-      // The site isn't the org's registered website — confirm, then scan anyway.
+      // The site isn't the org's registered website, confirm, then scan anyway.
       if (
         e instanceof ApiError &&
         (e.details as { code?: string } | undefined)?.code === "SITE_NOT_OWNED"
@@ -337,7 +337,7 @@ export default function SeoPage() {
                   </div>
                 </Card>
 
-                {/* Fixes — the actionable half: what to change, and where. */}
+                {/* Fixes, the actionable half: what to change, and where. */}
                 <SeoFixes
                   auditId={detail.id}
                   platform={

@@ -1,4 +1,4 @@
-"""Engine configuration — reads the repo-root .env (shared with the Node apps)."""
+"""Engine configuration, reads the repo-root .env (shared with the Node apps)."""
 
 from __future__ import annotations
 
@@ -35,7 +35,7 @@ class Settings(BaseSettings):
     anthropic_api_key: str = ""
     anthropic_model: str = "claude-sonnet-5"
     openai_api_key: str = ""
-    # Gemini (Google) can generate content text too — same GOOGLE_API_KEY as images
+    # Gemini (Google) can generate content text too, same GOOGLE_API_KEY as images
     gemini_model: str = "gemini-2.0-flash"
 
     # Image generation
@@ -46,7 +46,7 @@ class Settings(BaseSettings):
     image_timeout_sec: float = 120.0
     # gpt-image-2 is the current flagship and undercuts both gpt-image-1 and
     # gpt-image-1.5 on price, so those two are never the right pick. The image
-    # is the product here — it goes straight onto a customer's feed — so this
+    # is the product here, it goes straight onto a customer's feed, so this
     # defaults to quality. Set OPENAI_IMAGE_MODEL=gpt-image-1-mini to cut cost
     # roughly 6x if volume ever outweighs fidelity.
     openai_image_model: str = "gpt-image-2"
@@ -96,7 +96,7 @@ class Settings(BaseSettings):
     # Reading a storefront that builds its catalogue in the browser needs a
     # browser. Deliberately not this container: the worker was killed for
     # memory encoding a five second video, and Chromium is heavier than
-    # ffmpeg. Point this at a Browserless-compatible /content endpoint — one
+    # ffmpeg. Point this at a Browserless-compatible /content endpoint, one
     # container, self-hostable, and the hosted services speak it too.
     browser_render_url: str = ""
     browser_render_token: str = ""

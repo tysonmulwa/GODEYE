@@ -15,7 +15,7 @@ interface BusinessProfile {
   website: string | null;
   goals: string[];
   brandVoice: string | null;
-  // Not shown by this card, but sent back so saving does not wipe it — and
+  // Not shown by this card, but sent back so saving does not wipe it, and
   // coerced from null, which the schema rejects.
   seasonalNotes: string | null;
 }

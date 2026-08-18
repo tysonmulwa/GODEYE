@@ -24,7 +24,7 @@ export interface SessionOrg {
    *
    * Optional because a session restored by an older API build will not carry
    * it, and a missing field must read as "no reason to warn anybody" rather
-   * than as an expired trial. The API refuses the write either way — this is
+   * than as an expired trial. The API refuses the write either way, this is
    * only what the app uses to explain itself.
    */
   access?: WorkspaceAccess;

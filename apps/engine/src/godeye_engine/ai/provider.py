@@ -6,7 +6,7 @@ from dataclasses import dataclass
 
 from ..config import get_settings
 
-# USD per million tokens (input, output) — used for AgentRun cost accounting.
+# USD per million tokens (input, output), used for AgentRun cost accounting.
 MODEL_PRICES: dict[str, tuple[float, float]] = {
     "claude-sonnet-5": (3.0, 15.0),
     "claude-opus-4-8": (15.0, 75.0),
@@ -43,7 +43,7 @@ def complete(system: str, user: str, max_tokens: int = 2500) -> LlmResult:
     if settings.google_api_key:
         return _gemini(system, user, max_tokens)
     raise RuntimeError(
-        "No AI provider configured — set ANTHROPIC_API_KEY, OPENAI_API_KEY, "
+        "No AI provider configured, set ANTHROPIC_API_KEY, OPENAI_API_KEY, "
         "or GOOGLE_API_KEY (Gemini) in .env"
     )
 
@@ -113,7 +113,7 @@ def _openai(system: str, user: str, max_tokens: int) -> LlmResult:
 
 
 def _gemini(system: str, user: str, max_tokens: int) -> LlmResult:
-    """Gemini via the Generative Language REST API (httpx — no extra SDK dep)."""
+    """Gemini via the Generative Language REST API (httpx, no extra SDK dep)."""
     import httpx
 
     settings = get_settings()

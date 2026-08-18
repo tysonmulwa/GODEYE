@@ -1,4 +1,4 @@
-"""The shared agent charter — mission, guardrails, and per-skill roles."""
+"""The shared agent charter, mission, guardrails, and per-skill roles."""
 
 from godeye_engine.ai import content_agent, image_agent, mission, seo_agent, video_agent
 
@@ -18,7 +18,7 @@ class TestCharter:
     def test_unknown_skill_still_has_guardrails(self):
         text = mission.charter("does-not-exist")
         assert "Truth over invention" in text
-        assert "Your role —" not in text  # no role block, but still safe
+        assert "Your role," not in text  # no role block, but still safe
 
     def test_user_requested_skills_exist(self):
         for key in ["marketing", "content", "business", "seo"]:

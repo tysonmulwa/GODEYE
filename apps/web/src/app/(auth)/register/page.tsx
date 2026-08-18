@@ -85,7 +85,7 @@ export default function RegisterPage() {
           this in, and nobody should discover the clock once they are inside. */}
       <p className="mb-6 text-sm text-ink-2">
         <span className="font-semibold text-ink">{TRIAL_HOURS} hours of full access</span>, no card
-        needed. After that the workspace turns read-only until you choose a plan — nothing is
+        needed. After that the workspace turns read-only until you choose a plan, nothing is
         deleted.
       </p>
       <form onSubmit={submit} className="space-y-4">

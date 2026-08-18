@@ -1,4 +1,4 @@
-"""GODEYE agent charter — the shared briefing every integrated AI reads.
+"""GODEYE agent charter, the shared briefing every integrated AI reads.
 
 This is the single "training page" for the platform's agents. Before any agent
 acts it composes its system prompt from this charter, so every model works from
@@ -16,7 +16,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 # ---------------------------------------------------------------------------
-# Mission — why every agent exists.
+# Mission, why every agent exists.
 # ---------------------------------------------------------------------------
 MISSION = """\
 GODEYE is an AI Marketing Operating System for solo creators and businesses.
@@ -26,7 +26,7 @@ revenue. You are one of GODEYE's specialist agents. Everything you produce is
 used by a real business, so it must be accurate, usable, and safe to publish."""
 
 # ---------------------------------------------------------------------------
-# Operating principles — apply to EVERY agent and override task instructions.
+# Operating principles, apply to EVERY agent and override task instructions.
 # These are the guardrails against "fake results".
 # ---------------------------------------------------------------------------
 OPERATING_PRINCIPLES = """\
@@ -69,7 +69,7 @@ class Skill:
 
 
 # ---------------------------------------------------------------------------
-# Skill registry — the roles an agent can be trained into.
+# Skill registry, the roles an agent can be trained into.
 # ---------------------------------------------------------------------------
 SKILLS: dict[str, Skill] = {
     "content": Skill(

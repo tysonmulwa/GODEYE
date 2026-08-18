@@ -5,9 +5,9 @@ import { GodeyeCrest } from "@/components/logo";
 /**
  * What GODEYE does with a Facebook Page and an Instagram Business account.
  *
- * Meta rejected four permissions under Developer Policy 1.6 — "your use case
+ * Meta rejected four permissions under Developer Policy 1.6, "your use case
  * for the requested permission is invalid or is not needed to support its core
- * functionality" — and asked, for each one, which functionality needs it, how
+ * functionality", and asked, for each one, which functionality needs it, how
  * the integration works, and how it helps the end user. This page answers
  * those three questions per permission, in public, so a reviewer can read the
  * justification without taking anyone's word for it.

@@ -7,7 +7,7 @@ import { SITE_URL } from "@/lib/site";
  * the domain the site is actually served on.
  *
  * The disallowed paths are the signed-in application. There is nothing there
- * for a crawler — every page needs a session — and letting them be indexed
+ * for a crawler, every page needs a session, and letting them be indexed
  * puts a login screen in the results under a dashboard's name.
  *
  * The AI crawlers are named and allowed on purpose. They are already permitted

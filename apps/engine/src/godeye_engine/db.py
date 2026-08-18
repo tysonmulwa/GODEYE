@@ -49,7 +49,7 @@ class PgEnum(types.TypeDecorator):
     ``operator does not exist: "ScheduleStatus" = character varying``.
     Casting the bound value to the named enum (``$1::"ScheduleStatus"``) fixes
     ``==``, ``.in_()`` and ``.values()`` alike, while values stay plain Python
-    strings on the way in and out. ``create_type=False`` — Prisma owns the type.
+    strings on the way in and out. ``create_type=False``. Prisma owns the type.
     """
 
     impl = String
@@ -225,7 +225,7 @@ SocialConnection = Table(
     Column("externalId", String),
     Column("encryptedCredentials", Text, nullable=False),
     # These exist in the database and were simply never mapped here. Naming an
-    # unmapped column in .values() is not a silent no-op — SQLAlchemy raises
+    # unmapped column in .values() is not a silent no-op. SQLAlchemy raises
     # CompileError, which in _finish meant a post published and then failed to
     # record it, so the message was redelivered and published again.
     Column("lastCheckedAt", DateTime(timezone=False)),
@@ -381,7 +381,7 @@ PostingPlan = Table(
     Column("cadence", PgEnum("CadenceType"), nullable=False),
     Column("customCron", String),
     Column("timezone", String, nullable=False),
-    # "Platform"[] — a Prisma enum array, not a text array. See PgEnumArray.
+    # "Platform"[], a Prisma enum array, not a text array. See PgEnumArray.
     Column("platforms", PgEnumArray("Platform"), nullable=False),
     Column("preferredTimes", ARRAY(String), nullable=False),
     Column("active", Boolean, nullable=False),
@@ -438,7 +438,7 @@ Subscription = Table(
 )
 
 # The workspaces GODEYE itself runs: never billed, never locked.
-# Must match BILLING_EXEMPT_SLUGS in packages/shared/src/plans.ts — the API and
+# Must match BILLING_EXEMPT_SLUGS in packages/shared/src/plans.ts, the API and
 # this worker have to agree on who is exempt, or one of them would stop
 # publishing for a workspace the other considers paid up.
 BILLING_EXEMPT_SLUGS = ("godeye", "patampoa", "mjini-collection")
@@ -517,5 +517,5 @@ def new_id() -> str:
 
 
 def utcnow() -> datetime:
-    """Naive UTC now — Prisma stores DateTime as timestamp(3) without tz."""
+    """Naive UTC now. Prisma stores DateTime as timestamp(3) without tz."""
     return datetime.now(timezone.utc).replace(tzinfo=None)

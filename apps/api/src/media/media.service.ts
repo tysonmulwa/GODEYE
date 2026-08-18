@@ -149,7 +149,7 @@ export class MediaService {
       data: {
         orgId,
         contentItemId: input.contentItemId ?? null,
-        // The scheduler splits media by kind — video sent as an image would be
+        // The scheduler splits media by kind, video sent as an image would be
         // handed to the wrong publisher path (and TikTok takes video only).
         kind: input.contentType.startsWith("video/") ? "VIDEO" : "IMAGE",
         source: "UPLOADED",

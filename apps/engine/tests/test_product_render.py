@@ -70,7 +70,7 @@ class TestWhenRenderingWorks:
     def test_links_are_taken_from_the_rendered_page_not_the_shell(
         self, shell_site, monkeypatch
     ):
-        """The shell has no links — they are drawn by the JavaScript. Reading
+        """The shell has no links, they are drawn by the JavaScript. Reading
         them from the plain fetch would find nothing to render."""
         asked: list[str] = []
 
@@ -99,7 +99,7 @@ class TestWhenRenderingWorks:
 
     def test_a_rendered_site_with_no_products_is_not_a_shop(self, shell_site, monkeypatch):
         """Rendered successfully and still empty is a different answer from
-        "we could not read it" — and it should not ask to be retried."""
+        "we could not read it", and it should not ask to be retried."""
         monkeypatch.setattr(render, "is_configured", lambda: True)
         monkeypatch.setattr(
             render, "render", lambda url: render.Rendered(html="<html><body>A blog</body></html>")
@@ -178,7 +178,7 @@ class TestTheRenderRequest:
         assert not render.render("https://spa.example").ok
 
     def test_playwright_missing_says_how_to_proceed(self, monkeypatch):
-        """The dependency is optional on purpose — Chromium is heavier than the
+        """The dependency is optional on purpose. Chromium is heavier than the
         ffmpeg that got this worker killed."""
         self._configure(monkeypatch, BROWSER_RENDER_PROVIDER="playwright")
         import builtins

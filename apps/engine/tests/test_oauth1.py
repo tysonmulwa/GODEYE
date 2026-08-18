@@ -1,4 +1,4 @@
-"""OAuth 1.0a signing — validated against the RFC 5849 §3.1 worked example."""
+"""OAuth 1.0a signing, validated against the RFC 5849 §3.1 worked example."""
 
 from godeye_engine.publishers import oauth1
 

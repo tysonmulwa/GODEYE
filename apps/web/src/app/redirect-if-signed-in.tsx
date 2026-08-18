@@ -11,7 +11,7 @@ import { useAuthStore } from "@/lib/auth-store";
  * that rendered a spinner and redirected. A crawler ran no JavaScript, so the
  * homepage was two words of loading text, which is why it could not rank for
  * anything. The page is server-rendered content now and the redirect is this
- * — a behaviour bolted onto real content rather than standing in for it.
+ *, a behaviour bolted onto real content rather than standing in for it.
  *
  * A signed-out visitor is deliberately left alone. Bouncing them to /login
  * would put the same emptiness back, one URL along.

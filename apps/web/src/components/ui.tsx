@@ -67,7 +67,7 @@ export const Input = forwardRef<HTMLInputElement, React.InputHTMLAttributes<HTML
 /**
  * Password / secret input with a show-hide eye toggle. Use for any field that
  * hides its value (passwords, API keys, bot tokens) so people can verify what
- * they typed. Omit `type` — it's always a masked field until revealed.
+ * they typed. Omit `type`, it's always a masked field until revealed.
  */
 export const PasswordInput = forwardRef<
   HTMLInputElement,
@@ -117,7 +117,7 @@ export const Textarea = forwardRef<
   );
 });
 
-/** Form/field label — the design sets every label in uppercase mono. */
+/** Form/field label, the design sets every label in uppercase mono. */
 export function Label({ children, htmlFor }: { children: React.ReactNode; htmlFor?: string }) {
   return (
     <label
@@ -164,7 +164,7 @@ export function Card({
         // A wider radius than a printed panel would take: glass reads as a
         // physical pane, and a tight corner makes it look like a rectangle
         // drawn on the page instead of one resting above it. The hover lift
-        // is a plain CSS rule — a Tailwind arbitrary value cannot hold the
+        // is a plain CSS rule, a Tailwind arbitrary value cannot hold the
         // commas a two-part box-shadow needs.
         "glass glass-hover rounded-2xl p-4",
         className,
@@ -175,7 +175,7 @@ export function Card({
   );
 }
 
-// ---------- Badge (status/role chips — mono, per the design every code is mono) ----------
+// ---------- Badge (status/role chips, mono, per the design every code is mono) ----------
 
 const badgeStyles: Record<string, string> = {
   PENDING: "bg-amber-500/13 text-amber-600",
@@ -270,14 +270,14 @@ export function LiveDot({
 
 /**
  * Each platform's mark, drawn white-on-brand-colour in a 24x24 box. Marks are
- * geometric renditions rather than the exact trademarked artwork — enough to be
+ * geometric renditions rather than the exact trademarked artwork, enough to be
  * unmistakable at 16-36px, with no asset files to load. A platform with no mark
  * falls back to its initials.
  */
 /**
  * Official brand marks, single-path and monochrome, drawn in currentColor so
  * they render white on the chip's brand colour. Paths come from Simple Icons
- * (CC0), which publishes each platform's own artwork — so these are the real
+ * (CC0), which publishes each platform's own artwork, so these are the real
  * logos, not approximations, and carry no attribution requirement.
  *
  * LinkedIn is the exception: Simple Icons no longer ships it, so its mark is
@@ -522,7 +522,7 @@ export function PageHeader({
  *
  * Apple Pay is written as the Apple mark followed by the word "Pay", never as
  * the word "Apple" spelled out and never as some other fruit-shaped icon from
- * a general icon set — Apple's marketing guidelines are specific about it, and
+ * a general icon set. Apple's marketing guidelines are specific about it, and
  * a wrong mark on a payment button reads as a fake one to the customer.
  *
  * Inline SVG rather than a hosted image: it inherits the surrounding text

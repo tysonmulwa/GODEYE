@@ -1,4 +1,4 @@
-"""Reddit publisher — OAuth refresh-token grant + /api/submit."""
+"""Reddit publisher. OAuth refresh-token grant + /api/submit."""
 
 from __future__ import annotations
 
@@ -16,7 +16,7 @@ class RedditPublisher(BasePublisher):
 
         refresh_token = credentials.get("refreshToken")
         if not refresh_token:
-            raise PublishError("Reddit connection has no refresh token — reconnect the account")
+            raise PublishError("Reddit connection has no refresh token, reconnect the account")
 
         # Access tokens live ~1 hour, so exchange the stored refresh token for a
         # fresh one at post time rather than trusting the cached access token.

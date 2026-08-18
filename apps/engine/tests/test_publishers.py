@@ -172,7 +172,7 @@ class TestInstagram:
 
     def test_instagram_login_errors_are_left_alone(self, monkeypatch):
         """The reconnect advice would be nonsense on a connection that already
-        uses Instagram Login — it is the thing being recommended."""
+        uses Instagram Login, it is the thing being recommended."""
         monkeypatch.setattr(
             InstagramPublisher,
             "_post",
@@ -290,14 +290,14 @@ class TestTikTok:
         assert isinstance(get_publisher("TIKTOK"), TikTokPublisher)
 
     def test_requires_media(self):
-        """TikTok has no text-only post — fail before calling the API."""
+        """TikTok has no text-only post, fail before calling the API."""
         from godeye_engine.publishers.tiktok import TikTokPublisher
 
         with pytest.raises(PublishError, match="needs media"):
             TikTokPublisher().publish({"accessToken": "t"}, PostPayload(text="hi"))
 
     def test_photos_use_the_content_endpoint_and_pull_from_url(self, monkeypatch):
-        """Photos have no upload path — they must be pulled from their URLs."""
+        """Photos have no upload path, they must be pulled from their URLs."""
         import httpx
 
         from godeye_engine.publishers.tiktok import TikTokPublisher
@@ -375,7 +375,7 @@ class TestTikTok:
             {"accessToken": "t"}, PostPayload(text="hi", video_urls=["https://cdn/v.mp4"])
         )
         assert result.external_post_id == "pub-1"
-        # The bytes must be PUT to the upload URL — FILE_UPLOAD, not a pull.
+        # The bytes must be PUT to the upload URL. FILE_UPLOAD, not a pull.
         assert len(put_calls) == 1 and put_calls[0][0] == "https://up/1"
         assert put_calls[0][1]["content"] == b"video-bytes"
 
@@ -451,7 +451,7 @@ class TestMultiImage:
         # Caption on the first item only, else it repeats under every photo.
         assert media[0].get("caption") == "hi"
         assert "caption" not in media[1]
-        # result is a list for media groups — must still yield an id
+        # result is a list for media groups, must still yield an id
         assert result.external_post_id == "7"
 
     def test_facebook_attaches_unpublished_photos_to_one_post(self, monkeypatch):
@@ -481,7 +481,7 @@ class TestMultiImage:
         import httpx
 
         calls = []
-        # Children, then the carousel parent, then media_publish — don't run dry.
+        # Children, then the carousel parent, then media_publish, don't run dry.
         ids = iter(["c1", "c2", "parent", "published"])
 
         def fake_post(self, url, **kw):
@@ -912,7 +912,7 @@ class TestReels:
         self, monkeypatch, rendered
     ):
         """Instagram fetches video_url itself, so a render it cannot reach is
-        no use — but that should cost the sound, not the post."""
+        no use, but that should cost the sound, not the post."""
         monkeypatch.setattr(meta_mod, "store_rendered_reel", lambda *a, **kw: None)
         sent: list[dict] = []
         monkeypatch.setattr(
@@ -1075,8 +1075,8 @@ class TestTikTokSlideshow:
 
     def test_every_fallback_to_silence_says_why(self, monkeypatch, caplog):
         """A post that goes out silent is indistinguishable from one that was
-        never meant to have sound. Two paths — a failed image fetch and a failed
-        track fetch — abandoned the slideshow without logging anything, which is
+        never meant to have sound. Two paths, a failed image fetch and a failed
+        track fetch, abandoned the slideshow without logging anything, which is
         what made this take hours to see."""
         import logging
 
@@ -1106,7 +1106,7 @@ class TestTikTokSlideshow:
     def test_tiktok_renders_even_when_the_post_asked_for_stills(self, monkeypatch):
         """Elsewhere the toggle picks between a carousel and a Reel, both real
         formats. On TikTok the alternative is a silent post, so there is
-        nothing to choose — and the setting is not offered for it either."""
+        nothing to choose, and the setting is not offered for it either."""
         self._publisher(monkeypatch)
         seen = []
         monkeypatch.setattr(

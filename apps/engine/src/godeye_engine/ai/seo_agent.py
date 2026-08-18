@@ -1,4 +1,4 @@
-"""SEO Agent — LLM-powered keyword research, meta rewrites, and schema markup."""
+"""SEO Agent. LLM-powered keyword research, meta rewrites, and schema markup."""
 
 from __future__ import annotations
 
@@ -24,7 +24,7 @@ def keyword_research(
     The site's own crawled content is the source of truth. ``profile`` is passed
     ONLY when the audited URL is the user's own registered website; for any other
     site it stays ``None`` so the keywords reflect what the site actually sells /
-    is about — not the user's unrelated business.
+    is about, not the user's unrelated business.
     """
     lines = [
         "You are auditing the website below. First infer, purely from its real",

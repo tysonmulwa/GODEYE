@@ -51,7 +51,7 @@ const ENTRY_LIMITS: PlanLimits = {
  *
  * `subscription` is a Paystack plan: a card, charged again automatically every
  * month. `once` is a single transaction for one month, which is the only way
- * Apple Pay and M-Pesa can be used at all — Paystack can re-charge a card
+ * Apple Pay and M-Pesa can be used at all. Paystack can re-charge a card
  * authorisation and nothing else, so a wallet on a plan would take money once
  * and never renew.
  */
@@ -92,7 +92,7 @@ export class BillingService implements OnModuleInit {
       for (const code of ["PRO", "PREMIUM", "VIP"] as PlanCode[]) {
         const configured = env.paystack.plans[code];
         if (!configured) {
-          this.logger.warn(`PAYSTACK_PLAN_${code} is not set — that tier cannot be bought`);
+          this.logger.warn(`PAYSTACK_PLAN_${code} is not set, that tier cannot be bought`);
           continue;
         }
         try {
@@ -107,7 +107,7 @@ export class BillingService implements OnModuleInit {
     })();
   }
 
-  /** The org's effective plan — CANCELED/absent subscriptions fall back to the entry plan. */
+  /** The org's effective plan. CANCELED/absent subscriptions fall back to the entry plan. */
   async effectivePlan(orgId: string) {
     const sub = await this.prisma.subscription.findUnique({
       where: { orgId },
@@ -163,7 +163,7 @@ export class BillingService implements OnModuleInit {
         : { code: "PRO", name: "Pro", priceMonthlyUsd: "19" },
       subscriptionStatus: subscription?.status ?? null,
       currentPeriodEnd: subscription?.currentPeriodEnd?.toISOString() ?? null,
-      /** Trial clock and read-only state — the same answer the API enforces. */
+      /** Trial clock and read-only state, the same answer the API enforces. */
       access,
       limits: this.limitsOf(plan),
       usage,
@@ -215,7 +215,7 @@ export class BillingService implements OnModuleInit {
    *
    * Read at checkout rather than kept in configuration, because the number that
    * matters is the one Paystack will actually bill. Taking it from anywhere
-   * else — our own USD catalogue, an amount in an env var — invents a second
+   * else, our own USD catalogue, an amount in an env var, invents a second
    * source of truth for a price, and the two only ever disagree in front of a
    * paying customer.
    *
@@ -243,7 +243,7 @@ export class BillingService implements OnModuleInit {
           `server's ${env.paystack.mode} key. Plan codes belong to one mode: a plan created ` +
           `in test mode does not exist for a live key, and the other way round. Check that ` +
           `the plan was created with the dashboard's Test/Live switch set to ${env.paystack.mode}, ` +
-          `and that the value is the code beginning with PLN_ — not the plan's name or id.`,
+          `and that the value is the code beginning with PLN_, not the plan's name or id.`,
       );
     }
     return { amount, currency: data.data?.currency, interval: data.data?.interval };
@@ -254,7 +254,7 @@ export class BillingService implements OnModuleInit {
    *
    * The amount is the plan's own, fetched a moment earlier. Paystack's
    * documented example omits it when a plan code is passed, but the live API
-   * answers "Invalid Amount Sent" without one — it treats a missing amount as
+   * answers "Invalid Amount Sent" without one, it treats a missing amount as
    * zero. Sending the plan's exact figure satisfies it and cannot disagree
    * with what the subscription then charges.
    */
@@ -296,7 +296,7 @@ export class BillingService implements OnModuleInit {
         callback_url: `${env.webUrl.split(",")[0]}/billing?billing=success`,
         // The only link back to the workspace. The webhook arrives on its own,
         // with no session, so without this there is no way to know which
-        // organisation just paid — or, for a one-off, what it bought.
+        // organisation just paid, or, for a one-off, what it bought.
         metadata: { orgId, planCode, userId, mode },
       }),
     });
@@ -353,7 +353,7 @@ export class BillingService implements OnModuleInit {
    *
    * This exists because Paystack can only re-charge a card. A customer paying
    * with M-Pesa or Apple Pay has no reusable authorisation, so there is nothing
-   * to renew — putting them on a plan would take their money once and then let
+   * to renew, putting them on a plan would take their money once and then let
    * the workspace lock while they believed they were subscribed. Buying a
    * month at a time is the honest version of what those channels can do.
    *
@@ -457,7 +457,7 @@ export class BillingService implements OnModuleInit {
         create: { orgId, ...fields },
         update: fields,
       });
-      // The workspace is paying as of this instant — it must not wait out a
+      // The workspace is paying as of this instant, it must not wait out a
       // cached read-only decision before it can publish again.
       this.access.invalidate(orgId);
       this.audit.log({

@@ -2,7 +2,7 @@
 
 A failure stamps the connection with its reason. Nothing removed it, so a
 channel that failed once and worked ever after still showed the old error on
-Connections — long after the calendar had gone quiet. From the user's side
+Connections, long after the calendar had gone quiet. From the user's side
 that reads as a channel that is still broken.
 """
 
@@ -48,7 +48,7 @@ class TestSuccessClearsTheError:
     def test_only_an_errored_connection_is_touched(self):
         """EXPIRED and DISCONNECTED say something about the account rather
         than about this attempt, and a lucky publish must not overwrite them.
-        The WHERE is what protects them, so that is what to check — the first
+        The WHERE is what protects them, so that is what to check, the first
         version of this asserted on a comment and passed either way.
         """
         source = self._finish_source()
@@ -67,7 +67,7 @@ def test_a_failed_post_never_writes_prose_onto_the_channel():
 
     Every permanent failure used to stamp its message onto the connection, so
     the text of a single bad post sat there in red until something later
-    happened to clear it — and users disconnected and reconnected to be rid of
+    happened to clear it, and users disconnected and reconnected to be rid of
     it. The message lives on the post; the card carries status only.
     """
     source = inspect.getsource(scheduler._record_failure)

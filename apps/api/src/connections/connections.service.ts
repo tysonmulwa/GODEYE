@@ -35,8 +35,8 @@ import {
 
 /**
  * Lifetime of the signed OAuth `state` token. It has to outlast the whole
- * detour through the provider — signing in, 2FA, choosing a page, granting
- * permissions — which routinely exceeds 10 minutes on a first connection and
+ * detour through the provider, signing in, 2FA, choosing a page, granting
+ * permissions, which routinely exceeds 10 minutes on a first connection and
  * then fails at the callback with an opaque "invalid state".
  */
 const OAUTH_STATE_TTL = "30m";
@@ -329,7 +329,7 @@ export class ConnectionsService {
     return { connected: 1 };
   }
 
-  // ---------- Instagram OAuth (Instagram Login — no Facebook Page needed) ----------
+  // ---------- Instagram OAuth (Instagram Login, no Facebook Page needed) ----------
 
   async instagramAuthorize(orgId: string, userId: string): Promise<{ url: string }> {
     if (!env.instagram.appId) {

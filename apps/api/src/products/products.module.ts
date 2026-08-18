@@ -69,7 +69,7 @@ export class ProductsService {
     });
     if (!profile) {
       throw new BadRequestException(
-        "Add your business profile first — product import reads the website set there",
+        "Add your business profile first, product import reads the website set there",
       );
     }
 

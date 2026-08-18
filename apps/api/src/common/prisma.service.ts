@@ -15,7 +15,7 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
 
   /**
    * Connect with retry/backoff. A transient DB blip (e.g. the Supabase pooler
-   * returning P1001) must NOT crash the whole API at boot — Prisma connects
+   * returning P1001) must NOT crash the whole API at boot. Prisma connects
    * lazily on the first query, so if every retry fails we log and continue
    * rather than exiting the process; the API recovers once the DB responds.
    */
@@ -36,7 +36,7 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
       }
     }
     this.logger.warn(
-      "Could not establish an initial database connection — starting anyway; " +
+      "Could not establish an initial database connection, starting anyway; " +
         "queries will connect on demand once the database is reachable.",
     );
   }

@@ -34,7 +34,7 @@ ENCODE_THREADS = 2
 ENCODE_PRESET = "veryfast"
 
 INSTALL_HINT = (
-    "ffmpeg not found — install it (Windows: `winget install Gyan.FFmpeg`, then restart "
+    "ffmpeg not found, install it (Windows: `winget install Gyan.FFmpeg`, then restart "
     "the terminal) or set FFMPEG_PATH in .env to the ffmpeg executable"
 )
 
@@ -167,14 +167,14 @@ def still_clip_cmd(
 
     A slow zoom looked like shaking. zoompan recomputes the crop window every
     frame and rounds it to whole pixels, so a gentle push in arrives as jitter
-    rather than motion — there is nothing to reveal in a still photograph
+    rather than motion, there is nothing to reveal in a still photograph
     anyway.
 
     Overfilling the frame cut the photo up. Scaling to cover a 1080x1920 frame
     and cropping means a square photo loses its top and bottom, which is not
     the picture the user chose. It is fitted instead, so it arrives at its own
     proportions, and the space left over is filled with a blurred copy of
-    itself — black bars read as a mistake.
+    itself, black bars read as a mistake.
 
     The background is blurred small and scaled up, which costs almost nothing;
     blurring at full resolution would be a per-frame filter across every frame

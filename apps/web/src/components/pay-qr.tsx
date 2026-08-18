@@ -13,12 +13,12 @@ import { useScrollLock } from "@/lib/use-scroll-lock";
  * Apple Pay only appears on Apple devices, so somebody on a Windows PC never
  * sees it however well the domain is verified. Apple's own answer to that is a
  * QR the iPhone camera recognises as a payment handoff, but that code is minted
- * by Apple for a validated merchant session and cannot be drawn by us — a QR we
+ * by Apple for a validated merchant session and cannot be drawn by us, a QR we
  * generate is a link, and a link is all the camera will treat it as.
  *
  * A link is enough. This encodes the Paystack checkout itself: the customer
- * scans it, the checkout opens on the phone — where Apple Pay does appear, and
- * where M-Pesa is one tap — and this page notices the payment landing and moves
+ * scans it, the checkout opens on the phone, where Apple Pay does appear, and
+ * where M-Pesa is one tap, and this page notices the payment landing and moves
  * on by itself. The difference from Apple's version is where the sheet comes
  * from, not what the customer ends up doing.
  *
@@ -43,7 +43,7 @@ export function PayOnPhone({
   /** Already formatted, in the currency actually charged. */
   price: string;
   channels: string[];
-  /** True once the payment has been seen — the dialog says so and closes. */
+  /** True once the payment has been seen, the dialog says so and closes. */
   paid: boolean;
   onClose: () => void;
 }) {
@@ -163,7 +163,7 @@ export function PayOnPhone({
             </p>
             <p className="mt-3 flex items-center justify-center gap-2 text-[12px] text-ink-3">
               <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              Waiting for payment — this page will move on by itself.
+              Waiting for payment, this page will move on by itself.
             </p>
           </>
         )}

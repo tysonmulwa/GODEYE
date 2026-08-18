@@ -32,7 +32,7 @@ function fix(overrides: Partial<Parameters<typeof renderFixPack>[1][number]> = {
 describe("renderFixPack", () => {
   it("leads with the site, the score and the stack the fixes are written for", () => {
     const doc = renderFixPack(audit(), [fix()]);
-    expect(doc).toContain("# SEO fix pack — example.com");
+    expect(doc).toContain("# SEO fix pack, example.com");
     expect(doc).toContain("12 pages crawled");
     expect(doc).toContain("score 64/100");
     expect(doc).toContain("WordPress");
@@ -68,7 +68,7 @@ describe("renderFixPack", () => {
     expect(doc).toContain("````html");
   });
 
-  it("omits dismissed fixes — they're not work the user still has to do", () => {
+  it("omits dismissed fixes, they're not work the user still has to do", () => {
     const doc = renderFixPack(audit(), [
       fix({ title: "Keep me" }),
       fix({ title: "Not relevant", status: "DISMISSED" }),

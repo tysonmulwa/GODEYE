@@ -2,7 +2,7 @@
 
 A workspace that imported its catalogue owns real pictures of what it sells.
 Without one an autopilot post is bare text, and TikTok and Instagram both
-refuse that outright — so this is the difference between a post and no post,
+refuse that outright, so this is the difference between a post and no post,
 not between a better image and a worse one.
 """
 
@@ -78,7 +78,7 @@ def test_attaches_an_imported_photo(monkeypatch):
 def test_the_row_satisfies_the_columns_the_table_requires(monkeypatch):
     """storageKey and mimeType are NOT NULL and there is no updatedAt. The
     first version of this insert had all three wrong, and only a compile
-    against the real table caught it — the shape of a row is not something to
+    against the real table caught it, the shape of a row is not something to
     take on trust."""
     _, session = _run(monkeypatch, PRODUCT)
     row = session.inserts[0]
@@ -131,7 +131,7 @@ class TestWhichPhotoIsChosen:
 
 class TestRetryingAFailedPost:
     """Real posts failed with "needs media", were rescheduled, and failed
-    identically — because a retry re-queues the same content, and that content
+    identically, because a retry re-queues the same content, and that content
     still has nothing attached. Nothing about retrying could ever fix it."""
 
     def _publish_source(self):

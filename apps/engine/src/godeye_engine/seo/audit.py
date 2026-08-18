@@ -1,4 +1,4 @@
-"""SEO audit rules — turn crawl data into findings and a 0-100 score."""
+"""SEO audit rules, turn crawl data into findings and a 0-100 score."""
 
 from __future__ import annotations
 
@@ -45,7 +45,7 @@ def audit_page(page: PageData) -> list[Finding]:
     # --- meta description ---
     if not page.meta_description:
         add("warning", "missing_description", "Page has no meta description",
-            "Add a compelling 50-160 character meta description — it drives click-through rate.")
+            "Add a compelling 50-160 character meta description, it drives click-through rate.")
     elif len(page.meta_description) > DESCRIPTION_MAX:
         add("info", "description_too_long",
             f"Meta description is {len(page.meta_description)} characters (max ~{DESCRIPTION_MAX})",
@@ -73,7 +73,7 @@ def audit_page(page: PageData) -> list[Finding]:
     if page.images_missing_alt > 0:
         add("warning", "images_missing_alt",
             f"{page.images_missing_alt} of {page.images_total} images missing alt text",
-            "Add descriptive alt text — it's an accessibility and image-SEO win.")
+            "Add descriptive alt text, it's an accessibility and image-SEO win.")
 
     # --- technical ---
     if not page.is_https:

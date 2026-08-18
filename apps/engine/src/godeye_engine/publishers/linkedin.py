@@ -1,4 +1,4 @@
-"""LinkedIn publisher — member posts via the versioned REST API."""
+"""LinkedIn publisher, member posts via the versioned REST API."""
 
 from __future__ import annotations
 
@@ -38,7 +38,7 @@ class LinkedInPublisher(BasePublisher):
         )
         if response.status_code == 401:
             raise PublishError(
-                "LinkedIn token expired — reconnect the LinkedIn account (tokens last ~60 days)"
+                "LinkedIn token expired, reconnect the LinkedIn account (tokens last ~60 days)"
             )
         if response.status_code >= 400:
             raise self._fail(response, "LinkedIn")

@@ -29,8 +29,8 @@ logger = logging.getLogger(__name__)
 # this length lands around 13s, which is comfortably inside every network's
 # limits and about where short-form engagement holds up.
 SECONDS_PER_IMAGE = 3.2
-# A single image is the common case, not the edge one — autopilot attaches one
-# image per post — so this floor decides most posts. TikTok rejects anything
+# A single image is the common case, not the edge one, autopilot attaches one
+# image per post, so this floor decides most posts. TikTok rejects anything
 # under 3s, and 3.2 left a fifth of a second of margin against an encoder that
 # does not land exactly on the requested length. It also reads as a glitch
 # rather than a post. Five seconds is a slide, and it is a safe distance from

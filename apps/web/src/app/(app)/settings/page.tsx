@@ -124,7 +124,7 @@ function BillingCard() {
       <div className="mt-5 grid gap-2.5 border-t border-line-soft pt-4 sm:grid-cols-3">
         {data.plans.map((p) => {
           // A trial runs on the Pro plan, so nothing counts as the current plan
-          // until it has actually been paid for — otherwise a trialing
+          // until it has actually been paid for, otherwise a trialing
           // workspace is shown Pro as "current" and cannot buy it.
           const paying = data.access.status === "ACTIVE" || data.access.status === "EXEMPT";
           const current = paying && p.code === data.plan.code;
@@ -176,7 +176,7 @@ function BillingCard() {
       <p className="mt-3 flex flex-wrap items-center gap-x-1.5 text-[12px] text-ink-3">
         <span>Paying with</span>
         <ApplePayMark />
-        <span>or M-Pesa? Those buy one month at a time —</span>
+        <span>or M-Pesa? Those buy one month at a time,</span>
         <Link href="/billing" className="font-semibold underline underline-offset-2">
           see Billing
         </Link>

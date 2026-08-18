@@ -109,7 +109,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (status === "guest") router.replace("/login");
     // Not while locked. Onboarding saves a business profile, which a read-only
-    // workspace is refused — so somebody who let the trial lapse mid-signup
+    // workspace is refused, so somebody who let the trial lapse mid-signup
     // would be redirected into a form that cannot be submitted, with no way to
     // reach the page that takes their money.
     if (status === "authed" && organization && !organization.hasProfile) {
@@ -141,7 +141,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   // Below lg the document scrolls; from lg up the shell is pinned and <main>
   // scrolls inside it. A fixed dvh shell on a phone is re-measured every frame
   // as the address bar collapses, so the page changes height while you scroll
-  // it — which is the shakiness itself. svh is the stable floor: it is the
+  // it, which is the shakiness itself. svh is the stable floor: it is the
   // viewport with browser chrome showing, and it never changes.
   return (
     <div className="flex min-h-svh lg:h-dvh lg:overflow-hidden">
@@ -237,7 +237,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       {/* min-w-0 lets flex children shrink; without it wide content forces the
           whole page to scroll sideways on a phone. */}
       <main className="flex min-w-0 flex-1 flex-col lg:overflow-y-auto">
-        {/* Phone-only top bar — the only way to reach the nav below lg.
+        {/* Phone-only top bar, the only way to reach the nav below lg.
             This was deliberately opaque, because a backdrop-blur on a sticky
             bar is re-composited on every scroll frame and that stutters on a
             mid-range phone. It is glass now because content passing under it

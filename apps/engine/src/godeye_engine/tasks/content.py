@@ -1,4 +1,4 @@
-"""Content generation task — Content Agent → ContentItem row → realtime event."""
+"""Content generation task. Content Agent → ContentItem row → realtime event."""
 
 from __future__ import annotations
 

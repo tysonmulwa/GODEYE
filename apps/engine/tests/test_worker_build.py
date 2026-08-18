@@ -88,7 +88,7 @@ def test_health_is_green_only_when_workers_match_this_build():
 
 
 def test_health_flags_a_worker_that_cannot_render():
-    """A current worker with no ffmpeg still publishes — it drops the sound and
+    """A current worker with no ffmpeg still publishes, it drops the sound and
     falls back to a silent photo carousel without saying anything."""
     result = _health(
         [{"node": "celery@aaa", "build": "07eda6d4", "ffmpeg": "missing: not found on PATH"}],

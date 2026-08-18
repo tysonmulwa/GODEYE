@@ -6,7 +6,7 @@ HTML = """
 <!doctype html>
 <html>
 <head>
-  <title>Acme Coffee — Fresh Roasts</title>
+  <title>Acme Coffee. Fresh Roasts</title>
   <meta name="description" content="Specialty coffee roasted in Nairobi.">
   <link rel="canonical" href="https://example.com/">
   <meta property="og:title" content="Acme Coffee">
@@ -60,7 +60,7 @@ class TestParsePage:
         self.page = crawler.parse_page("https://example.com/", HTML, 200, 250)
 
     def test_meta_extraction(self):
-        assert self.page.title == "Acme Coffee — Fresh Roasts"
+        assert self.page.title == "Acme Coffee. Fresh Roasts"
         assert self.page.meta_description == "Specialty coffee roasted in Nairobi."
         assert self.page.canonical == "https://example.com/"
 

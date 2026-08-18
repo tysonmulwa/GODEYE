@@ -1,4 +1,4 @@
-"""X (Twitter) publisher — API v2 with OAuth 1.0a user context."""
+"""X (Twitter) publisher, using API v2 with OAuth 1.0a user context."""
 
 from __future__ import annotations
 
@@ -25,7 +25,7 @@ def _auth_header(credentials: dict[str, Any], method: str, url: str) -> str:
 
 
 def verify_credentials(credentials: dict[str, Any]) -> dict[str, str]:
-    """Used at connect time — returns the account's username/name or raises."""
+    """Used at connect time, returns the account's username/name or raises."""
     response = httpx.get(
         ME_URL,
         headers={"Authorization": _auth_header(credentials, "GET", ME_URL)},
