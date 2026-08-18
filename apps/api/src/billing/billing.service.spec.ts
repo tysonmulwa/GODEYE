@@ -155,6 +155,7 @@ describe("BillingService", () => {
 
       await expect(service.checkout("org1", "user1", "PRO")).resolves.toEqual({
         url: "https://checkout.paystack.com/abc",
+        reference: null,
       });
 
       // The plan is read first — Paystack answers "Invalid Amount Sent" to an

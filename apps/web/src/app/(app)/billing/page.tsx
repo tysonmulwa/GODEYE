@@ -5,6 +5,7 @@ import { Check, Clock, ExternalLink, Lock } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import type { WorkspaceAccess } from "@godeye/shared";
+import { PayOnPhone } from "@/components/pay-qr";
 import { ApplePayMark, Badge, Button, Card, ErrorNote, PageHeader } from "@/components/ui";
 import { api } from "@/lib/api";
 import { useAuthStore } from "@/lib/auth-store";
@@ -108,6 +109,10 @@ export default function BillingPage() {
   const queryClient = useQueryClient();
   const setAccess = useAuthStore((s) => s.setAccess);
   const [error, setError] = useState<string | null>(null);
+  /** The open scan-to-pay dialog, if any. */
+  const [payOnPhone, setPayOnPhone] = useState<{ url: string; planCode: string } | null>(null);
+  /** What billing looked like when it opened, so a change means "paid". */
+  const [before, setBefore] = useState<string | null>(null);
 
   const { data, isLoading } = useQuery<Overview>({
     queryKey: ["billing"],
@@ -122,14 +127,56 @@ export default function BillingPage() {
       // The body is the object itself. api() serialises it — passing a string
       // here stringified it twice, and the API received a quoted blob instead
       // of a plan code, so every upgrade failed validation.
-      api<{ url: string }>("/billing/checkout", { method: "POST", body: { planCode, mode } }),
-    onSuccess: ({ url }) => {
-      window.location.href = url;
+      api<{ url: string; reference: string | null }>("/billing/checkout", {
+        method: "POST",
+        body: { planCode, mode },
+      }),
+    onSuccess: ({ url }, { planCode, mode }) => {
+      // A card subscription goes straight to Paystack: it can only be paid on
+      // a card anyway, and this device has one. A wallet month opens the QR
+      // instead, because the wallet is on a phone that is not this screen.
+      if (mode === "subscription") {
+        window.location.href = url;
+        return;
+      }
+      setPayOnPhone({ url, planCode });
     },
     onError: (e) => setError(e instanceof Error ? e.message : "Could not start checkout"),
   });
 
   const banner = params.get("billing");
+
+  /**
+   * A fingerprint of what has been paid for.
+   *
+   * The webhook is what actually grants the month, and it arrives on its own a
+   * second or two after the customer confirms on their phone. Rather than ask
+   * Paystack whether that particular reference succeeded — which would need its
+   * own idempotency, since crediting a month twice for one payment is worse
+   * than waiting — the page simply watches for its own billing state to change.
+   */
+  const paidFingerprint = data
+    ? `${data.plan.code}|${data.subscriptionStatus}|${data.currentPeriodEnd}`
+    : null;
+
+  // Snapshot on open; anything different afterwards is the payment landing.
+  useEffect(() => {
+    if (payOnPhone && before === null && paidFingerprint) setBefore(paidFingerprint);
+    if (!payOnPhone && before !== null) setBefore(null);
+  }, [payOnPhone, before, paidFingerprint]);
+
+  const paidOnPhone = !!payOnPhone && before !== null && paidFingerprint !== before;
+
+  // Poll only while somebody is standing in front of the QR, and stop the
+  // moment the payment shows up — a success dialog has nothing left to wait for.
+  useEffect(() => {
+    if (!payOnPhone || paidOnPhone) return;
+    const id = setInterval(
+      () => void queryClient.invalidateQueries({ queryKey: ["billing"] }),
+      4000,
+    );
+    return () => clearInterval(id);
+  }, [payOnPhone, paidOnPhone, queryClient]);
 
   // Keep the rest of the app in step: paying here is what lifts the read-only
   // state, and the sidebar strip should stop warning about a trial that is over.
@@ -347,6 +394,23 @@ export default function BillingPage() {
               Payments are not configured on this server yet, so upgrading is unavailable.
             </p>
           )}
+
+          {payOnPhone &&
+            (() => {
+              const plan = data.plans.find((p) => p.code === payOnPhone.planCode);
+              return (
+                <PayOnPhone
+                  url={payOnPhone.url}
+                  planName={plan?.name ?? payOnPhone.planCode}
+                  price={
+                    plan ? money(plan.priceOnceCurrency, plan.priceOnceMajor) : ""
+                  }
+                  channels={data.oneOffChannels}
+                  paid={paidOnPhone}
+                  onClose={() => setPayOnPhone(null)}
+                />
+              );
+            })()}
 
           <p className="mt-6 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-ink-3">
             <ExternalLink size={12} />

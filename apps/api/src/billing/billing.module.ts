@@ -303,7 +303,7 @@ export class BillingService implements OnModuleInit {
     const data = (await res.json()) as {
       status?: boolean;
       message?: string;
-      data?: { authorization_url?: string };
+      data?: { authorization_url?: string; reference?: string };
     };
     if (!res.ok || !data.status || !data.data?.authorization_url) {
       this.logger.error(`Paystack checkout failed (${mode}): ${data.message}`);
@@ -316,7 +316,10 @@ export class BillingService implements OnModuleInit {
       action: "billing.checkout_started",
       metadata: { planCode, mode, provider: "paystack" },
     });
-    return { url: data.data.authorization_url };
+    // The reference travels back so the page can show a QR of this exact
+    // checkout and name the payment it is waiting for. Nothing is charged on
+    // it until the customer completes it, on this device or another.
+    return { url: data.data.authorization_url, reference: data.data.reference ?? null };
   }
 
   /**
