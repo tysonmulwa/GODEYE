@@ -73,42 +73,59 @@ export function ApplePayMark({
   );
 }
 
-/** Safaricom's green, and the red of the swoosh on the handset. */
-const MPESA_GREEN = "#43B02A";
-const MPESA_RED = "#E4002B";
+/** Safaricom's green, and the red of the swoosh across the handset. */
+const MPESA_GREEN = "#3CB44A";
+const MPESA_RED = "#E1251B";
 
 /**
- * The M-Pesa handset: the glyph that sits inside the wordmark.
+ * The handset from the M-PESA wordmark.
  *
- * Kept as the icon on its own, because at the size a list row gives it the
- * full wordmark would be unreadable, and a green phone with a red swoosh is
- * the part people recognise.
+ * It is not an icon sitting beside the name: in the wordmark it stands where
+ * the hyphen would be, between the M and the P, and it is taller than the
+ * letters so it overhangs them at both ends. A pale sage body with a white
+ * screen, and a red wave crossing it that runs past the body on both sides.
  */
-export function MpesaGlyph({ className, size = 16 }: { className?: string; size?: number }) {
+export function MpesaPhone({ className, size = 24 }: { className?: string; size?: number }) {
+  // overflow visible: the wave runs past the handset on both sides and tucks
+  // under the letters, so it has to be allowed outside its own box.
   return (
     <svg
-      viewBox="0 0 20 30"
-      width={(size * 20) / 30}
+      viewBox="0 0 19 46"
+      width={(size * 19) / 46}
       height={size}
       aria-hidden="true"
       focusable="false"
       className={className}
+      style={{ overflow: "visible" }}
     >
-      <rect x="0.75" y="0.75" width="18.5" height="28.5" rx="4" fill="#EDF5EC" stroke={MPESA_GREEN} strokeWidth="1.5" />
-      <path d="M2.6 15.8c3.4-3.6 6.2-4.2 8.3-3.2 1 .5 1.7 1.4 2.6 1.6.9.2 2-.2 3.6-1.7-1 3.4-2.6 4.9-4.2 5-1.5.1-2.7-.9-4-1.3-1.4-.4-3.1-.1-6.3 1.6z" fill={MPESA_RED} />
+      <rect x="0" y="0" width="19" height="46" rx="5" fill="#D9E7DA" />
+      <rect x="2.5" y="3.5" width="14" height="19" rx="2.5" fill="#FFFFFF" />
+      <path
+        d="M-7 27C2 26.5 8 22.5 13 17.5C17 13.5 21 11.5 26 13C21 19 16 25.5 10 29C4 32 -2 31.5 -7 30Z"
+        fill={MPESA_RED}
+      />
     </svg>
   );
 }
 
-/** M-PESA, as the wordmark reads: the name in Safaricom green. */
-export function MpesaMark({ className, size = 13 }: { className?: string; size?: number }) {
+/**
+ * M-PESA, set the way the wordmark is set.
+ *
+ * The letters take the page's own bold weight rather than pretending to be
+ * Safaricom's typeface, but the shape of the mark is right: M, handset, PESA,
+ * with no hyphen, because the handset is the hyphen.
+ */
+export function MpesaMark({ className, size = 15 }: { className?: string; size?: number }) {
   return (
     <span
-      className={cx("inline-flex items-center gap-1 whitespace-nowrap font-bold", className)}
-      style={{ fontSize: size, color: MPESA_GREEN, letterSpacing: "0.01em" }}
+      className={cx("inline-flex items-center whitespace-nowrap font-extrabold", className)}
+      style={{ fontSize: size, color: MPESA_GREEN, letterSpacing: "-0.01em", lineHeight: 1 }}
     >
-      <MpesaGlyph size={size * 1.35} />
-      <span>M-PESA</span>
+      <span>M</span>
+      {/* Overlapped a little at each side, the way the wave tucks under the
+          letters in the wordmark. */}
+      <MpesaPhone size={size * 1.5} className="mx-[0.14em]" />
+      <span>PESA</span>
     </span>
   );
 }
