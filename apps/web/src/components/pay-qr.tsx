@@ -3,8 +3,8 @@
 import { Check, Loader2, Smartphone, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import QRCode from "qrcode";
-import { GodeyeCrest } from "@/components/logo";
-import { ApplePayMark, Button, cx } from "@/components/ui";
+import { AppleLogo, ApplePayMark, MpesaGlyph, MpesaMark } from "@/components/payment-marks";
+import { Button, cx } from "@/components/ui";
 import { useScrollLock } from "@/lib/use-scroll-lock";
 
 /**
@@ -22,9 +22,10 @@ import { useScrollLock } from "@/lib/use-scroll-lock";
  * on by itself. The difference from Apple's version is where the sheet comes
  * from, not what the customer ends up doing.
  *
- * The mark in the middle is GODEYE's, not Apple's. This code opens a checkout
- * that may well be paid with M-Pesa or a card, and Apple's logo on it would
- * tell the customer something untrue about what they are scanning.
+ * The mark in the middle is the one the customer picked. A checkout opened for
+ * Apple Pay offers Apple Pay and nothing else, so the Apple logo on it is the
+ * truth about what they are scanning, which is the only reason it is allowed to
+ * be there.
  */
 
 /** Highest error correction, because the logo covers the middle of the code. */
@@ -123,8 +124,15 @@ export function PayOnPhone({
                 height={232}
                 className="rounded-xl border border-line bg-white p-2"
               />
-              <span className="pointer-events-none absolute left-1/2 top-1/2 flex h-11 w-11 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-lg bg-white shadow-sm">
-                <GodeyeCrest size={26} />
+              {/* Sitting on white and no larger than the code's error
+                  correction can spare. The code is generated at level H, which
+                  tolerates roughly thirty per cent of itself being covered. */}
+              <span className="pointer-events-none absolute left-1/2 top-1/2 flex h-10 w-10 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-lg bg-white">
+                {method === "apple_pay" ? (
+                  <AppleLogo size={22} className="text-black" />
+                ) : (
+                  <MpesaGlyph size={24} />
+                )}
               </span>
             </div>
           ) : (
@@ -152,7 +160,7 @@ export function PayOnPhone({
             <p className="flex flex-wrap items-center justify-center gap-x-1.5 text-[13px] leading-relaxed text-ink-2">
               <Smartphone className="h-3.5 w-3.5 shrink-0 text-ink-3" />
               <span>Open the Camera app and point it at the code. Pay with</span>
-              {method === "apple_pay" ? <ApplePayMark /> : <span>M-Pesa</span>}
+              {method === "apple_pay" ? <ApplePayMark /> : <MpesaMark />}
               <span>on your phone.</span>
             </p>
             <p className="mt-3 flex items-center justify-center gap-2 text-[12px] text-ink-3">

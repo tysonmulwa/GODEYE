@@ -1,7 +1,8 @@
 "use client";
 
-import { CreditCard, Smartphone, X } from "lucide-react";
-import { ApplePayMark, cx } from "@/components/ui";
+import { X } from "lucide-react";
+import { ApplePayMark, CardsMark, MpesaGlyph, MpesaMark } from "@/components/payment-marks";
+import { cx } from "@/components/ui";
 import { useScrollLock } from "@/lib/use-scroll-lock";
 
 export type PaymentMethod = "card" | "apple_pay" | "mpesa";
@@ -23,19 +24,19 @@ const LABELS: Record<
   { title: React.ReactNode; hint: string; icon: React.ReactNode }
 > = {
   card: {
-    title: "Card",
+    title: <span className="text-[14px] font-semibold">Card</span>,
     hint: "Renews automatically every month",
-    icon: <CreditCard className="h-4 w-4" />,
+    icon: <CardsMark size={18} />,
   },
   apple_pay: {
-    title: <ApplePayMark />,
+    title: <ApplePayMark size={14} />,
     hint: "Pay for one month",
-    icon: <Smartphone className="h-4 w-4" />,
+    icon: <ApplePayMark size={11} boxed />,
   },
   mpesa: {
-    title: "M-Pesa",
+    title: <MpesaMark size={14} />,
     hint: "Pay for one month",
-    icon: <Smartphone className="h-4 w-4" />,
+    icon: <MpesaGlyph size={18} />,
   },
 };
 
@@ -109,7 +110,7 @@ export function PayMethods({
               >
                 <span className="shrink-0 text-ink-3">{icon}</span>
                 <span className="min-w-0 flex-1">
-                  <span className="block text-[14px] font-semibold">{title}</span>
+                  <span className="block">{title}</span>
                   <span className="block text-[12px] text-ink-3">
                     {/* Shillings appear here and nowhere else, and only once
                         M-Pesa is on screen as the thing being chosen. */}

@@ -7,7 +7,7 @@ import { useEffect, useRef, useState } from "react";
 import type { WorkspaceAccess } from "@godeye/shared";
 import { PayMethods, type PaymentMethod } from "@/components/pay-methods";
 import { PayOnPhone } from "@/components/pay-qr";
-import { ApplePayMark, Badge, Button, Card, ErrorNote, PageHeader } from "@/components/ui";
+import { Badge, Button, Card, ErrorNote, PageHeader } from "@/components/ui";
 import { api } from "@/lib/api";
 import { useAuthStore } from "@/lib/auth-store";
 
@@ -83,6 +83,34 @@ function trialRemaining(endsAt: string | null): string {
   return `${hours} hour${hours === 1 ? "" : "s"}`;
 }
 
+/**
+ * Where the workspace stands, in a sentence.
+ *
+ * "Active" on its own does not tell somebody whether their card will be
+ * charged again, which is the thing they actually want to know after paying.
+ */
+function planSummary(data: Overview): string {
+  const ends = data.currentPeriodEnd
+    ? new Date(data.currentPeriodEnd).toLocaleDateString("en-US", {
+        day: "numeric",
+        month: "long",
+        year: "numeric",
+      })
+    : null;
+
+  if (data.access.status === "EXEMPT") return "This workspace is not billed.";
+  if (data.access.locked) return "Payment needed to switch publishing back on.";
+  if (data.access.status === "TRIALING") {
+    return `Free trial, ${trialRemaining(data.access.trialEndsAt)} left. Choose a plan to keep it.`;
+  }
+  if (data.subscriptionStatus === "ACTIVE") {
+    // A card subscription renews on that date; a month bought with a wallet
+    // simply ends on it. The API says which by whether a renewal exists.
+    return ends ? `Active, renews ${ends}.` : "Active.";
+  }
+  return ends ? `Ends ${ends}.` : "";
+}
+
 const METRICS: { key: keyof PlanLimits; label: string; format: (n: number) => string }[] = [
   { key: "postsPerMonth", label: "Posts this month", format: (n) => n.toLocaleString("en-US") },
   { key: "aiTokensPerMonth", label: "AI tokens", format: (n) => compact.format(n) },
@@ -114,6 +142,9 @@ export default function BillingPage() {
   const [payOnPhone, setPayOnPhone] = useState<{
     url: string;
     planCode: string;
+    /** Paystack's reference for this checkout, so the payment made on the
+     *  phone can be confirmed from here without waiting on a webhook. */
+    reference: string | null;
     // Never a card: a card is paid on the device the customer is already
     // using, so there is nothing to hand to a phone.
     method: Exclude<PaymentMethod, "card">;
@@ -138,7 +169,7 @@ export default function BillingPage() {
         method: "POST",
         body: { planCode, method },
       }),
-    onSuccess: ({ url }, { planCode, method }) => {
+    onSuccess: ({ url, reference }, { planCode, method }) => {
       setChoosing(null);
       // A card is paid on this device, which has one. A wallet lives on a
       // phone that is not this screen, so those get the QR.
@@ -146,7 +177,7 @@ export default function BillingPage() {
         window.location.href = url;
         return;
       }
-      setPayOnPhone({ url, planCode, method });
+      setPayOnPhone({ url, planCode, reference, method });
     },
     onError: (e) => setError(e instanceof Error ? e.message : "Could not start checkout"),
   });
@@ -192,17 +223,26 @@ export default function BillingPage() {
 
   const paidOnPhone = !!payOnPhone && before !== null && paidFingerprint !== before;
 
-  // Poll only while somebody is standing in front of the QR, and stop the
-  // moment the payment shows up, since a success dialog has nothing left to
-  // wait for.
+  /**
+   * While the QR is up, ask Paystack directly whether that reference has been
+   * paid.
+   *
+   * The first version of this only refetched the billing overview and waited
+   * for the webhook to have done the work. That is fine when the webhook is
+   * configured and quick, and useless when it is neither, which is exactly the
+   * case this dialog exists for: the customer has paid on their phone and is
+   * watching a spinner on their computer. Asking about the reference makes the
+   * confirmation the page's own job.
+   */
   useEffect(() => {
     if (!payOnPhone || paidOnPhone) return;
-    const id = setInterval(
-      () => void queryClient.invalidateQueries({ queryKey: ["billing"] }),
-      4000,
-    );
+    const ask = () => {
+      if (payOnPhone.reference) confirm.mutate(payOnPhone.reference);
+      else void queryClient.invalidateQueries({ queryKey: ["billing"] });
+    };
+    const id = setInterval(ask, 4000);
     return () => clearInterval(id);
-  }, [payOnPhone, paidOnPhone, queryClient]);
+  }, [payOnPhone, paidOnPhone, confirm, queryClient]);
 
   // Keep the rest of the app in step: paying here is what lifts the read-only
   // state, and the sidebar strip should stop warning about a trial that is over.
@@ -265,6 +305,22 @@ export default function BillingPage() {
 
       {data && (
         <>
+          <Card className="mb-6">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <p className="text-[12px] uppercase tracking-[0.11em] text-ink-3">Current plan</p>
+                <p className="mt-1 flex flex-wrap items-baseline gap-x-2">
+                  <span className="text-[22px] font-bold">{data.plan.name}</span>
+                  <span className="font-mono text-[15px] text-ink-2">
+                    {usd.format(Number(data.plan.priceMonthlyUsd))}/month
+                  </span>
+                </p>
+                <p className="mt-1.5 text-[13px] text-ink-2">{planSummary(data)}</p>
+              </div>
+              {data.subscriptionStatus && <Badge status={data.subscriptionStatus} />}
+            </div>
+          </Card>
+
           {(data.access.status === "TRIALING" || data.access.locked) && (
             <Card
               className={`mb-6 ${

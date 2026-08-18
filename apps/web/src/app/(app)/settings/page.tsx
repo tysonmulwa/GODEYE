@@ -10,8 +10,8 @@ import { BusinessProfileCard } from "@/components/business-profile-card";
 import { ProductCatalogueCard } from "@/components/product-catalogue";
 import { api } from "@/lib/api";
 import { useAuthStore } from "@/lib/auth-store";
+import { ApplePayMark } from "@/components/payment-marks";
 import {
-  ApplePayMark,
   Button,
   Card,
   ErrorNote,

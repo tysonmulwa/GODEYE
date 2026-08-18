@@ -343,6 +343,11 @@ export class BillingService implements OnModuleInit {
       orgId,
       userId,
       action: "billing.checkout_started",
+      // The reference is recorded here as well as on the applied payment, so a
+      // checkout that never completes can still be traced back to a customer
+      // saying they paid.
+      targetType: "PaystackTransaction",
+      targetId: data.data.reference,
       metadata: { planCode, method, provider: "paystack" },
     });
     // The reference travels back so the page can show a QR of this exact
