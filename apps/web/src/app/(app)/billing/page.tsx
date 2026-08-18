@@ -5,7 +5,12 @@ import { Check, Clock, ExternalLink, Lock } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import type { WorkspaceAccess } from "@godeye/shared";
-import { PayMethods, type PaymentMethod } from "@/components/pay-methods";
+import {
+  PayMethods,
+  applePayIsNative,
+  isHandheld,
+  type PaymentMethod,
+} from "@/components/pay-methods";
 import { PayOnPhone } from "@/components/pay-qr";
 import { Badge, Button, Card, ErrorNote, PageHeader } from "@/components/ui";
 import { api } from "@/lib/api";
@@ -145,9 +150,6 @@ export default function BillingPage() {
     /** Paystack's reference for this checkout, so the payment made on the
      *  phone can be confirmed from here without waiting on a webhook. */
     reference: string | null;
-    // Never a card: a card is paid on the device the customer is already
-    // using, so there is nothing to hand to a phone.
-    method: Exclude<PaymentMethod, "card">;
   } | null>(null);
   /** What billing looked like when it opened, so a change means "paid". */
   const [before, setBefore] = useState<string | null>(null);
@@ -171,13 +173,16 @@ export default function BillingPage() {
       }),
     onSuccess: ({ url, reference }, { planCode, method }) => {
       setChoosing(null);
-      // A card is paid on this device, which has one. A wallet lives on a
-      // phone that is not this screen, so those get the QR.
-      if (method === "card") {
+      // The QR exists for one situation: Apple Pay on a device that cannot
+      // raise the sheet. An iPhone or a Mac does it natively, and M-Pesa never
+      // needs it at all, since Paystack asks for a phone number and pushes a
+      // prompt to that handset. Everything else simply goes to the checkout.
+      const needsQr = method === "apple_pay" && !applePayIsNative() && !isHandheld();
+      if (!needsQr) {
         window.location.href = url;
         return;
       }
-      setPayOnPhone({ url, planCode, reference, method });
+      setPayOnPhone({ url, planCode, reference });
     },
     onError: (e) => setError(e instanceof Error ? e.message : "Could not start checkout"),
   });
@@ -456,14 +461,7 @@ export default function BillingPage() {
                 <PayOnPhone
                   url={payOnPhone.url}
                   planName={plan?.name ?? payOnPhone.planCode}
-                  price={
-                    plan
-                      ? payOnPhone.method === "mpesa"
-                        ? money("KES", plan.priceMpesaKes)
-                        : usd.format(Number(plan.priceMonthlyUsd))
-                      : ""
-                  }
-                  method={payOnPhone.method}
+                  price={plan ? usd.format(Number(plan.priceMonthlyUsd)) : ""}
                   paid={paidOnPhone}
                   onClose={() => setPayOnPhone(null)}
                 />

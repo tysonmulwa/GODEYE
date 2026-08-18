@@ -3,7 +3,7 @@
 import { Check, Loader2, Smartphone, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import QRCode from "qrcode";
-import { AppleLogo, ApplePayMark, MpesaGlyph, MpesaMark } from "@/components/payment-marks";
+import { AppleLogo, ApplePayMark } from "@/components/payment-marks";
 import { Button, cx } from "@/components/ui";
 import { useScrollLock } from "@/lib/use-scroll-lock";
 
@@ -17,10 +17,15 @@ import { useScrollLock } from "@/lib/use-scroll-lock";
  * generate is a link, and a link is all the camera will treat it as.
  *
  * A link is enough. This encodes the Paystack checkout itself: the customer
- * scans it, the checkout opens on the phone, where Apple Pay does appear, and
- * where M-Pesa is one tap, and this page notices the payment landing and moves
- * on by itself. The difference from Apple's version is where the sheet comes
- * from, not what the customer ends up doing.
+ * scans it, the checkout opens on the phone where Apple Pay does appear, they
+ * confirm with Face ID, and this page notices the payment landing and moves on
+ * by itself. The difference from Apple's version is where the sheet comes from,
+ * not what the customer ends up doing.
+ *
+ * Only ever shown for Apple Pay, and only on a device that cannot raise the
+ * sheet itself. M-Pesa never comes here: it asks for a phone number and pushes
+ * a prompt to that handset, so scanning a code would be a step that achieves
+ * nothing.
  *
  * The mark in the middle is the one the customer picked. A checkout opened for
  * Apple Pay offers Apple Pay and nothing else, so the Apple logo on it is the
@@ -35,7 +40,6 @@ export function PayOnPhone({
   url,
   planName,
   price,
-  method,
   paid,
   onClose,
 }: {
@@ -43,7 +47,6 @@ export function PayOnPhone({
   planName: string;
   /** Already formatted, in the currency actually charged. */
   price: string;
-  method: "apple_pay" | "mpesa";
   /** True once the payment has been seen, the dialog says so and closes. */
   paid: boolean;
   onClose: () => void;
@@ -128,11 +131,7 @@ export function PayOnPhone({
                   correction can spare. The code is generated at level H, which
                   tolerates roughly thirty per cent of itself being covered. */}
               <span className="pointer-events-none absolute left-1/2 top-1/2 flex h-10 w-10 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-lg bg-white">
-                {method === "apple_pay" ? (
-                  <AppleLogo size={22} className="text-black" />
-                ) : (
-                  <MpesaGlyph size={24} />
-                )}
+                <AppleLogo size={22} className="text-black" />
               </span>
             </div>
           ) : (
@@ -160,7 +159,7 @@ export function PayOnPhone({
             <p className="flex flex-wrap items-center justify-center gap-x-1.5 text-[13px] leading-relaxed text-ink-2">
               <Smartphone className="h-3.5 w-3.5 shrink-0 text-ink-3" />
               <span>Open the Camera app and point it at the code. Pay with</span>
-              {method === "apple_pay" ? <ApplePayMark /> : <MpesaMark />}
+              <ApplePayMark />
               <span>on your phone.</span>
             </p>
             <p className="mt-3 flex items-center justify-center gap-2 text-[12px] text-ink-3">

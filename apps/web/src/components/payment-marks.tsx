@@ -130,11 +130,19 @@ export function CardsMark({ className, size = 16 }: { className?: string; size?:
       focusable="false"
       className={className}
     >
-      {/* The card behind, tilted, with its magnetic stripe. */}
-      <path d="M14.53 1.6 6.9 9.23a2 2 0 0 0 0 2.83l1.06 1.06 9.9-9.9-1.06-1.06a2 2 0 0 0-2.27-.56zm4.04 2.68-9.9 9.9 3.18 3.18a2 2 0 0 0 2.83 0l7.07-7.07a2 2 0 0 0 0-2.83l-3.18-3.18zm-.7 3.9 1.76 1.77-1.42 1.41-1.76-1.76 1.41-1.42z" opacity="0.45" />
-      {/* The card in front, square on, with its chip. */}
-      <rect x="2" y="11.5" width="15" height="10.5" rx="2" />
-      <rect x="4" y="13.6" width="3.4" height="2.4" rx="0.7" fill="#fff" opacity="0.85" />
+      {/* The card behind, tilted, with its magnetic stripe. Held back a
+          little so the two read as two rather than as one odd shape. */}
+      <path
+        d="M14.53 1.6 6.9 9.23a2 2 0 0 0 0 2.83l1.06 1.06 9.9-9.9-1.06-1.06a2 2 0 0 0-2.27-.56zm4.04 2.68-9.9 9.9 3.18 3.18a2 2 0 0 0 2.83 0l7.07-7.07a2 2 0 0 0 0-2.83l-3.18-3.18z"
+        opacity="0.55"
+      />
+      {/* The card in front, square on. The chip is cut out of the shape rather
+          than painted over it, so it works on a light sidebar and a dark one. */}
+      <path
+        fillRule="evenodd"
+        clipRule="evenodd"
+        d="M4 11.5h11a2 2 0 0 1 2 2v6.5a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-6.5a2 2 0 0 1 2-2zm0.7 2.1a.7.7 0 0 0-.7.7v1a.7.7 0 0 0 .7.7h2a.7.7 0 0 0 .7-.7v-1a.7.7 0 0 0-.7-.7h-2z"
+      />
     </svg>
   );
 }

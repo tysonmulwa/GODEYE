@@ -1,44 +1,51 @@
 "use client";
 
 import { X } from "lucide-react";
-import { ApplePayMark, CardsMark, MpesaGlyph, MpesaMark } from "@/components/payment-marks";
+import { ApplePayMark, CardsMark, MpesaMark } from "@/components/payment-marks";
 import { cx } from "@/components/ui";
 import { useScrollLock } from "@/lib/use-scroll-lock";
 
 export type PaymentMethod = "card" | "apple_pay" | "mpesa";
 
 /**
+ * Whether this device can raise the Apple Pay sheet itself.
+ *
+ * Safari on an iPhone, iPad or Mac exposes ApplePaySession, and no other
+ * browser does. Where it exists the customer taps and confirms with Face ID,
+ * so a QR code would be a step that achieves nothing. Where it does not, the QR
+ * is the only way to reach the wallet they own, which lives on a device that is
+ * not this screen.
+ */
+export function applePayIsNative(): boolean {
+  if (typeof window === "undefined") return false;
+  const session = (window as unknown as { ApplePaySession?: { canMakePayments?: () => boolean } })
+    .ApplePaySession;
+  try {
+    return !!session?.canMakePayments?.();
+  } catch {
+    // Some browsers throw on canMakePayments in an insecure context.
+    return false;
+  }
+}
+
+/** A phone or tablet, where showing a QR to scan with that same device is absurd. */
+export function isHandheld(): boolean {
+  if (typeof window === "undefined") return false;
+  return window.matchMedia?.("(pointer: coarse)").matches ?? false;
+}
+
+/**
  * How would you like to pay?
  *
- * One question, asked once, after the customer has already chosen a plan. The
- * plan cards say what the plan costs and nothing about payment, because a
- * shilling figure next to a dollar figure makes somebody stop and work out
- * which one applies to them.
+ * Asked once, after the plan is chosen, which leaves the plan cards free to
+ * talk about the plan. Each row carries its own brand mark, one line of
+ * description, and the price in the currency that method actually charges:
+ * shillings for M-Pesa and dollars for the rest, so nobody has to work out
+ * which of two currencies applies to them.
  *
- * A card is the only method Paystack can charge again, so it is the only one
- * that subscribes. The wallets buy a month at a time. That difference is worth
- * exactly one short line under the card option, not a paragraph.
+ * M-Pesa leads, because most of the people paying pay with it.
  */
-const LABELS: Record<
-  PaymentMethod,
-  { title: React.ReactNode; hint: string; icon: React.ReactNode }
-> = {
-  card: {
-    title: <span className="text-[14px] font-semibold">Card</span>,
-    hint: "Renews automatically every month",
-    icon: <CardsMark size={18} />,
-  },
-  apple_pay: {
-    title: <ApplePayMark size={14} />,
-    hint: "Pay for one month",
-    icon: <ApplePayMark size={11} boxed />,
-  },
-  mpesa: {
-    title: <MpesaMark size={14} />,
-    hint: "Pay for one month",
-    icon: <MpesaGlyph size={18} />,
-  },
-};
+const ORDER: PaymentMethod[] = ["mpesa", "apple_pay", "card"];
 
 export function PayMethods({
   planName,
@@ -50,6 +57,7 @@ export function PayMethods({
   onClose,
 }: {
   planName: string;
+  /** Already formatted, e.g. "$49". */
   priceUsd: string;
   priceMpesaKes: number;
   methods: string[];
@@ -59,8 +67,35 @@ export function PayMethods({
 }) {
   useScrollLock(true);
 
-  const order: PaymentMethod[] = ["card", "apple_pay", "mpesa"];
-  const available = order.filter((m) => methods.includes(m));
+  const available = ORDER.filter((m) => methods.includes(m));
+
+  const rows: Record<
+    PaymentMethod,
+    { mark: React.ReactNode; name: string; hint: string; price: string }
+  > = {
+    mpesa: {
+      mark: <MpesaMark size={12} />,
+      name: "M-Pesa",
+      hint: "Pay in Kenyan shillings",
+      price: `Ksh ${priceMpesaKes.toLocaleString("en-US")}`,
+    },
+    apple_pay: {
+      mark: <ApplePayMark size={12} boxed />,
+      name: "Apple Pay",
+      // The instruction has to match what pressing it does, and that depends on
+      // the device: an iPhone raises the sheet, a Windows desktop cannot.
+      hint: applePayIsNative()
+        ? "Confirm with Face ID or Touch ID"
+        : "Scan a QR code with your iPhone",
+      price: priceUsd,
+    },
+    card: {
+      mark: <CardsMark size={22} />,
+      name: "Card",
+      hint: "Visa or Mastercard, renews monthly",
+      price: priceUsd,
+    },
+  };
 
   return (
     <div
@@ -74,26 +109,24 @@ export function PayMethods({
         className="w-full max-w-sm rounded-xl border border-line bg-surface-2 p-6 shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-start justify-between">
+        <div className="flex items-start justify-between gap-3">
           <div>
-            <h2 className="text-[17px] font-semibold leading-snug">Subscribe to {planName}</h2>
-            <p className="mt-0.5 text-[13px] text-ink-3">
-              <span className="font-mono">{priceUsd}</span> a month
-            </p>
+            <h2 className="text-[17px] font-semibold leading-snug">How do you want to pay?</h2>
+            <p className="mt-0.5 text-[13px] text-ink-3">{planName}, billed monthly</p>
           </div>
           <button
             type="button"
             onClick={onClose}
             aria-label="Close"
-            className="rounded-lg p-1.5 text-ink-3 transition-colors hover:bg-surface-3 hover:text-ink"
+            className="-mr-1.5 -mt-1 rounded-lg p-1.5 text-ink-3 transition-colors hover:bg-surface-3 hover:text-ink"
           >
             <X className="h-4 w-4" />
           </button>
         </div>
 
-        <div className="mt-5 space-y-2">
+        <div className="mt-5 space-y-2.5">
           {available.map((method) => {
-            const { title, hint, icon } = LABELS[method];
+            const { mark, name, hint, price } = rows[method];
             return (
               <button
                 key={method}
@@ -101,31 +134,31 @@ export function PayMethods({
                 disabled={!!busy}
                 onClick={() => onPick(method)}
                 className={cx(
-                  "flex w-full items-center gap-3 rounded-lg border px-3.5 py-3 text-left transition-colors",
+                  "flex w-full items-center gap-3 rounded-xl border px-3.5 py-3 text-left transition-colors",
                   busy === method
                     ? "border-accent bg-accent-soft"
                     : "border-line hover:border-line-hover hover:bg-surface-3",
                   busy && busy !== method ? "opacity-50" : "",
                 )}
               >
-                <span className="shrink-0 text-ink-3">{icon}</span>
+                {/* Fixed width, so three marks of different shapes still line
+                    the names up with one another. */}
+                <span className="flex h-9 w-12 shrink-0 items-center justify-center">{mark}</span>
                 <span className="min-w-0 flex-1">
-                  <span className="block">{title}</span>
-                  <span className="block text-[12px] text-ink-3">
-                    {/* Shillings appear here and nowhere else, and only once
-                        M-Pesa is on screen as the thing being chosen. */}
-                    {method === "mpesa"
-                      ? `KES ${priceMpesaKes.toLocaleString("en-US")} for one month`
-                      : hint}
-                  </span>
+                  <span className="block text-[14px] font-semibold leading-tight">{name}</span>
+                  <span className="mt-0.5 block text-[12px] leading-tight text-ink-3">{hint}</span>
                 </span>
-                {busy === method && (
-                  <span className="shrink-0 text-[12px] text-accent">Opening</span>
-                )}
+                <span className="shrink-0 font-mono text-[14px] font-semibold">
+                  {busy === method ? "…" : price}
+                </span>
               </button>
             );
           })}
         </div>
+
+        <p className="mt-4 text-center text-[11px] leading-relaxed text-ink-3">
+          Secure checkout by Paystack. We never see or store your card details.
+        </p>
       </div>
     </div>
   );

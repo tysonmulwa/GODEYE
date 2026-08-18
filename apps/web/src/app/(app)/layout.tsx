@@ -15,12 +15,12 @@ import {
   Settings,
   Users,
   X,
-  CreditCard,
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { CommandPalette } from "@/components/command-palette";
+import { CardsMark } from "@/components/payment-marks";
 import { GodeyeBootScreen, GodeyeLockup } from "@/components/logo";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { TrialNotice } from "@/components/trial-notice";
@@ -38,7 +38,7 @@ const NAV = [
   { href: "/calendar", label: "Calendar", icon: CalendarDays },
   { href: "/connections", label: "Connections", icon: Link2 },
   { href: "/team", label: "Team", icon: Users },
-  { href: "/billing", label: "Billing", icon: CreditCard },
+  { href: "/billing", label: "Billing", icon: CardsMark },
   { href: "/settings", label: "Settings", icon: Settings },
 ];
 
