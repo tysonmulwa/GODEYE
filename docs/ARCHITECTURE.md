@@ -239,6 +239,20 @@ mutating request from a locked workspace except `/auth`, `/billing`, `/webhooks`
 itself runs (`BILLING_EXEMPT_SLUGS`: godeye, patampoa, mjini-collection) are never billed
 and never locked.
 
+**Two ways to pay, because Paystack can only re-charge a card.** A card is a real
+Paystack subscription (`plan` code) that renews itself monthly. Apple Pay and M-Pesa
+produce authorisations Paystack cannot charge again, so they buy one month at a time:
+`POST /billing/checkout {mode: "once"}` initializes a plain transaction with
+`channels` and no plan, priced in KES from the shared catalogue (M-Pesa settles in
+shillings and a transaction carries one currency). `charge.success` with
+`metadata.mode === "once"` sets `currentPeriodEnd` a month past whichever is later —
+now, or the end already paid for — and leaves `providerSubscriptionId` null. That null
+is load-bearing: it is how the guard, the sweeper and the engine tell a month that ends
+from a card that renews. A bought month locks the workspace the instant it runs out; a
+card subscription past its renewal date is left alone, because Paystack retries a failed
+charge and its webhook is what cancels — locking a paying customer over a slow webhook
+is the worse of the two errors.
+
 **Paystack** — the only payment provider. When `PAYSTACK_SECRET_KEY` and the
 `PAYSTACK_PLAN_*` codes are set, `POST /billing/checkout` initializes a transaction
 against the plan (plain HTTPS calls — no SDK dependency) carrying `orgId` in metadata,

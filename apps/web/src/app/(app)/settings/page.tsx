@@ -2,6 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle } from "lucide-react";
+import Link from "next/link";
 import { useState } from "react";
 import type { WorkspaceAccess } from "@godeye/shared";
 import { AccountCard } from "@/components/account-card";
@@ -10,6 +11,7 @@ import { ProductCatalogueCard } from "@/components/product-catalogue";
 import { api } from "@/lib/api";
 import { useAuthStore } from "@/lib/auth-store";
 import {
+  ApplePayMark,
   Button,
   Card,
   ErrorNote,
@@ -168,6 +170,17 @@ function BillingCard() {
           );
         })}
       </div>
+
+      {/* This card only starts the card subscription. The wallet path prices
+          in shillings and buys a single month, which needs the room to say so. */}
+      <p className="mt-3 flex flex-wrap items-center gap-x-1.5 text-[12px] text-ink-3">
+        <span>Paying with</span>
+        <ApplePayMark />
+        <span>or M-Pesa? Those buy one month at a time —</span>
+        <Link href="/billing" className="font-semibold underline underline-offset-2">
+          see Billing
+        </Link>
+      </p>
       <div className="mt-3">
         <ErrorNote message={error} />
       </div>

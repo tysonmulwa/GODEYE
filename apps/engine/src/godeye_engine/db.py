@@ -428,8 +428,13 @@ Subscription = Table(
     Column("planId", String, nullable=False),
     # TRIALING | ACTIVE | PAST_DUE | CANCELED
     Column("status", PgEnum("SubscriptionStatus"), nullable=False),
-    # When the 24 hour trial runs out, or when a paid period renews.
+    # When the 24 hour trial runs out, when a bought month ends, or when a card
+    # subscription next renews.
     Column("currentPeriodEnd", DateTime(timezone=False)),
+    # Paystack's subscription code, present only when a card stands behind this
+    # and can be charged again. The column keeps the name it was created with;
+    # Prisma maps it to providerSubscriptionId.
+    Column("stripeSubscriptionId", String),
 )
 
 # The workspaces GODEYE itself runs: never billed, never locked.
@@ -467,6 +472,17 @@ def locked_org_ids(now: datetime):
                 Subscription.c.status.in_(("PAST_DUE", "CANCELED")),
                 and_(
                     Subscription.c.status == "TRIALING",
+                    Subscription.c.currentPeriodEnd.isnot(None),
+                    Subscription.c.currentPeriodEnd <= now,
+                ),
+                # A month bought with M-Pesa or Apple Pay. No card stands
+                # behind it, so when the date passes nothing renews it and
+                # publishing stops until the next payment. A card subscription
+                # is deliberately not locked on this date: Paystack retries a
+                # failed renewal, and its webhook is what cancels.
+                and_(
+                    Subscription.c.status == "ACTIVE",
+                    Subscription.c.stripeSubscriptionId.is_(None),
                     Subscription.c.currentPeriodEnd.isnot(None),
                     Subscription.c.currentPeriodEnd <= now,
                 ),

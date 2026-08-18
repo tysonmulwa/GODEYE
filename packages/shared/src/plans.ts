@@ -6,9 +6,12 @@
  * runtime. Kept apart, the marketing page eventually promises a number the
  * product refuses to honour — and a customer discovers it after paying.
  *
- * Prices are USD. GODEYE sells internationally and Paystack charges in the
- * currency of the plan, so a figure quoted in any other currency is one the
- * customer is never actually charged.
+ * Every tier carries two prices for one month: dollars for the card
+ * subscription that renews itself, and shillings for the wallet channels.
+ * M-Pesa settles in KES and nothing else, so a workspace paying that way has
+ * to be quoted a shilling figure rather than a dollar one converted at the
+ * till. Both are written down here, and neither is derived from the other at
+ * runtime.
  */
 
 export interface PlanLimits {
@@ -24,10 +27,31 @@ export interface PlanDefinition {
   code: PlanCode;
   name: string;
   priceMonthlyUsd: number;
+  /**
+   * The same month, priced in shillings, for the wallet channels.
+   *
+   * M-Pesa settles in KES and nothing else, so a workspace paying that way is
+   * charged this figure rather than a converted dollar amount worked out at
+   * the moment of payment. A price that moves with the exchange rate is a
+   * price nobody can quote, and the customer sees the difference on their
+   * statement rather than on the pricing page.
+   */
+  priceMonthlyKes: number;
   /** One line on who the plan is for, shown on the public pricing page. */
   tagline: string;
   limits: PlanLimits;
 }
+
+/**
+ * The rate the shilling prices were set at, recorded so the next person knows
+ * what to redo rather than guessing which way the numbers were rounded.
+ *
+ * Not applied at runtime: converting on the fly would let the price change
+ * between the pricing page and the checkout, and quote a different figure to
+ * the same customer twice in one day. Revisit deliberately, the way any other
+ * price change is made.
+ */
+export const KES_PER_USD = 129;
 
 /**
  * There is no free plan. Every workspace starts on a 24 hour Pro trial and then
@@ -45,6 +69,7 @@ export const PLANS: PlanDefinition[] = [
     code: "PRO",
     name: "Pro",
     priceMonthlyUsd: 19,
+    priceMonthlyKes: 2451,
     tagline: "Everything working, for one business on its own channels.",
     limits: { postsPerMonth: 30, aiTokensPerMonth: 100_000, connections: 3, seats: 1 },
   },
@@ -52,6 +77,7 @@ export const PLANS: PlanDefinition[] = [
     code: "PREMIUM",
     name: "Premium",
     priceMonthlyUsd: 49,
+    priceMonthlyKes: 6321,
     tagline: "For a business posting every day across its channels.",
     limits: { postsPerMonth: 500, aiTokensPerMonth: 2_000_000, connections: 15, seats: 5 },
   },
@@ -59,6 +85,7 @@ export const PLANS: PlanDefinition[] = [
     code: "VIP",
     name: "VIP",
     priceMonthlyUsd: 199,
+    priceMonthlyKes: 25671,
     tagline: "For agencies and teams running several brands at once.",
     limits: { postsPerMonth: 5000, aiTokensPerMonth: 20_000_000, connections: 100, seats: 25 },
   },

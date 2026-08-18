@@ -5,7 +5,7 @@ import { Check, Clock, ExternalLink, Lock } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import type { WorkspaceAccess } from "@godeye/shared";
-import { Badge, Button, Card, ErrorNote, PageHeader } from "@/components/ui";
+import { ApplePayMark, Badge, Button, Card, ErrorNote, PageHeader } from "@/components/ui";
 import { api } from "@/lib/api";
 import { useAuthStore } from "@/lib/auth-store";
 
@@ -20,6 +20,9 @@ interface PlanRow {
   code: string;
   name: string;
   priceMonthlyUsd: string;
+  /** One month bought outright, in the wallet currency's major units. */
+  priceOnceMajor: number;
+  priceOnceCurrency: string;
   limits: PlanLimits;
 }
 
@@ -32,6 +35,9 @@ interface Overview {
   limits: PlanLimits;
   usage: PlanLimits;
   plans: PlanRow[];
+  /** Channels a one-off month may use. Empty means wallets are off on this
+   *  server, so only the card subscription is offered. */
+  oneOffChannels: string[];
   /** True when Paystack is live on this server. False hides the upgrade
    *  buttons rather than sending somebody to a checkout that cannot start. */
   paymentsConfigured: boolean;
@@ -50,6 +56,22 @@ const usd = new Intl.NumberFormat("en-US", {
 });
 
 const compact = new Intl.NumberFormat("en-US", { notation: "compact" });
+
+/**
+ * A price in the currency it is actually charged in.
+ *
+ * The card subscription is quoted in dollars and the wallet month in shillings,
+ * because those are the two currencies Paystack bills. Showing one converted
+ * into the other would put a number on this page that appears on nobody's
+ * statement.
+ */
+function money(currency: string, major: number): string {
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency,
+    maximumFractionDigits: 0,
+  }).format(major);
+}
 
 /** "23 hours", "45 minutes" — the same wording the trial strip uses. */
 function trialRemaining(endsAt: string | null): string {
@@ -96,11 +118,11 @@ export default function BillingPage() {
   });
 
   const checkout = useMutation({
-    mutationFn: (planCode: string) =>
+    mutationFn: ({ planCode, mode }: { planCode: string; mode: "subscription" | "once" }) =>
       // The body is the object itself. api() serialises it — passing a string
       // here stringified it twice, and the API received a quoted blob instead
       // of a plan code, so every upgrade failed validation.
-      api<{ url: string }>("/billing/checkout", { method: "POST", body: { planCode } }),
+      api<{ url: string }>("/billing/checkout", { method: "POST", body: { planCode, mode } }),
     onSuccess: ({ url }) => {
       window.location.href = url;
     },
@@ -260,17 +282,60 @@ export default function BillingPage() {
                     ))}
                   </ul>
                   {!current && (
-                    <Button
-                      className="mt-5 w-full"
-                      loading={checkout.isPending}
-                      disabled={!data.paymentsConfigured}
-                      onClick={() => {
-                        setError(null);
-                        checkout.mutate(p.code);
-                      }}
-                    >
-                      {paying ? `Switch to ${p.name}` : `Choose ${p.name}`}
-                    </Button>
+                    <div className="mt-5 space-y-2">
+                      <Button
+                        className="w-full"
+                        loading={checkout.isPending && checkout.variables?.planCode === p.code}
+                        disabled={!data.paymentsConfigured}
+                        onClick={() => {
+                          setError(null);
+                          checkout.mutate({ planCode: p.code, mode: "subscription" });
+                        }}
+                      >
+                        {paying ? `Switch to ${p.name}` : `Subscribe with card`}
+                      </Button>
+
+                      {/* The wallet path. Paystack can only re-charge a card, so
+                          M-Pesa and Apple Pay buy one month at a time — offering
+                          them as a subscription would take the money once and
+                          then let the workspace lock while the customer believed
+                          they were paying. Priced in shillings because M-Pesa
+                          settles in nothing else. */}
+                      {data.oneOffChannels.length > 0 && (
+                        <>
+                          <Button
+                            variant="secondary"
+                            className="w-full"
+                            disabled={!data.paymentsConfigured}
+                            onClick={() => {
+                              setError(null);
+                              checkout.mutate({ planCode: p.code, mode: "once" });
+                            }}
+                          >
+                            Pay for one month
+                          </Button>
+                          <p className="flex flex-wrap items-center justify-center gap-x-1.5 text-[11px] text-ink-3">
+                            <span className="font-mono">
+                              {money(p.priceOnceCurrency, p.priceOnceMajor)}
+                            </span>
+                            <span>·</span>
+                            {data.oneOffChannels.includes("apple_pay") && (
+                              <>
+                                <ApplePayMark />
+                                <span>·</span>
+                              </>
+                            )}
+                            {data.oneOffChannels.includes("mobile_money") && (
+                              <>
+                                <span>M-Pesa</span>
+                                <span>·</span>
+                              </>
+                            )}
+                            <span>no auto-renew</span>
+                          </p>
+                        </>
+                      )}
+                    </div>
                   )}
                 </Card>
               );
@@ -283,10 +348,15 @@ export default function BillingPage() {
             </p>
           )}
 
-          <p className="mt-6 flex items-center gap-1.5 text-xs text-ink-3">
+          <p className="mt-6 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-ink-3">
             <ExternalLink size={12} />
-            Payments are handled by Paystack — card, mobile money and Apple Pay. GODEYE never sees
-            or stores your card details.
+            <span>Payments are handled by Paystack — card,</span>
+            <ApplePayMark />
+            <span>
+              and M-Pesa. GODEYE never sees or stores your card details. A card subscription
+              renews itself each month; a month bought with a wallet does not, so the workspace
+              turns read-only when it ends until you buy the next one.
+            </span>
           </p>
         </>
       )}

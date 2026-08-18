@@ -34,6 +34,8 @@ interface CacheEntry {
 export interface SweepResult {
   /** Trials whose clock had run out, now recorded as PAST_DUE. */
   expired: number;
+  /** Bought months that have run out, with no card behind them to renew. */
+  lapsed: number;
   /** Workspaces that predate the trial and had no subscription row at all. */
   backfilled: number;
   /** Exempt workspaces put back to ACTIVE. */
@@ -142,6 +144,10 @@ export class WorkspaceAccessService implements OnModuleInit, OnModuleDestroy {
           select: {
             status: true,
             currentPeriodEnd: true,
+            // Present only when Paystack holds a card it can charge again.
+            // A month bought with M-Pesa or Apple Pay has none, and that
+            // absence is what separates "renews itself" from "ends".
+            providerSubscriptionId: true,
             plan: { select: { code: true } },
           },
         },
@@ -150,10 +156,15 @@ export class WorkspaceAccessService implements OnModuleInit, OnModuleDestroy {
 
     const value = this.decide(org);
     // A decision is never cached past the moment it would change. Without this,
-    // a trial expiring in two seconds would keep writing for another thirty.
+    // a trial expiring in two seconds would keep writing for another thirty —
+    // and the same applies to the last minute of a month somebody bought.
     const trialEnd = value.trialEndsAt ? Date.parse(value.trialEndsAt) : Infinity;
+    const boughtMonthEnd =
+      org?.subscription && !org.subscription.providerSubscriptionId
+        ? (org.subscription.currentPeriodEnd?.getTime() ?? Infinity)
+        : Infinity;
     this.cache.set(orgId, {
-      expiresAt: Math.min(Date.now() + CACHE_TTL_MS, trialEnd),
+      expiresAt: Math.min(Date.now() + CACHE_TTL_MS, trialEnd, boughtMonthEnd),
       value,
     });
     return value;
@@ -165,6 +176,7 @@ export class WorkspaceAccessService implements OnModuleInit, OnModuleDestroy {
       subscription: {
         status: string;
         currentPeriodEnd: Date | null;
+        providerSubscriptionId: string | null;
         plan: { code: string } | null;
       } | null;
     } | null,
@@ -202,6 +214,17 @@ export class WorkspaceAccessService implements OnModuleInit, OnModuleDestroy {
     }
 
     if (sub.status === "ACTIVE") {
+      // A month bought outright ends when it ends: there is no card to charge,
+      // so nothing will extend it and the workspace goes read-only until the
+      // next payment. A card subscription is left alone even a few days past
+      // its renewal date — Paystack retries a failed charge, and its webhook
+      // is what cancels. Locking a paying customer because a webhook was slow
+      // is the worse error of the two.
+      const boughtMonth = !sub.providerSubscriptionId;
+      const ended = !!sub.currentPeriodEnd && sub.currentPeriodEnd.getTime() <= Date.now();
+      if (boughtMonth && ended) {
+        return { status: "LOCKED", locked: true, trialEndsAt: null, planCode };
+      }
       return { status: "ACTIVE", locked: false, trialEndsAt: null, planCode };
     }
 
@@ -217,10 +240,10 @@ export class WorkspaceAccessService implements OnModuleInit, OnModuleDestroy {
     this.sweeping = true;
     try {
       const result = await this.sweep();
-      if (result.expired || result.backfilled || result.comped) {
+      if (result.expired || result.lapsed || result.backfilled || result.comped) {
         this.logger.log(
-          `Trial sweep: ${result.expired} expired, ${result.backfilled} backfilled, ` +
-            `${result.comped} comped`,
+          `Billing sweep: ${result.expired} trials expired, ${result.lapsed} bought ` +
+            `months lapsed, ${result.backfilled} backfilled, ${result.comped} comped`,
         );
       }
     } catch (e) {
@@ -246,6 +269,20 @@ export class WorkspaceAccessService implements OnModuleInit, OnModuleDestroy {
       data: { status: "PAST_DUE" },
     });
 
+    // Months bought outright with a wallet. Nothing renews them, so once the
+    // date passes the workspace has stopped paying — the same state an expired
+    // trial lands in. Card subscriptions are untouched here: theirs is a
+    // renewal date, not a deadline, and Paystack's own webhook cancels them.
+    const lapsed = await this.prisma.subscription.updateMany({
+      where: {
+        status: "ACTIVE",
+        providerSubscriptionId: null,
+        currentPeriodEnd: { lte: now },
+        org: { slug: { notIn: BILLING_EXEMPT_SLUGS } },
+      },
+      data: { status: "PAST_DUE" },
+    });
+
     // The workspaces GODEYE runs are comped. Saying so in the data means the
     // billing page and any export agree with the guard, instead of the exemption
     // living only in a list in code.
@@ -256,8 +293,13 @@ export class WorkspaceAccessService implements OnModuleInit, OnModuleDestroy {
 
     const backfilled = await this.backfillMissing(now);
 
-    if (expired.count || comped.count || backfilled) this.cache.clear();
-    return { expired: expired.count, backfilled, comped: comped.count };
+    if (expired.count || lapsed.count || comped.count || backfilled) this.cache.clear();
+    return {
+      expired: expired.count,
+      lapsed: lapsed.count,
+      backfilled,
+      comped: comped.count,
+    };
   }
 
   /**

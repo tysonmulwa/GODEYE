@@ -19,7 +19,7 @@ import { ApiBearerAuth, ApiOperation, ApiTags } from "@nestjs/swagger";
 import { Throttle } from "@nestjs/throttler";
 import { createHmac, timingSafeEqual } from "crypto";
 import type { Request } from "express";
-import type { PlanCode } from "@godeye/shared";
+import { PLANS, type PlanCode } from "@godeye/shared";
 import { z } from "zod";
 import { AuditService } from "../common/audit.service";
 import { CurrentAuth } from "../common/current-auth.decorator";
@@ -46,7 +46,22 @@ const ENTRY_LIMITS: PlanLimits = {
   seats: 1,
 };
 
-const checkoutSchema = z.object({ planCode: z.enum(["PRO", "PREMIUM", "VIP"]) });
+/**
+ * How a workspace is paying for the month.
+ *
+ * `subscription` is a Paystack plan: a card, charged again automatically every
+ * month. `once` is a single transaction for one month, which is the only way
+ * Apple Pay and M-Pesa can be used at all — Paystack can re-charge a card
+ * authorisation and nothing else, so a wallet on a plan would take money once
+ * and never renew.
+ */
+const checkoutSchema = z.object({
+  planCode: z.enum(["PRO", "PREMIUM", "VIP"]),
+  mode: z.enum(["subscription", "once"]).default("subscription"),
+});
+
+/** Days a single payment buys. A month, erring on the customer's side. */
+const ONE_MONTH_DAYS = 31;
 
 function monthStart(): Date {
   const d = new Date();
@@ -156,8 +171,16 @@ export class BillingService implements OnModuleInit {
         code: p.code,
         name: p.name,
         priceMonthlyUsd: p.priceMonthlyUsd.toString(),
+        // What a single month costs in the wallet currency, so the page can
+        // quote M-Pesa customers the figure they will actually be asked for
+        // rather than a converted dollar amount.
+        priceOnceMajor: this.oneOffPrice(p.code),
+        priceOnceCurrency: env.paystack.oneOffCurrency,
         limits: this.limitsOf(p),
       })),
+      /** Whether a one-off month can be bought, and with what. Empty when the
+       *  server has no wallet channels enabled at all. */
+      oneOffChannels: env.paystack.oneOffChannels,
       // What the billing page needs to know to show an upgrade button at all.
       // Reported as a boolean: the secret key must never leave the server.
       paymentsConfigured: !!env.paystack.secretKey,
@@ -235,17 +258,15 @@ export class BillingService implements OnModuleInit {
    * zero. Sending the plan's exact figure satisfies it and cannot disagree
    * with what the subscription then charges.
    */
-  async checkout(orgId: string, userId: string, planCode: PlanCode) {
+  async checkout(
+    orgId: string,
+    userId: string,
+    planCode: PlanCode,
+    mode: "subscription" | "once" = "subscription",
+  ) {
     if (!env.paystack.secretKey) {
       throw new BadRequestException(
         "Payments are not configured on this server yet. Set PAYSTACK_SECRET_KEY.",
-      );
-    }
-    const plan = env.paystack.plans[planCode];
-    if (!plan) {
-      throw new BadRequestException(
-        `No Paystack plan configured for ${planCode}. Create a recurring plan in ` +
-          `the Paystack dashboard and set PAYSTACK_PLAN_${planCode} to its plan code.`,
       );
     }
     const user = await this.prisma.user.findUnique({
@@ -256,7 +277,10 @@ export class BillingService implements OnModuleInit {
       throw new BadRequestException("Your account has no email address to bill");
     }
 
-    const { amount, currency } = await this.paystackPlan(planCode, plan);
+    const request =
+      mode === "once"
+        ? this.oneOffRequest(planCode)
+        : await this.subscriptionRequest(planCode);
 
     const res = await fetch("https://api.paystack.co/transaction/initialize", {
       method: "POST",
@@ -266,19 +290,14 @@ export class BillingService implements OnModuleInit {
       },
       body: JSON.stringify({
         email: user.email,
-        plan,
-        amount,
-        // Only when Paystack stated one. A plan priced in a currency the
-        // merchant does not have enabled fails at checkout, and guessing a
-        // default here would hide which of the two is actually wrong.
-        ...(currency ? { currency } : {}),
+        ...request,
         // Paystack appends its own query string, so the page has to tolerate
         // extra params. It already does: it reads only `billing`.
         callback_url: `${env.webUrl.split(",")[0]}/billing?billing=success`,
         // The only link back to the workspace. The webhook arrives on its own,
         // with no session, so without this there is no way to know which
-        // organisation just paid.
-        metadata: { orgId, planCode, userId },
+        // organisation just paid — or, for a one-off, what it bought.
+        metadata: { orgId, planCode, userId, mode },
       }),
     });
     const data = (await res.json()) as {
@@ -287,7 +306,7 @@ export class BillingService implements OnModuleInit {
       data?: { authorization_url?: string };
     };
     if (!res.ok || !data.status || !data.data?.authorization_url) {
-      this.logger.error(`Paystack checkout failed: ${data.message}`);
+      this.logger.error(`Paystack checkout failed (${mode}): ${data.message}`);
       throw new BadRequestException(data.message ?? "Could not start checkout");
     }
 
@@ -295,9 +314,68 @@ export class BillingService implements OnModuleInit {
       orgId,
       userId,
       action: "billing.checkout_started",
-      metadata: { planCode, provider: "paystack" },
+      metadata: { planCode, mode, provider: "paystack" },
     });
     return { url: data.data.authorization_url };
+  }
+
+  /**
+   * A card subscription: Paystack holds the plan and charges it again monthly.
+   *
+   * No `channels` list. Paystack already limits a plan transaction to what it
+   * can re-charge, and naming channels here would only risk offering one it
+   * cannot.
+   */
+  private async subscriptionRequest(planCode: PlanCode) {
+    const plan = env.paystack.plans[planCode];
+    if (!plan) {
+      throw new BadRequestException(
+        `No Paystack plan configured for ${planCode}. Create a recurring plan in ` +
+          `the Paystack dashboard and set PAYSTACK_PLAN_${planCode} to its plan code.`,
+      );
+    }
+    const { amount, currency } = await this.paystackPlan(planCode, plan);
+    return {
+      plan,
+      amount,
+      // Only when Paystack stated one. A plan priced in a currency the
+      // merchant does not have enabled fails at checkout, and guessing a
+      // default here would hide which of the two is actually wrong.
+      ...(currency ? { currency } : {}),
+    };
+  }
+
+  /**
+   * One month, bought outright.
+   *
+   * This exists because Paystack can only re-charge a card. A customer paying
+   * with M-Pesa or Apple Pay has no reusable authorisation, so there is nothing
+   * to renew — putting them on a plan would take their money once and then let
+   * the workspace lock while they believed they were subscribed. Buying a
+   * month at a time is the honest version of what those channels can do.
+   *
+   * Priced in shillings from the shared catalogue, because M-Pesa settles in
+   * KES and a transaction carries exactly one currency.
+   */
+  private oneOffRequest(planCode: PlanCode) {
+    return {
+      amount: this.oneOffPrice(planCode) * 100,
+      currency: env.paystack.oneOffCurrency,
+      channels: env.paystack.oneOffChannels,
+    };
+  }
+
+  /**
+   * A single month's price in major units of the wallet currency.
+   *
+   * Read from the shared catalogue, never converted here: a rate applied at
+   * checkout would quote one figure on the billing page and charge another at
+   * the till, and the customer only finds out on their statement.
+   */
+  private oneOffPrice(planCode: string): number {
+    const plan = PLANS.find((p) => p.code === planCode);
+    if (!plan) throw new BadRequestException(`Unknown plan ${planCode}`);
+    return env.paystack.oneOffCurrency === "KES" ? plan.priceMonthlyKes : plan.priceMonthlyUsd;
   }
 
   /**
@@ -342,16 +420,34 @@ export class BillingService implements OnModuleInit {
         return;
       }
       const customer = (data.customer ?? {}) as Record<string, unknown>;
-      const renewsAt = this.parseDate(data.next_payment_date);
+      const once = metadata.mode === "once";
+      const existing = await this.prisma.subscription.findUnique({
+        where: { orgId },
+        select: { currentPeriodEnd: true },
+      });
+
+      // A one-off buys a month from where the current one ends, not from now:
+      // somebody who pays a week early has bought a month, not lost a week.
+      // A subscription takes Paystack's own next charge date instead.
+      const paidUntil = once
+        ? new Date(
+            Math.max(Date.now(), existing?.currentPeriodEnd?.getTime() ?? 0) +
+              ONE_MONTH_DAYS * 24 * 3600 * 1000,
+          )
+        : this.parseDate(data.next_payment_date);
+
       const fields = {
         planId: plan.id,
         status: "ACTIVE" as const,
         providerCustomerId: (customer.customer_code as string) ?? null,
-        providerSubscriptionId: (data.subscription_code as string) ?? null,
-        // Only overwritten when the event says when the next charge is. Clearing
-        // it on a plain charge.success would erase the renewal date that the
+        // Deliberately left null for a one-off. Nothing renews it, and that
+        // absence is what tells the read-only guard this month has a hard end
+        // rather than a card behind it.
+        providerSubscriptionId: once ? null : ((data.subscription_code as string) ?? null),
+        // Only overwritten when there is a date to write. Clearing it on a
+        // plain charge.success would erase the renewal date that the
         // subscription.create event had already recorded.
-        ...(renewsAt ? { currentPeriodEnd: renewsAt } : {}),
+        ...(paidUntil ? { currentPeriodEnd: paidUntil } : {}),
       };
       await this.prisma.subscription.upsert({
         where: { orgId },
@@ -364,9 +460,17 @@ export class BillingService implements OnModuleInit {
       this.audit.log({
         orgId,
         action: "billing.subscription_activated",
-        metadata: { planCode, provider: "paystack" },
+        metadata: {
+          planCode,
+          provider: "paystack",
+          mode: once ? "once" : "subscription",
+          paidUntil: paidUntil?.toISOString() ?? null,
+        },
       });
-      this.logger.log(`Paystack activated ${planCode} for org ${orgId}`);
+      this.logger.log(
+        `Paystack activated ${planCode} for org ${orgId}` +
+          (once ? ` until ${paidUntil?.toISOString()} (one-off month)` : " (subscription)"),
+      );
       return;
     }
 
@@ -412,12 +516,16 @@ export class BillingController {
   @Post("checkout")
   @MinRole("ADMIN")
   @Throttle({ default: { limit: 5, ttl: 60_000 } })
-  @ApiOperation({ summary: "Start a Paystack checkout for a paid plan" })
+  @ApiOperation({
+    summary:
+      "Start a Paystack checkout: a card subscription that renews, or one month " +
+      "bought outright (the only mode Apple Pay and M-Pesa can use)",
+  })
   checkout(
     @CurrentAuth() auth: AccessTokenPayload,
     @Body(new ZodPipe(checkoutSchema)) body: z.infer<typeof checkoutSchema>,
   ) {
-    return this.billing.checkout(auth.orgId, auth.sub, body.planCode);
+    return this.billing.checkout(auth.orgId, auth.sub, body.planCode, body.mode);
   }
 }
 

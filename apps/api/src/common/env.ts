@@ -155,6 +155,29 @@ export const env = {
       VIP: (process.env.PAYSTACK_PLAN_VIP ?? "").trim(),
     } as Record<string, string>,
     /**
+     * Channels offered on a one-off month.
+     *
+     * Only ever narrowed here, never widened: Paystack still refuses anything
+     * the account has not enabled. Configurable because which wallets a
+     * merchant can actually take varies by country and by how far their
+     * account activation has got.
+     *
+     * The card subscription deliberately does not use this list. Paystack
+     * allows only cards to be charged again automatically, so offering M-Pesa
+     * on a plan would show a customer a button that takes their money once and
+     * then quietly never renews.
+     */
+    oneOffChannels: (process.env.PAYSTACK_ONEOFF_CHANNELS ?? "card,apple_pay,mobile_money,bank_transfer,ussd,qr")
+      .split(",")
+      .map((c) => c.trim())
+      .filter(Boolean),
+    /**
+     * The currency a one-off month is charged in. KES by default, because
+     * M-Pesa settles in shillings and a transaction carries exactly one
+     * currency — so the wallet channels and the price have to agree.
+     */
+    oneOffCurrency: (process.env.PAYSTACK_ONEOFF_CURRENCY ?? "KES").trim().toUpperCase(),
+    /**
      * Which Paystack mode these keys belong to, read from the key's own prefix.
      *
      * Worth knowing because plan codes are scoped to a mode: a PLN_ created in

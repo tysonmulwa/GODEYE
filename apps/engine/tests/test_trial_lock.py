@@ -51,8 +51,20 @@ class TestLockedOrgIds:
         assert "'TRIALING'" in sql
         assert '"Subscription"."currentPeriodEnd" <=' in sql
 
-    def test_an_active_subscription_is_never_locked(self):
-        assert "'ACTIVE'" not in literal_sql(locked_org_ids(NOW))
+    def test_a_card_subscription_is_never_locked_on_its_renewal_date(self):
+        # ACTIVE appears in the SQL now, but only alongside "no subscription
+        # code" — a card's renewal date is a date Paystack retries, not a
+        # deadline. Locking a paying customer over a slow webhook is the worse
+        # of the two mistakes.
+        sql = literal_sql(locked_org_ids(NOW))
+        assert '"Subscription"."stripeSubscriptionId" IS NULL' in sql
+
+    def test_a_bought_month_is_locked_once_it_runs_out(self):
+        # M-Pesa and Apple Pay leave nothing to charge again, so when the month
+        # they paid for ends, publishing stops until the next payment.
+        sql = literal_sql(locked_org_ids(NOW))
+        assert "'ACTIVE'" in sql
+        assert sql.count('"Subscription"."currentPeriodEnd" <=') == 2
 
     def test_the_workspaces_godeye_runs_are_never_locked(self):
         sql = literal_sql(locked_org_ids(NOW))

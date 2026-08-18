@@ -167,7 +167,7 @@ describe("BillingService", () => {
           amount: 1900,
           currency: "KES",
           email: "jane@acme.com",
-          metadata: { orgId: "org1", planCode: "PRO", userId: "user1" },
+          metadata: { orgId: "org1", planCode: "PRO", userId: "user1", mode: "subscription" },
         }),
       );
     });
@@ -238,6 +238,110 @@ describe("BillingService", () => {
       data: { status: "CANCELED" },
     });
     expect(access.invalidate).toHaveBeenCalledWith("org1");
+  });
+
+  describe("a month bought outright", () => {
+    const realFetch = global.fetch;
+    const realKey = env.paystack.secretKey;
+
+    beforeEach(() => {
+      env.paystack.secretKey = "sk_test_checkout";
+    });
+    afterEach(() => {
+      global.fetch = realFetch;
+      env.paystack.secretKey = realKey;
+    });
+
+    it("charges the shilling price and offers the wallet channels", async () => {
+      const fetchMock = jest.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          status: true,
+          data: { authorization_url: "https://checkout.paystack.com/once" },
+        }),
+      });
+      global.fetch = fetchMock as never;
+
+      await service.checkout("org1", "user1", "PRO", "once");
+
+      // One call only: a one-off never reads the Paystack plan, because it is
+      // not using one.
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      const body = JSON.parse(fetchMock.mock.calls[0][1].body);
+      expect(body.amount).toBe(245100); // 2,451 KES in subunits
+      expect(body.currency).toBe("KES");
+      expect(body.plan).toBeUndefined();
+      expect(body.channels).toEqual(expect.arrayContaining(["apple_pay", "mobile_money"]));
+      expect(body.metadata).toEqual({
+        orgId: "org1",
+        planCode: "PRO",
+        userId: "user1",
+        mode: "once",
+      });
+    });
+
+    it("never puts a wallet on a plan, which would take money and not renew", async () => {
+      const fetchMock = jest.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ status: true, data: { authorization_url: "https://x" } }),
+      });
+      global.fetch = fetchMock as never;
+      await service.checkout("org1", "user1", "VIP", "once");
+      expect(JSON.parse(fetchMock.mock.calls[0][1].body).plan).toBeUndefined();
+    });
+
+    it("grants a month from now, and leaves no subscription code behind", async () => {
+      prisma.subscription.findUnique.mockResolvedValue(null);
+      const before = Date.now();
+
+      await service.handlePaystackEvent({
+        event: "charge.success",
+        data: {
+          reference: "ref_once",
+          customer: { customer_code: "CUS_1" },
+          metadata: { orgId: "org1", planCode: "PRO", mode: "once" },
+        },
+      });
+
+      const args = prisma.subscription.upsert.mock.calls[0][0];
+      expect(args.update.status).toBe("ACTIVE");
+      // Null is what tells the guard this month ends rather than renews.
+      expect(args.update.providerSubscriptionId).toBeNull();
+      const days = (args.update.currentPeriodEnd.getTime() - before) / (24 * 3600 * 1000);
+      expect(days).toBeGreaterThan(30.9);
+      expect(days).toBeLessThan(31.1);
+    });
+
+    it("adds a month to one already paid for, rather than restarting it", async () => {
+      // Paying a week early must buy a month, not throw the week away.
+      const weekAway = new Date(Date.now() + 7 * 24 * 3600 * 1000);
+      prisma.subscription.findUnique.mockResolvedValue({ currentPeriodEnd: weekAway });
+
+      await service.handlePaystackEvent({
+        event: "charge.success",
+        data: { metadata: { orgId: "org1", planCode: "PRO", mode: "once" } },
+      });
+
+      const { currentPeriodEnd } = prisma.subscription.upsert.mock.calls[0][0].update;
+      const days = (currentPeriodEnd.getTime() - weekAway.getTime()) / (24 * 3600 * 1000);
+      expect(days).toBeGreaterThan(30.9);
+      expect(days).toBeLessThan(31.1);
+    });
+
+    it("still records a card subscription's own renewal date", async () => {
+      prisma.subscription.findUnique.mockResolvedValue(null);
+      await service.handlePaystackEvent({
+        event: "subscription.create",
+        data: {
+          subscription_code: "SUB_1",
+          next_payment_date: "2026-09-17T00:00:00.000Z",
+          metadata: { orgId: "org1", planCode: "PRO", mode: "subscription" },
+        },
+      });
+      const { update } = prisma.subscription.upsert.mock.calls[0][0];
+      expect(update.providerSubscriptionId).toBe("SUB_1");
+      expect(update.currentPeriodEnd).toEqual(new Date("2026-09-17T00:00:00.000Z"));
+    });
   });
 
   it("rejects webhook payloads with a bad signature", () => {

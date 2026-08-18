@@ -36,8 +36,8 @@ function value(key: string, n: number): string {
 
 const QUESTIONS = [
   {
-    q: "What currency am I charged in?",
-    a: "US dollars. Payment is handled by Paystack — card, mobile money or Apple Pay — which converts from your own currency at checkout and shows you the amount before you confirm.",
+    q: "What can I pay with?",
+    a: `Card, Apple Pay or M-Pesa, all through Paystack. A card subscription is billed in US dollars and renews itself every month. Apple Pay and M-Pesa cannot be charged again automatically, so those buy one month at a time, priced in shillings: ${PLANS.map((p) => `${p.name} ${p.priceMonthlyKes.toLocaleString("en-US")}`).join(", ")} KES. When a bought month ends the workspace turns read-only until you buy the next one, and nothing is deleted.`,
   },
   {
     q: "Do I need a card to start?",
