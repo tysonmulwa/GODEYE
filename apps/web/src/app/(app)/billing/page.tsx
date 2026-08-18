@@ -3,8 +3,9 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, Clock, ExternalLink, Lock } from "lucide-react";
 import { useSearchParams } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { WorkspaceAccess } from "@godeye/shared";
+import { PayMethods, type PaymentMethod } from "@/components/pay-methods";
 import { PayOnPhone } from "@/components/pay-qr";
 import { ApplePayMark, Badge, Button, Card, ErrorNote, PageHeader } from "@/components/ui";
 import { api } from "@/lib/api";
@@ -21,9 +22,8 @@ interface PlanRow {
   code: string;
   name: string;
   priceMonthlyUsd: string;
-  /** One month bought outright, in the wallet currency's major units. */
-  priceOnceMajor: number;
-  priceOnceCurrency: string;
+  /** One month on M-Pesa, in shillings. Shown only once M-Pesa is chosen. */
+  priceMpesaKes: number;
   limits: PlanLimits;
 }
 
@@ -36,9 +36,8 @@ interface Overview {
   limits: PlanLimits;
   usage: PlanLimits;
   plans: PlanRow[];
-  /** Channels a one-off month may use. Empty means wallets are off on this
-   *  server, so only the card subscription is offered. */
-  oneOffChannels: string[];
+  /** Ways to pay this server offers, in the order the picker shows them. */
+  methods: string[];
   /** True when Paystack is live on this server. False hides the upgrade
    *  buttons rather than sending somebody to a checkout that cannot start. */
   paymentsConfigured: boolean;
@@ -109,8 +108,16 @@ export default function BillingPage() {
   const queryClient = useQueryClient();
   const setAccess = useAuthStore((s) => s.setAccess);
   const [error, setError] = useState<string | null>(null);
+  /** The plan whose payment picker is open, if any. */
+  const [choosing, setChoosing] = useState<PlanRow | null>(null);
   /** The open scan-to-pay dialog, if any. */
-  const [payOnPhone, setPayOnPhone] = useState<{ url: string; planCode: string } | null>(null);
+  const [payOnPhone, setPayOnPhone] = useState<{
+    url: string;
+    planCode: string;
+    // Never a card: a card is paid on the device the customer is already
+    // using, so there is nothing to hand to a phone.
+    method: Exclude<PaymentMethod, "card">;
+  } | null>(null);
   /** What billing looked like when it opened, so a change means "paid". */
   const [before, setBefore] = useState<string | null>(null);
 
@@ -123,25 +130,43 @@ export default function BillingPage() {
   });
 
   const checkout = useMutation({
-    mutationFn: ({ planCode, mode }: { planCode: string; mode: "subscription" | "once" }) =>
-      // The body is the object itself. api() serialises it, passing a string
-      // here stringified it twice, and the API received a quoted blob instead
-      // of a plan code, so every upgrade failed validation.
+    mutationFn: ({ planCode, method }: { planCode: string; method: PaymentMethod }) =>
+      // The body is the object itself. api() serialises it, and passing a
+      // string here stringified it twice, so the API received a quoted blob
+      // instead of a plan code and every upgrade failed validation.
       api<{ url: string; reference: string | null }>("/billing/checkout", {
         method: "POST",
-        body: { planCode, mode },
+        body: { planCode, method },
       }),
-    onSuccess: ({ url }, { planCode, mode }) => {
-      // A card subscription goes straight to Paystack: it can only be paid on
-      // a card anyway, and this device has one. A wallet month opens the QR
-      // instead, because the wallet is on a phone that is not this screen.
-      if (mode === "subscription") {
+    onSuccess: ({ url }, { planCode, method }) => {
+      setChoosing(null);
+      // A card is paid on this device, which has one. A wallet lives on a
+      // phone that is not this screen, so those get the QR.
+      if (method === "card") {
         window.location.href = url;
         return;
       }
-      setPayOnPhone({ url, planCode });
+      setPayOnPhone({ url, planCode, method });
     },
     onError: (e) => setError(e instanceof Error ? e.message : "Could not start checkout"),
+  });
+
+  /**
+   * Confirm the payment the customer has just come back from.
+   *
+   * Paystack puts the reference on the return URL, so the page can ask the API
+   * to check it and activate the plan there and then. The webhook does the same
+   * job and usually wins the race, but it is one server calling another and it
+   * can be unconfigured or slow, which is exactly the case where the customer
+   * is staring at the old plan wondering where their money went.
+   */
+  const confirm = useMutation({
+    mutationFn: (reference: string) =>
+      api<{ applied: boolean; status: string }>("/billing/verify", {
+        method: "POST",
+        body: { reference },
+      }),
+    onSettled: () => void queryClient.invalidateQueries({ queryKey: ["billing"] }),
   });
 
   const banner = params.get("billing");
@@ -168,7 +193,8 @@ export default function BillingPage() {
   const paidOnPhone = !!payOnPhone && before !== null && paidFingerprint !== before;
 
   // Poll only while somebody is standing in front of the QR, and stop the
-  // moment the payment shows up, a success dialog has nothing left to wait for.
+  // moment the payment shows up, since a success dialog has nothing left to
+  // wait for.
   useEffect(() => {
     if (!payOnPhone || paidOnPhone) return;
     const id = setInterval(
@@ -184,14 +210,15 @@ export default function BillingPage() {
     if (data?.access) setAccess(data.access);
   }, [data?.access, setAccess]);
 
-  // A successful return from Paystack races the webhook. One retry a few
-  // seconds later turns "still says trial" into "says Premium" without the
-  // customer having to reload the page and wonder.
+  // Straight back from Paystack: confirm the reference on the URL, once.
+  const reference = params.get("reference") ?? params.get("trxref");
+  const confirmRef = useRef<string | null>(null);
   useEffect(() => {
-    if (banner !== "success") return;
-    const id = setTimeout(() => void queryClient.invalidateQueries({ queryKey: ["billing"] }), 4000);
-    return () => clearTimeout(id);
-  }, [banner, queryClient]);
+    if (banner !== "success" || !reference) return;
+    if (confirmRef.current === reference) return;
+    confirmRef.current = reference;
+    confirm.mutate(reference);
+  }, [banner, reference, confirm]);
 
   return (
     <>
@@ -329,60 +356,16 @@ export default function BillingPage() {
                     ))}
                   </ul>
                   {!current && (
-                    <div className="mt-5 space-y-2">
-                      <Button
-                        className="w-full"
-                        loading={checkout.isPending && checkout.variables?.planCode === p.code}
-                        disabled={!data.paymentsConfigured}
-                        onClick={() => {
-                          setError(null);
-                          checkout.mutate({ planCode: p.code, mode: "subscription" });
-                        }}
-                      >
-                        {paying ? `Switch to ${p.name}` : `Subscribe with card`}
-                      </Button>
-
-                      {/* The wallet path. Paystack can only re-charge a card, so
-                          M-Pesa and Apple Pay buy one month at a time, offering
-                          them as a subscription would take the money once and
-                          then let the workspace lock while the customer believed
-                          they were paying. Priced in shillings because M-Pesa
-                          settles in nothing else. */}
-                      {data.oneOffChannels.length > 0 && (
-                        <>
-                          <Button
-                            variant="secondary"
-                            className="w-full"
-                            disabled={!data.paymentsConfigured}
-                            onClick={() => {
-                              setError(null);
-                              checkout.mutate({ planCode: p.code, mode: "once" });
-                            }}
-                          >
-                            Pay for one month
-                          </Button>
-                          <p className="flex flex-wrap items-center justify-center gap-x-1.5 text-[11px] text-ink-3">
-                            <span className="font-mono">
-                              {money(p.priceOnceCurrency, p.priceOnceMajor)}
-                            </span>
-                            <span>·</span>
-                            {data.oneOffChannels.includes("apple_pay") && (
-                              <>
-                                <ApplePayMark />
-                                <span>·</span>
-                              </>
-                            )}
-                            {data.oneOffChannels.includes("mobile_money") && (
-                              <>
-                                <span>M-Pesa</span>
-                                <span>·</span>
-                              </>
-                            )}
-                            <span>no auto-renew</span>
-                          </p>
-                        </>
-                      )}
-                    </div>
+                    <Button
+                      className="mt-5 w-full"
+                      disabled={!data.paymentsConfigured}
+                      onClick={() => {
+                        setError(null);
+                        setChoosing(p);
+                      }}
+                    >
+                      {paying ? `Switch to ${p.name}` : "Subscribe"}
+                    </Button>
                   )}
                 </Card>
               );
@@ -395,6 +378,21 @@ export default function BillingPage() {
             </p>
           )}
 
+          {choosing && (
+            <PayMethods
+              planName={choosing.name}
+              priceUsd={usd.format(Number(choosing.priceMonthlyUsd))}
+              priceMpesaKes={choosing.priceMpesaKes}
+              methods={data.methods}
+              busy={checkout.isPending ? (checkout.variables?.method ?? null) : null}
+              onPick={(method) => {
+                setError(null);
+                checkout.mutate({ planCode: choosing.code, method });
+              }}
+              onClose={() => setChoosing(null)}
+            />
+          )}
+
           {payOnPhone &&
             (() => {
               const plan = data.plans.find((p) => p.code === payOnPhone.planCode);
@@ -403,25 +401,19 @@ export default function BillingPage() {
                   url={payOnPhone.url}
                   planName={plan?.name ?? payOnPhone.planCode}
                   price={
-                    plan ? money(plan.priceOnceCurrency, plan.priceOnceMajor) : ""
+                    plan
+                      ? payOnPhone.method === "mpesa"
+                        ? money("KES", plan.priceMpesaKes)
+                        : usd.format(Number(plan.priceMonthlyUsd))
+                      : ""
                   }
-                  channels={data.oneOffChannels}
+                  method={payOnPhone.method}
                   paid={paidOnPhone}
                   onClose={() => setPayOnPhone(null)}
                 />
               );
             })()}
 
-          <p className="mt-6 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-ink-3">
-            <ExternalLink size={12} />
-            <span>Payments are handled by Paystack, card,</span>
-            <ApplePayMark />
-            <span>
-              and M-Pesa. GODEYE never sees or stores your card details. A card subscription
-              renews itself each month; a month bought with a wallet does not, so the workspace
-              turns read-only when it ends until you buy the next one.
-            </span>
-          </p>
         </>
       )}
     </>

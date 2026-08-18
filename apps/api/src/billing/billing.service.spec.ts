@@ -29,6 +29,12 @@ function makePrisma() {
       aggregate: jest.fn().mockResolvedValue({ _sum: { inputTokens: 0, outputTokens: 0 } }),
     },
     socialConnection: { count: jest.fn().mockResolvedValue(0) },
+    // applyPayment reads this to see whether a reference has been credited
+    // already, and writes it once it has.
+    auditLog: {
+      findFirst: jest.fn().mockResolvedValue(null),
+      create: jest.fn().mockResolvedValue({}),
+    },
     membership: { count: jest.fn().mockResolvedValue(1) },
     invitation: { count: jest.fn().mockResolvedValue(0) },
     user: { findUnique: jest.fn().mockResolvedValue({ email: "jane@acme.com" }) },
@@ -168,7 +174,13 @@ describe("BillingService", () => {
           amount: 1900,
           currency: "KES",
           email: "jane@acme.com",
-          metadata: { orgId: "org1", planCode: "PRO", userId: "user1", mode: "subscription" },
+          metadata: {
+            orgId: "org1",
+            planCode: "PRO",
+            userId: "user1",
+            method: "card",
+            mode: "subscription",
+          },
         }),
       );
     });
@@ -253,7 +265,7 @@ describe("BillingService", () => {
       env.paystack.secretKey = realKey;
     });
 
-    it("charges the shilling price and offers the wallet channels", async () => {
+    const started = () => {
       const fetchMock = jest.fn().mockResolvedValue({
         ok: true,
         json: async () => ({
@@ -262,8 +274,12 @@ describe("BillingService", () => {
         }),
       });
       global.fetch = fetchMock as never;
+      return fetchMock;
+    };
 
-      await service.checkout("org1", "user1", "PRO", "once");
+    it("charges M-Pesa in shillings, because it settles in nothing else", async () => {
+      const fetchMock = started();
+      await service.checkout("org1", "user1", "PRO", "mpesa");
 
       // One call only: a one-off never reads the Paystack plan, because it is
       // not using one.
@@ -272,23 +288,48 @@ describe("BillingService", () => {
       expect(body.amount).toBe(245100); // 2,451 KES in subunits
       expect(body.currency).toBe("KES");
       expect(body.plan).toBeUndefined();
-      expect(body.channels).toEqual(expect.arrayContaining(["apple_pay", "mobile_money"]));
+      expect(body.channels).toEqual(["mobile_money"]);
       expect(body.metadata).toEqual({
         orgId: "org1",
         planCode: "PRO",
         userId: "user1",
+        method: "mpesa",
         mode: "once",
       });
     });
 
+    it("charges Apple Pay in dollars, the price the rest of the product quotes", async () => {
+      const fetchMock = started();
+      await service.checkout("org1", "user1", "PRO", "apple_pay");
+
+      const body = JSON.parse(fetchMock.mock.calls[0][1].body);
+      expect(body.amount).toBe(1900);
+      expect(body.currency).toBe("USD");
+      expect(body.channels).toEqual(["apple_pay"]);
+    });
+
+    it("opens the sheet on the one method chosen, not a list to choose again", async () => {
+      const fetchMock = started();
+      await service.checkout("org1", "user1", "VIP", "apple_pay");
+      expect(JSON.parse(fetchMock.mock.calls[0][1].body).channels).toHaveLength(1);
+    });
+
     it("never puts a wallet on a plan, which would take money and not renew", async () => {
-      const fetchMock = jest.fn().mockResolvedValue({
-        ok: true,
-        json: async () => ({ status: true, data: { authorization_url: "https://x" } }),
-      });
-      global.fetch = fetchMock as never;
-      await service.checkout("org1", "user1", "VIP", "once");
+      const fetchMock = started();
+      await service.checkout("org1", "user1", "VIP", "mpesa");
       expect(JSON.parse(fetchMock.mock.calls[0][1].body).plan).toBeUndefined();
+    });
+
+    it("refuses a method the server has turned off", async () => {
+      const real = env.paystack.methods;
+      env.paystack.methods = ["card"];
+      try {
+        await expect(service.checkout("org1", "user1", "PRO", "mpesa")).rejects.toThrow(
+          /not available/,
+        );
+      } finally {
+        env.paystack.methods = real;
+      }
     });
 
     it("grants a month from now, and leaves no subscription code behind", async () => {
@@ -342,6 +383,111 @@ describe("BillingService", () => {
       const { update } = prisma.subscription.upsert.mock.calls[0][0];
       expect(update.providerSubscriptionId).toBe("SUB_1");
       expect(update.currentPeriodEnd).toEqual(new Date("2026-09-17T00:00:00.000Z"));
+    });
+  });
+
+  describe("confirming a payment without waiting for the webhook", () => {
+    const realFetch = global.fetch;
+    const realKey = env.paystack.secretKey;
+
+    const paystackSays = (data: unknown) => {
+      const fetchMock = jest.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ status: true, data }),
+      });
+      global.fetch = fetchMock as never;
+      return fetchMock;
+    };
+
+    beforeEach(() => {
+      env.paystack.secretKey = "sk_test_verify";
+    });
+    afterEach(() => {
+      global.fetch = realFetch;
+      env.paystack.secretKey = realKey;
+    });
+
+    it("activates the plan the customer just paid for", async () => {
+      const fetchMock = paystackSays({
+        status: "success",
+        reference: "ref_live_1",
+        subscription_code: "SUB_9",
+        customer: { customer_code: "CUS_9" },
+        metadata: { orgId: "org1", planCode: "PRO", mode: "subscription" },
+      });
+
+      await expect(service.verifyPayment("org1", "ref_live_1")).resolves.toEqual({
+        applied: true,
+        status: "success",
+      });
+      expect(fetchMock.mock.calls[0][0]).toBe(
+        "https://api.paystack.co/transaction/verify/ref_live_1",
+      );
+      expect(prisma.subscription.upsert).toHaveBeenCalledWith(
+        expect.objectContaining({ update: expect.objectContaining({ status: "ACTIVE" }) }),
+      );
+      expect(access.invalidate).toHaveBeenCalledWith("org1");
+    });
+
+    it("credits a payment once, however many times it is confirmed", async () => {
+      // The webhook and the customer's return trip race each other on purpose.
+      // A one-off adds a month, so crediting the same reference twice would
+      // hand out a month nobody paid for.
+      prisma.auditLog.findFirst.mockResolvedValue({ id: "already" });
+      paystackSays({
+        status: "success",
+        reference: "ref_live_1",
+        metadata: { orgId: "org1", planCode: "PRO", mode: "once" },
+      });
+
+      await expect(service.verifyPayment("org1", "ref_live_1")).resolves.toEqual({
+        applied: false,
+        status: "success",
+      });
+      expect(prisma.subscription.upsert).not.toHaveBeenCalled();
+    });
+
+    it("records the reference so the second attempt can see it", async () => {
+      paystackSays({
+        status: "success",
+        reference: "ref_live_2",
+        metadata: { orgId: "org1", planCode: "PRO", mode: "once" },
+      });
+      await service.verifyPayment("org1", "ref_live_2");
+      expect(prisma.auditLog.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            action: "billing.payment_applied",
+            targetId: "ref_live_2",
+          }),
+        }),
+      );
+    });
+
+    it("refuses to activate a plan from another workspace's payment", async () => {
+      // A reference is not a secret, so knowing one must not buy anything.
+      paystackSays({
+        status: "success",
+        reference: "ref_live_3",
+        metadata: { orgId: "someone-else", planCode: "VIP", mode: "once" },
+      });
+      await expect(service.verifyPayment("org1", "ref_live_3")).rejects.toThrow(
+        /belongs to another workspace/,
+      );
+      expect(prisma.subscription.upsert).not.toHaveBeenCalled();
+    });
+
+    it("changes nothing when the payment did not succeed", async () => {
+      paystackSays({
+        status: "abandoned",
+        reference: "ref_live_4",
+        metadata: { orgId: "org1", planCode: "PRO" },
+      });
+      await expect(service.verifyPayment("org1", "ref_live_4")).resolves.toEqual({
+        applied: false,
+        status: "abandoned",
+      });
+      expect(prisma.subscription.upsert).not.toHaveBeenCalled();
     });
   });
 

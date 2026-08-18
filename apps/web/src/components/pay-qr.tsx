@@ -34,7 +34,7 @@ export function PayOnPhone({
   url,
   planName,
   price,
-  channels,
+  method,
   paid,
   onClose,
 }: {
@@ -42,7 +42,7 @@ export function PayOnPhone({
   planName: string;
   /** Already formatted, in the currency actually charged. */
   price: string;
-  channels: string[];
+  method: "apple_pay" | "mpesa";
   /** True once the payment has been seen, the dialog says so and closes. */
   paid: boolean;
   onClose: () => void;
@@ -152,14 +152,8 @@ export function PayOnPhone({
             <p className="flex flex-wrap items-center justify-center gap-x-1.5 text-[13px] leading-relaxed text-ink-2">
               <Smartphone className="h-3.5 w-3.5 shrink-0 text-ink-3" />
               <span>Open the Camera app and point it at the code. Pay with</span>
-              {channels.includes("apple_pay") && (
-                <>
-                  <ApplePayMark />
-                  <span>,</span>
-                </>
-              )}
-              {channels.includes("mobile_money") && <span>M-Pesa</span>}
-              <span>or a card on your phone.</span>
+              {method === "apple_pay" ? <ApplePayMark /> : <span>M-Pesa</span>}
+              <span>on your phone.</span>
             </p>
             <p className="mt-3 flex items-center justify-center gap-2 text-[12px] text-ink-3">
               <Loader2 className="h-3.5 w-3.5 animate-spin" />
