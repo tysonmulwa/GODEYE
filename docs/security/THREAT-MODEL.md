@@ -172,3 +172,89 @@ Stated so the gaps are not mistaken for clean bills of health:
    first time it is not, with no signal that anything is wrong.
 7. **S-8 / D-1** — gives revenue away rather than losing data.
 8. **S-7, S-9, S-10, S-11, B-4** — real, bounded, individually cheap to fix.
+
+---
+
+# Mitigation trace — added after the P0 phase
+
+Written when this model was, every threat below read OPEN or PARTIAL. This
+section says what changed, where, and what test would fail if it were undone.
+A threat still marked OPEN is open; nothing here is aspirational.
+
+## Boundary 1 — browser → API
+
+| Threat | Was | Now | Where | Test |
+|---|---|---|---|---|
+| **S**poofing: an OAuth `state` is accepted as a session (C-1) | OPEN | **MITIGATED** | Separate key + `typ`/`iss`/`aud` + HS256 allow-list, `common/tokens.ts` | `c1-oauth-state-is-a-session` |
+| **E**levation: VIEWER writes through five unguarded controllers (S-1) | OPEN | **MITIGATED** | Global `RolesGuard`, default-deny, boot refuses an unannotated route | `s1-roles-guard-missing`, `authorization-matrix`, `boot-audit` |
+| **E**levation: a demoted or removed member keeps their powers (S-10) | OPEN | **MITIGATED** | `MembershipService` reads the live row; `sessionVersion` retires issued tokens | `s10-role-revocation`, `roles.guard.spec` |
+| **D**oS: one global rate-limit bucket (S-4) | OPEN | **MITIGATED** | `trust proxy` hop count, Redis-backed, three layers, cost-weighted | `s4-trust-proxy` |
+| **S**poofing: credential stuffing spread across addresses | OPEN | **MITIGATED** | Per-account **and** per-address exponential backoff | `login-backoff.service.spec` |
+| **I**nformation disclosure: `/api/docs` maps every route (S-9) | OPEN | **MITIGATED** | Gated on `NODE_ENV`; the contract still emitted for CI | `s5-s6-s9-config` |
+| **I**nformation disclosure: `accountExists` enumerates users (S-16) | OPEN | **MITIGATED** | Removed; the client handles both cases blind | — (no test; PASS\*) |
+| **T**ampering: CSRF on cookie-authenticated `/auth/refresh` (S-14) | OPEN | **OPEN** | — | — |
+
+## Boundary 2 — API → engine
+
+| Threat | Was | Now | Where | Test |
+|---|---|---|---|---|
+| **S**poofing: the shared secret has a published default (S-5) | OPEN | **MITIGATED** | No fallback on either side; boot refuses the published value | `s5-s6-s9-config`, `secrets.spec` |
+| **I**nformation disclosure: `!=` on the secret is a timing oracle | OPEN | **MITIGATED** | `hmac.compare_digest` in `api.py` | `s5-s6-s9-config` |
+| **D**oS: a hung engine holds an API request for five minutes (B-4) | OPEN | **MITIGATED** | Mandatory deadlines + circuit breaker; `/health` split | `b4-fetch-timeouts` |
+
+## Boundary 3 — engine → worker
+
+| Threat | Was | Now | Where | Test |
+|---|---|---|---|---|
+| **T**ampering: credentials encrypted with a key from the repo (S-6) | OPEN | **MITIGATED** | Weak-key rejection in both services; `.env.example` carries no valid value | `crypto.service.spec`, `test_security.py` |
+| **I**nformation disclosure: a ciphertext moved between tenants decrypts | OPEN | **MITIGATED** | AAD binds the ciphertext to its org or user | both suites assert the cross-tenant refusal |
+| **T**ampering: no key rotation path | OPEN | **MITIGATED** | Key ids + `TOKEN_ENCRYPTION_KEY_PREVIOUS` | `crypto.service.spec` |
+| **R**epudiation: Redis broker is unauthenticated on the private network | PARTIAL | **PARTIAL** | Unchanged — a platform control, not a code one | — |
+
+## Boundary 4 — worker → external platforms
+
+| Threat | Was | Now | Where | Test |
+|---|---|---|---|---|
+| **I**nformation disclosure: SSRF reaches metadata and internal services (S-2, S-3, S-20) | OPEN | **MITIGATED** | One `safe_fetch`; address pinning closes DNS rebinding; manual redirects | `test_egress.py` (61), `s2-s3-ssrf` (21) |
+| **D**oS: an unbounded response body OOMs a worker | OPEN | **MITIGATED** | Streamed with a hard cap | `test_egress.py` |
+| **D**enial of service to the CUSTOMER: tokens expire, publishing silently stops (B-7) | OPEN | **MITIGATED** | Hourly refresh, rotation-aware, explicit states, pre-publish refusal | `test_token_refresh.py` (16), `b7-token-refresh` |
+| **T**ampering: the public IndexNow key derived from the credential key (S-6b) | OPEN | **MITIGATED** | `INDEXNOW_KEY_SECRET`, asserted different at boot | `s5-s6-s9-config` |
+
+## Boundary 5 — webhook → API
+
+| Threat | Was | Now | Where | Test |
+|---|---|---|---|---|
+| **T**ampering: unsigned events written to the database (S-7) | OPEN | **MITIGATED** | 401, nothing stored; 1 MB limit before the body is read | `s7-meta-webhook` |
+| **D**oS: unauthenticated unbounded writes | OPEN | **MITIGATED** | Same, plus retention | `s7-meta-webhook` |
+| **E**levation: one payment credits two months (S-8) | OPEN | **MITIGATED** | Marker first, in the transaction, behind a unique index | `s8-d1-payment-idempotency`, `billing.service.spec` |
+| **R**epudiation: a missed payment is invisible | OPEN | **MITIGATED** | Daily reconciliation reports divergence | — (PASS\*) |
+| **T**ampering: a 64-char non-hex signature 500s instead of 401 | OPEN | **MITIGATED** | Hex validated before decoding | `s7-meta-webhook` |
+
+## Boundary 6 — tenant → tenant
+
+| Threat | Was | Now | Where | Test |
+|---|---|---|---|---|
+| **E**levation: an `:id` from another workspace is readable (BOLA) | PARTIAL | **MITIGATED** | Ownership in the WHERE clause; 404 not 403 | `tenant-isolation` |
+| **I**nformation disclosure: a state token connects a victim's pages to an attacker's workspace (S-11) | OPEN | **MITIGATED** | Cookie-bound nonce, single-use `jti`, provider binding, role re-check | `s11-oauth-state-binding` |
+| **I**nformation disclosure: a socket stays in `org:<id>` after removal (S-17) | OPEN | **MITIGATED** | Re-validated on a timer, dropped across replicas on change | — (PASS\*) |
+| **T**ampering: Supabase RLS is assumed off | OPEN | **OPEN** | Unverified. Application-level scoping is the only control | — |
+
+## Still open after this phase
+
+1. **S-14** — CSRF on cookie-authenticated `/auth/refresh` and `/auth/logout`.
+2. **Supabase RLS** — assumed off; never verified.
+3. **Redis and Postgres network exposure** — assumed private; never verified.
+4. **Infrastructure-layer egress** — the SSRF guard is application-layer only.
+5. **No detection** — every mitigation above is preventive. There is no alerting,
+   no anomaly detection and no security event stream, so an attempt that gets
+   past one of these would leave no trace anybody reads. That is the single
+   largest structural gap remaining, and it is the same one the scorecard records
+   as Observability 2/10.
+
+## Ranked by what is left, not by what was fixed
+
+1. The **rotation of `JWT_ACCESS_SECRET`**, which is the other half of C-1 and
+   has not happened.
+2. **No detection**, per above.
+3. **S-14**, the one open finding with a straightforward fix.
+4. The three **unverified assumptions** — RLS, network exposure, proxy hop count.
