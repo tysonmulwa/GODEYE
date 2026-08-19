@@ -49,6 +49,10 @@ describe("SeoService", () => {
   });
 
   it("uses the explicit URL when provided", async () => {
+    // The workspace's own site. A workspace with NO website used to produce a
+    // null ownedHost, which made isForeign false and removed the gate entirely
+    // — see "asks before scanning when ownership cannot be established" below.
+    prisma.businessProfile.findUnique.mockResolvedValue({ website: "https://example.com" });
     const result = await service.runAudit("org1", "user1", {
       url: "https://example.com",
       maxPages: 20,
@@ -58,6 +62,39 @@ describe("SeoService", () => {
     expect(engine.enqueueSeoAudit).toHaveBeenCalledWith(
       expect.objectContaining({ url: "https://example.com", auditId: "audit1" }),
     );
+  });
+
+  it("asks before scanning when ownership cannot be established (S-2)", async () => {
+    // No website on the profile. This was the hole: ownedHost was null, so
+    // `isForeign` computed false and the gate never fired — and the exploit
+    // fixture reproduced it exactly. Unknown ownership now needs the same
+    // explicit confirmation a foreign site does.
+    prisma.businessProfile.findUnique.mockResolvedValue({ website: null });
+    await expect(
+      service.runAudit("org1", "user1", {
+        url: "https://example.com",
+        maxPages: 20,
+        allowForeign: false,
+      }),
+    ).rejects.toThrow(ConflictException);
+    expect(engine.enqueueSeoAudit).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["cloud metadata", "http://169.254.169.254/latest/meta-data/"],
+    ["loopback", "http://127.0.0.1:8000/health"],
+    ["an internal service", "http://engine.railway.internal/health"],
+    ["a non-http scheme", "file:///etc/passwd"],
+  ])("refuses %s before anything is enqueued (S-2)", async (_label, url) => {
+    prisma.businessProfile.findUnique.mockResolvedValue({ website: null });
+    await expect(
+      service.runAudit("org1", "user1", { url, maxPages: 1, allowForeign: true }),
+    ).rejects.toThrow(/cannot be fetched/);
+    // The load-bearing assertion: no AgentRun, no SeoAudit, no task. A 200 that
+    // queues the work has already lost, whatever the worker does next.
+    expect(prisma.agentRun.create).not.toHaveBeenCalled();
+    expect(prisma.seoAudit.create).not.toHaveBeenCalled();
+    expect(engine.enqueueSeoAudit).not.toHaveBeenCalled();
   });
 
   it("blocks a site that isn't the org's registered website until confirmed", async () => {
@@ -100,6 +137,7 @@ describe("SeoService", () => {
   });
 
   it("marks run and audit FAILED when the engine enqueue throws", async () => {
+    prisma.businessProfile.findUnique.mockResolvedValue({ website: "https://example.com" });
     engine.enqueueSeoAudit.mockRejectedValue(new Error("engine down"));
     await expect(
       service.runAudit("org1", "user1", {

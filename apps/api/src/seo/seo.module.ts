@@ -23,6 +23,7 @@ import { CurrentAuth } from "../common/current-auth.decorator";
 import { AccessTokenPayload, JwtAuthGuard } from "../common/jwt-auth.guard";
 import { PrismaService } from "../common/prisma.service";
 import { ZodPipe } from "../common/zod.pipe";
+import { assertPublicUrl } from "../common/url-guard";
 import { EngineService } from "../engine/engine.service";
 import { renderFixPack } from "./fix-pack";
 import { MinRole } from "../common/roles.guard";
@@ -75,13 +76,26 @@ export class SeoService {
     // to confirm before scanning a site they don't own. Plan-based limits on how
     // many sites a workspace may add (e.g. premium 2, vip 3) are intentionally
     // NOT enforced yet, kept inactive while billing is still under test.
+    // Before the ownership gate, and before any row is written (S-2). The gate
+    // below is about *whose* site it is; this is about whether the address is
+    // on the public internet at all. The engine revalidates and pins the
+    // resolved address at connect time.
+    await assertPublicUrl(url);
+
     const ownedHost = hostOf(profile?.website);
     const requestedHost = hostOf(url);
+    // A workspace with no website set used to produce a null ownedHost, which
+    // made isForeign false and removed the gate entirely — the exact case the
+    // exploit fixture reproduces. Unknown ownership now means the request needs
+    // the same explicit confirmation a foreign site does.
+    const ownershipUnknown = !ownedHost;
     const isForeign = !!ownedHost && !!requestedHost && ownedHost !== requestedHost;
-    if (isForeign && !input.allowForeign) {
+    if ((isForeign || ownershipUnknown) && !input.allowForeign) {
       throw new ConflictException({
         code: "SITE_NOT_OWNED",
-        message: `${requestedHost} isn't your registered site (${ownedHost}). Scan it anyway?`,
+        message: ownedHost
+          ? `${requestedHost} isn't your registered site (${ownedHost}). Scan it anyway?`
+          : `This workspace has no registered website, so we cannot tell whether you own ${requestedHost}. Scan it anyway?`,
       });
     }
 

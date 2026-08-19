@@ -26,6 +26,8 @@ from urllib.parse import urljoin, urlparse
 
 import httpx
 
+from ..security import EgressBlocked, SafeClient
+
 from .extract import Product, extract_products, looks_client_rendered, parse_price
 
 logger = logging.getLogger(__name__)
@@ -71,8 +73,10 @@ class ImportResult:
         return self.verdict == FOUND
 
 
-def _client() -> httpx.Client:
-    return httpx.Client(headers=HEADERS, timeout=TIMEOUT, follow_redirects=True)
+def _client() -> SafeClient:
+    """The importer reads a URL the customer typed, so it goes through the
+    egress guard rather than straight to httpx (finding S-3)."""
+    return SafeClient(headers=HEADERS, total_timeout=TIMEOUT)
 
 
 def _origin(url: str) -> str:
@@ -80,7 +84,7 @@ def _origin(url: str) -> str:
     return f"{parts.scheme}://{parts.netloc}"
 
 
-def shopify_feed(base_url: str, client: httpx.Client, limit: int = 250) -> list[Product] | None:
+def shopify_feed(base_url: str, client: SafeClient, limit: int = 250) -> list[Product] | None:
     """The whole catalogue in one request, when the shop is Shopify.
 
     Returns None when this is not a Shopify store. That has to be judged on the
@@ -90,7 +94,7 @@ def shopify_feed(base_url: str, client: httpx.Client, limit: int = 250) -> list[
     url = urljoin(_origin(base_url) + "/", f"products.json?limit={limit}")
     try:
         response = client.get(url)
-    except httpx.HTTPError:
+    except (httpx.HTTPError, EgressBlocked):
         return None
     if response.status_code != 200:
         return None
@@ -142,7 +146,7 @@ def _plain(html: str | None) -> str | None:
     return text[:2000] or None
 
 
-def discover_product_urls(base_url: str, client: httpx.Client, limit: int) -> list[str]:
+def discover_product_urls(base_url: str, client: SafeClient, limit: int) -> list[str]:
     """Product page URLs, from the sitemap where there is one and links where
     there is not."""
     origin = _origin(base_url)
@@ -162,7 +166,7 @@ def discover_product_urls(base_url: str, client: httpx.Client, limit: int) -> li
     for path in ("/sitemap.xml", "/sitemap_index.xml", "/product-sitemap.xml"):
         try:
             response = client.get(urljoin(origin + "/", path))
-        except httpx.HTTPError:
+        except (httpx.HTTPError, EgressBlocked):
             continue
         # A single-page app answers 200 with HTML for every path, so the body
         # decides whether this was really a sitemap.
@@ -174,7 +178,7 @@ def discover_product_urls(base_url: str, client: httpx.Client, limit: int) -> li
             if location.endswith(".xml"):
                 try:
                     nested = client.get(location)
-                except httpx.HTTPError:
+                except (httpx.HTTPError, EgressBlocked):
                     continue
                 for inner in re.findall(r"<loc>\s*(.*?)\s*</loc>", nested.text)[:500]:
                     consider(inner)
@@ -188,7 +192,7 @@ def discover_product_urls(base_url: str, client: httpx.Client, limit: int) -> li
             home = client.get(origin)
             for href in re.findall(r'href=["\']([^"\']+)["\']', home.text):
                 consider(href)
-        except httpx.HTTPError:
+        except (httpx.HTTPError, EgressBlocked):
             pass
     return found[:limit]
 
@@ -203,7 +207,7 @@ def import_from_site(url: str, limit: int = MAX_PRODUCT_PAGES) -> ImportResult:
     with _client() as client:
         try:
             home = client.get(origin)
-        except httpx.HTTPError as e:
+        except (httpx.HTTPError, EgressBlocked) as e:
             return ImportResult(
                 verdict=UNREACHABLE, detail=f"Could not reach {origin}: {type(e).__name__}"
             )
@@ -246,7 +250,7 @@ def import_from_site(url: str, limit: int = MAX_PRODUCT_PAGES) -> ImportResult:
         for product_url in discover_product_urls(origin, client, limit):
             try:
                 page = client.get(product_url)
-            except httpx.HTTPError:
+            except (httpx.HTTPError, EgressBlocked):
                 continue
             if page.status_code != 200:
                 continue
@@ -284,7 +288,7 @@ def import_from_site(url: str, limit: int = MAX_PRODUCT_PAGES) -> ImportResult:
 
 
 def _read_storefront_api(
-    origin: str, html: str, client: httpx.Client, limit: int
+    origin: str, html: str, client: SafeClient, limit: int
 ) -> ImportResult | None:
     """Read the catalogue from the API the storefront itself calls.
 
@@ -311,7 +315,7 @@ def _read_storefront_api(
     )
 
 
-def _read_rendered(origin: str, client: httpx.Client, limit: int) -> ImportResult | None:
+def _read_rendered(origin: str, client: SafeClient, limit: int) -> ImportResult | None:
     """Try again with a browser. None means keep the plain-fetch verdict.
 
     The links a catalogue needs are themselves drawn by the JavaScript, so the

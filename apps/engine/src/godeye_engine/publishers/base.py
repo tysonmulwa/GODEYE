@@ -8,6 +8,8 @@ from dataclasses import dataclass
 from typing import Any
 
 import httpx
+
+from ..security import EgressBlocked, safe_fetch
 from tenacity import (
     retry,
     retry_if_exception_type,
@@ -27,7 +29,14 @@ def download_media(url: str) -> tuple[bytes, str] | None:
     fall back to passing the URL.
     """
     try:
-        response = httpx.get(url, timeout=30, follow_redirects=True)
+        # S-20: this is a third SSRF sink the audit missed. It is called from
+        # five publishers with a URL that reaches it from stored media records,
+        # and it followed redirects with no validation at all. 25 MB because a
+        # video is legitimately large; the platform caps are stricter.
+        response = safe_fetch(url, max_bytes=25 * 1024 * 1024, total_timeout=30)
+    except EgressBlocked as e:
+        logger.warning("Media fetch refused for %s: %s", url, e.reason)
+        return None
     except httpx.HTTPError as e:
         # None is the caller's signal to fall back, but on its own it says
         # nothing about why, which left a failed fetch indistinguishable from

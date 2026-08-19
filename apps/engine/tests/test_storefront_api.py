@@ -60,15 +60,32 @@ def serving(monkeypatch, routes):
     It builds its client with auth headers, so the factory is replaced rather
     than the transport handed in, that is what it actually calls.
 
-    The real class is captured first: supabase_store.httpx is the httpx module
-    itself, so the replacement would otherwise call itself forever.
+    It now builds a SafeClient rather than an httpx.Client, because the backend
+    URL is scraped out of the customer's own page HTML and is therefore
+    attacker-controlled (the egress guard, findings S-2/S-3). These tests are
+    about mapping a row onto a Product, so the guard is stubbed here rather than
+    exercised; its own behaviour is covered in test_egress.py, which is where a
+    weakened guard would show up.
     """
     real_client = httpx.Client
-    monkeypatch.setattr(
-        supabase_store.httpx,
-        "Client",
-        lambda **kwargs: real_client(transport=mock_transport(routes)),
-    )
+
+    class StubbedSafeClient:
+        def __init__(self, **_kwargs):
+            self._client = real_client(transport=mock_transport(routes))
+
+        def get(self, url, *, params=None, timeout=None):
+            return self._client.get(url, params=params)
+
+        def close(self):
+            self._client.close()
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_exc):
+            self.close()
+
+    monkeypatch.setattr(supabase_store, "SafeClient", StubbedSafeClient)
 
 
 class TestDiscovery:

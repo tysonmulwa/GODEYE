@@ -45,14 +45,39 @@ describe("ProductsService", () => {
     });
 
     it("imports once consent is recorded", async () => {
+      // A literal public address rather than a hostname: the egress guard
+      // resolves names, and `shop.example` does not exist — which on a resolver
+      // that hijacks NXDOMAIN comes back as a private address and is correctly
+      // refused. The URL is the subject of the SSRF tests below; here it just
+      // needs to be somewhere the guard has no objection to.
       prisma.businessProfile.findUnique.mockResolvedValue({
-        website: "https://shop.example",
+        website: "https://93.184.215.14/shop",
         productImportConsentAt: new Date(),
       });
       await service.importNow("org1", "user1", { limit: 40 });
       expect(engine.enqueueImportProducts).toHaveBeenCalledWith(
         expect.objectContaining({ orgId: "org1" }),
       );
+    });
+
+    it.each([
+      ["cloud metadata", "http://169.254.169.254/latest/meta-data/"],
+      ["loopback", "http://127.0.0.1:8000/health"],
+      ["a private address", "http://10.0.0.1/"],
+      ["an internal service", "http://engine.railway.internal/health"],
+      ["a non-http scheme", "file:///etc/passwd"],
+      ["credentials in the URL", "http://user:pass@93.184.215.14/"],
+    ])("refuses %s even with consent recorded (S-3)", async (_label, url) => {
+      // Consent is a boolean the workspace granted itself. It says nothing
+      // about where the URL points, which is what made this an SSRF.
+      prisma.businessProfile.findUnique.mockResolvedValue({
+        website: null,
+        productImportConsentAt: new Date(),
+      });
+      await expect(service.importNow("org1", "user1", { url, limit: 1 })).rejects.toThrow(
+        /cannot be fetched/,
+      );
+      expect(engine.enqueueImportProducts).not.toHaveBeenCalled();
     });
 
     it("keeps the original consent date when other settings are saved", async () => {

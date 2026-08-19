@@ -24,6 +24,8 @@ from urllib.parse import urljoin
 
 import httpx
 
+from ..security import EgressBlocked, SafeClient
+
 from .extract import Product, parse_price
 
 logger = logging.getLogger(__name__)
@@ -76,7 +78,7 @@ class Backend:
         return f"Backend({self.url}, tables={self.tables})"
 
 
-def discover(html: str, origin: str, client: httpx.Client) -> Backend | None:
+def discover(html: str, origin: str, client: SafeClient) -> Backend | None:
     """Find the backend a page's own scripts talk to, or None.
 
     The bundle is where this lives, not the HTML: the page is a mount point and
@@ -88,7 +90,7 @@ def discover(html: str, origin: str, client: httpx.Client) -> Backend | None:
             continue
         try:
             response = client.get(urljoin(origin + "/", src), timeout=TIMEOUT)
-        except httpx.HTTPError:
+        except (httpx.HTTPError, EgressBlocked):
             continue
         if response.status_code == 200:
             sources.append(response.text)
@@ -117,14 +119,18 @@ def discover(html: str, origin: str, client: httpx.Client) -> Backend | None:
 def fetch_products(backend: Backend, origin: str, limit: int = 100) -> list[Product]:
     """Read the catalogue table, trying the likeliest names in turn."""
     headers = {"apikey": backend.key, "Authorization": f"Bearer {backend.key}"}
-    with httpx.Client(headers=headers, timeout=TIMEOUT) as client:
+    # A fourth SSRF sink, and the least obvious one: `backend.url` is scraped
+    # out of the customer's own page HTML, so it is attacker-controlled in
+    # exactly the way S-3's URL is. Found while wiring the egress guard, not in
+    # the original audit.
+    with SafeClient(headers=headers, total_timeout=TIMEOUT) as client:
         for table in backend.tables:
             try:
                 response = client.get(
                     f"{backend.url}/rest/v1/{table}",
                     params={"select": "*", "limit": str(limit)},
                 )
-            except httpx.HTTPError as e:
+            except (httpx.HTTPError, EgressBlocked) as e:
                 logger.info("Supabase read of %s failed: %s", table, type(e).__name__)
                 continue
             if response.status_code != 200:

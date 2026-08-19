@@ -26,6 +26,7 @@ import { CurrentAuth } from "../common/current-auth.decorator";
 import { AccessTokenPayload, JwtAuthGuard } from "../common/jwt-auth.guard";
 import { PrismaService } from "../common/prisma.service";
 import { ZodPipe } from "../common/zod.pipe";
+import { assertPublicUrl } from "../common/url-guard";
 import { EngineService } from "../engine/engine.service";
 import { MinRole } from "../common/roles.guard";
 
@@ -120,6 +121,14 @@ export class ProductsService {
     if (!input.url && !profile.website) {
       throw new BadRequestException("No website is set for this workspace");
     }
+
+    // Before anything is enqueued (S-3). "Consent" here was a boolean the
+    // workspace granted itself, which is not a check on where the URL points.
+    // The engine revalidates and pins the address at connect time; this refuses
+    // the request at the boundary so nothing is queued and the caller is told
+    // why straight away.
+    const target = input.url ?? profile.website;
+    if (target) await assertPublicUrl(target);
 
     const { taskId } = await this.engine.enqueueImportProducts({
       orgId,

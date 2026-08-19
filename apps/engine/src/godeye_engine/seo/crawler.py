@@ -9,6 +9,8 @@ from dataclasses import dataclass, field
 from urllib.parse import urldefrag, urljoin, urlparse
 
 import httpx
+
+from ..security import EgressBlocked, SafeClient
 from bs4 import BeautifulSoup
 
 logger = logging.getLogger(__name__)
@@ -179,7 +181,7 @@ def parse_page(url: str, html: str, status_code: int, response_time_ms: int) -> 
 _LOC_RE = re.compile(r"<loc>\s*([^<\s]+)\s*</loc>", re.IGNORECASE)
 
 
-def _fetch_locs(client: httpx.Client, url: str) -> list[str] | None:
+def _fetch_locs(client: SafeClient, url: str) -> list[str] | None:
     """<loc> entries from an XML sitemap, or None if the URL isn't a real sitemap.
 
     Guards against sites that answer /sitemap.xml with an HTML shell (a common
@@ -187,28 +189,28 @@ def _fetch_locs(client: httpx.Client, url: str) -> list[str] | None:
     """
     try:
         resp = client.get(url)
-    except httpx.HTTPError:
+    except (httpx.HTTPError, EgressBlocked):
         return None
     if resp.status_code != 200 or "<loc" not in resp.text.lower():
         return None
     return _LOC_RE.findall(resp.text)
 
 
-def _discover_sitemaps(client: httpx.Client, base: str) -> list[str]:
+def _discover_sitemaps(client: SafeClient, base: str) -> list[str]:
     """Candidate sitemap URLs: those declared in robots.txt, then common paths."""
     candidates: list[str] = []
     try:
         robots = client.get(f"{base}/robots.txt")
         if robots.status_code == 200:
             candidates += re.findall(r"(?im)^\s*sitemap:\s*(\S+)", robots.text)
-    except httpx.HTTPError:
+    except (httpx.HTTPError, EgressBlocked):
         pass
     candidates += [f"{base}/sitemap.xml", f"{base}/sitemap_index.xml"]
     seen: set[str] = set()
     return [u for u in candidates if not (u in seen or seen.add(u))]
 
 
-def _sitemap_urls(client: httpx.Client, base: str, limit: int = 80) -> list[str]:
+def _sitemap_urls(client: SafeClient, base: str, limit: int = 80) -> list[str]:
     """Page URLs from the site's sitemap(s), follows one level of index nesting.
 
     Modern sites (Shopify, headless/JS storefronts) render navigation with
@@ -244,15 +246,16 @@ def fetch_pages(urls: list[str], limit: int = 25) -> dict[str, PageData]:
     result; the caller decides what a missing page means.
     """
     out: dict[str, PageData] = {}
-    client = httpx.Client(
-        headers={"User-Agent": USER_AGENT}, timeout=TIMEOUT, follow_redirects=True
-    )
+    # SafeClient, not httpx: every URL here came from a customer, and three of
+    # them (the audit start URL, a sitemap <loc>, a page link) are attacker
+    # controlled. See security/egress.py — findings S-2 and S-20.
+    client = SafeClient(headers={"User-Agent": USER_AGENT}, total_timeout=TIMEOUT)
     try:
         for url in urls[:limit]:
             started = time.monotonic()
             try:
                 response = client.get(url)
-            except httpx.HTTPError as e:
+            except (httpx.HTTPError, EgressBlocked) as e:
                 logger.info("Verification fetch failed for %s: %s", url, e)
                 continue
             if response.status_code >= 400:
@@ -275,12 +278,10 @@ def fetch_pages(urls: list[str], limit: int = 25) -> dict[str, PageData]:
 def fetch_text(url: str) -> tuple[int, str]:
     """GET a plain-text resource (robots.txt, an IndexNow key file). (status, body)."""
     try:
-        with httpx.Client(
-            headers={"User-Agent": USER_AGENT}, timeout=TIMEOUT, follow_redirects=True
-        ) as client:
+        with SafeClient(headers={"User-Agent": USER_AGENT}, total_timeout=TIMEOUT) as client:
             response = client.get(url)
             return response.status_code, response.text
-    except httpx.HTTPError as e:
+    except (httpx.HTTPError, EgressBlocked) as e:
         logger.info("Fetch failed for %s: %s", url, e)
         return 0, ""
 
@@ -295,11 +296,7 @@ def crawl(start_url: str, max_pages: int = 20, progress=None) -> CrawlResult:
     broken: dict[str, list[str]] = {}
     platform = "html"
 
-    client = httpx.Client(
-        headers={"User-Agent": USER_AGENT},
-        timeout=TIMEOUT,
-        follow_redirects=True,
-    )
+    client = SafeClient(headers={"User-Agent": USER_AGENT}, total_timeout=TIMEOUT)
     try:
         root = urlparse(start)
         base = f"{root.scheme}://{root.netloc}"
@@ -325,7 +322,7 @@ def crawl(start_url: str, max_pages: int = 20, progress=None) -> CrawlResult:
             started = time.monotonic()
             try:
                 response = client.get(url)
-            except httpx.HTTPError as e:
+            except (httpx.HTTPError, EgressBlocked) as e:
                 logger.info("Fetch failed for %s: %s", url, e)
                 broken.setdefault(url, sorted(linked_from.get(url, {"(start)"})))
                 continue
@@ -358,7 +355,7 @@ def crawl(start_url: str, max_pages: int = 20, progress=None) -> CrawlResult:
         has_robots = False
         try:
             has_robots = client.get(f"{base}/robots.txt").status_code == 200
-        except httpx.HTTPError:
+        except (httpx.HTTPError, EgressBlocked):
             pass
     finally:
         client.close()
