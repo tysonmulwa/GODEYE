@@ -1,6 +1,7 @@
 import { createHmac, randomBytes } from "node:crypto";
 import { BadRequestException, Logger } from "@nestjs/common";
 import { env } from "../common/env";
+import { httpRequest, TIMEOUTS } from "../common/http-client";
 
 const metaLogger = new Logger("MetaClient");
 
@@ -11,7 +12,14 @@ const metaLogger = new Logger("MetaClient");
  */
 
 async function getJson(url: string, init?: RequestInit): Promise<any> {
-  const res = await fetch(url, init);
+  // Every platform call is bounded. Node's fetch has no total-request timeout,
+  // so one unresponsive provider used to hold a request, an event-loop slot and
+  // a database connection for up to five minutes (B-4).
+  const res = await httpRequest(url, {
+    ...init,
+    timeoutMs: TIMEOUTS.platform,
+    upstream: hostOf(url),
+  });
   const body: any = await res.json().catch(() => ({}));
   if (!res.ok) {
     const detail = body?.description ?? body?.message ?? body?.error?.message ?? res.statusText;
@@ -95,6 +103,15 @@ export async function validateDiscord(
 
 // ---------- Reddit OAuth (click-to-connect) ----------
 
+/** The host a URL points at, so the circuit breaker is per provider. */
+function hostOf(url: string): string {
+  try {
+    return new URL(url).hostname;
+  } catch {
+    return "platform";
+  }
+}
+
 export function redditAuthorizeUrl(state: string): string {
   if (!env.reddit.clientId) {
     throw new BadRequestException(
@@ -126,7 +143,9 @@ export async function redditExchangeCode(code: string): Promise<RedditAccount> {
       "Reddit is not configured on this server (REDDIT_CLIENT_ID / REDDIT_CLIENT_SECRET missing)",
     );
   }
-  const tokenRes = await fetch("https://www.reddit.com/api/v1/access_token", {
+  const tokenRes = await httpRequest("https://www.reddit.com/api/v1/access_token", {
+    timeoutMs: TIMEOUTS.platform,
+    upstream: "reddit",
     method: "POST",
     headers: {
       Authorization: `Basic ${Buffer.from(`${clientId}:${clientSecret}`).toString("base64")}`,
@@ -183,7 +202,9 @@ export interface LinkedInAccount {
 }
 
 export async function linkedinExchangeCode(code: string): Promise<LinkedInAccount> {
-  const tokenRes = await fetch("https://www.linkedin.com/oauth/v2/accessToken", {
+  const tokenRes = await httpRequest("https://www.linkedin.com/oauth/v2/accessToken", {
+    timeoutMs: TIMEOUTS.platform,
+    upstream: "linkedin",
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({
@@ -323,7 +344,9 @@ export async function tiktokExchangeCode(
   // Proves this exchange came from whoever started the authorize request, even
   // if the code itself was intercepted.
   if (codeVerifier) body.set("code_verifier", codeVerifier);
-  const tokenRes = await fetch(`${TIKTOK_API}/oauth/token/`, {
+  const tokenRes = await httpRequest(`${TIKTOK_API}/oauth/token/`, {
+    timeoutMs: TIMEOUTS.platform,
+    upstream: "tiktok",
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body,
@@ -383,7 +406,9 @@ export async function instagramExchangeCode(code: string): Promise<InstagramAcco
     redirect_uri: env.instagram.redirectUri,
     code,
   });
-  const shortRes = await fetch("https://api.instagram.com/oauth/access_token", {
+  const shortRes = await httpRequest("https://api.instagram.com/oauth/access_token", {
+    timeoutMs: TIMEOUTS.platform,
+    upstream: "instagram",
     method: "POST",
     headers: { "content-type": "application/x-www-form-urlencoded" },
     body: form.toString(),
@@ -554,7 +579,9 @@ export interface XRequestToken {
 export async function xRequestToken(): Promise<XRequestToken> {
   const { apiKey, apiSecret } = requireXApp();
   const url = `${X_API}/oauth/request_token`;
-  const res = await fetch(url, {
+  const res = await httpRequest(url, {
+    timeoutMs: TIMEOUTS.platform,
+    upstream: "x",
     method: "POST",
     headers: {
       Authorization: oauth1Header({
@@ -611,7 +638,9 @@ export async function xExchangeVerifier(
 ): Promise<XAccount> {
   const { apiKey, apiSecret } = requireXApp();
   const url = `${X_API}/oauth/access_token`;
-  const res = await fetch(url, {
+  const res = await httpRequest(url, {
+    timeoutMs: TIMEOUTS.platform,
+    upstream: "x",
     method: "POST",
     headers: {
       Authorization: oauth1Header({

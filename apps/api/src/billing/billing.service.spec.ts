@@ -1,6 +1,7 @@
 import { BadRequestException, ForbiddenException } from "@nestjs/common";
 import { AuditService } from "../common/audit.service";
 import { env } from "../common/env";
+import { resetBreakers } from "../common/http-client";
 import { BillingService } from "./billing.module";
 import { WorkspaceAccessService } from "./workspace-access.service";
 
@@ -12,8 +13,33 @@ const ENTRY_PLAN = {
   limits: { postsPerMonth: 30, aiTokensPerMonth: 100_000, connections: 3, seats: 1 },
 };
 
-function makePrisma() {
+/** A stand-in for the (provider, reference) unique index, so a duplicate throws
+ *  P2002 exactly as Postgres would. */
+function makePaymentApplications() {
+  const seen = new Set<string>();
   return {
+    seen,
+    create: jest.fn(async ({ data }: { data: { provider?: string; reference: string } }) => {
+      const key = `${data.provider ?? "paystack"}:${data.reference}`;
+      if (seen.has(key)) {
+        const error = Object.assign(new Error("Unique constraint failed"), { code: "P2002" });
+        throw error;
+      }
+      seen.add(key);
+      return { id: `pa_${seen.size}`, ...data };
+    }),
+    update: jest.fn(async () => ({})),
+    findUnique: jest.fn(async () => null),
+    deleteMany: jest.fn(async () => ({ count: 0 })),
+  };
+}
+
+function makePrisma() {
+  const applications = makePaymentApplications();
+  return {
+    /** Runs the callback against this same fake, which is what a real
+     *  interactive transaction does with `tx`. */
+    $transaction: jest.fn(async (fn: (tx: unknown) => Promise<unknown>) => fn(prismaRef.current)),
     subscription: {
       findUnique: jest.fn().mockResolvedValue(null),
       findFirst: jest.fn(),
@@ -29,17 +55,28 @@ function makePrisma() {
       aggregate: jest.fn().mockResolvedValue({ _sum: { inputTokens: 0, outputTokens: 0 } }),
     },
     socialConnection: { count: jest.fn().mockResolvedValue(0) },
-    // applyPayment reads this to see whether a reference has been credited
-    // already, and writes it once it has.
     auditLog: {
       findFirst: jest.fn().mockResolvedValue(null),
       create: jest.fn().mockResolvedValue({}),
     },
+    /**
+     * The idempotency marker (S-8), with its unique constraint modelled.
+     *
+     * The old fake was an AuditLog row that could be written twice without
+     * complaint, so "credits a payment once" passed on a mechanism that did not
+     * exist. A fake that cannot fail the way the database fails is not a test of
+     * idempotency — it is a test of the happy path with an extra step.
+     */
+    paymentApplication: applications,
     membership: { count: jest.fn().mockResolvedValue(1) },
     invitation: { count: jest.fn().mockResolvedValue(0) },
     user: { findUnique: jest.fn().mockResolvedValue({ email: "jane@acme.com" }) },
   };
 }
+
+/** `$transaction` needs to hand the callback the same fake it lives on, and the
+ *  object does not exist until makePrisma returns. */
+const prismaRef: { current: unknown } = { current: null };
 
 describe("BillingService", () => {
   let prisma: ReturnType<typeof makePrisma>;
@@ -47,7 +84,12 @@ describe("BillingService", () => {
   let service: BillingService;
 
   beforeEach(() => {
+    // The circuit breaker in http-client is module-global, which is right in a
+    // process and wrong across tests: five deliberate Paystack failures in one
+    // test would otherwise open the circuit for every test after it.
+    resetBreakers();
     prisma = makePrisma();
+    prismaRef.current = prisma;
     access = {
       state: jest.fn().mockResolvedValue({
         status: "TRIALING",
@@ -361,7 +403,9 @@ describe("BillingService", () => {
 
       await service.handlePaystackEvent({
         event: "charge.success",
-        data: { metadata: { orgId: "org1", planCode: "PRO", mode: "once" } },
+        // A reference is now required: without one there is nothing to be
+        // idempotent on, and a retry would credit the month again (S-8).
+        data: { reference: "ref_early", metadata: { orgId: "org1", planCode: "PRO", mode: "once" } },
       });
 
       const { currentPeriodEnd } = prisma.subscription.upsert.mock.calls[0][0].update;
@@ -375,6 +419,7 @@ describe("BillingService", () => {
       await service.handlePaystackEvent({
         event: "subscription.create",
         data: {
+          reference: "ref_sub_1",
           subscription_code: "SUB_1",
           next_payment_date: "2026-09-17T00:00:00.000Z",
           metadata: { orgId: "org1", planCode: "PRO", mode: "subscription" },
@@ -433,7 +478,11 @@ describe("BillingService", () => {
       // The webhook and the customer's return trip race each other on purpose.
       // A one-off adds a month, so crediting the same reference twice would
       // hand out a month nobody paid for.
-      prisma.auditLog.findFirst.mockResolvedValue({ id: "already" });
+      //
+      // The refusal now comes from the DATABASE — a unique violation on the
+      // marker — rather than from a prior read that another caller could have
+      // been between. Previously this test primed `auditLog.findFirst`, i.e. it
+      // asserted the read-then-write that WAS the race.
       paystackSays({
         status: "success",
         reference: "ref_live_1",
@@ -441,6 +490,56 @@ describe("BillingService", () => {
       });
 
       await expect(service.verifyPayment("org1", "ref_live_1")).resolves.toEqual({
+        applied: true,
+        status: "success",
+      });
+      expect(prisma.subscription.upsert).toHaveBeenCalledTimes(1);
+
+      // Second confirmation of the same reference: refused, nothing extended.
+      await expect(service.verifyPayment("org1", "ref_live_1")).resolves.toEqual({
+        applied: false,
+        status: "success",
+      });
+      expect(prisma.subscription.upsert).toHaveBeenCalledTimes(1);
+    });
+
+    it("writes the idempotency marker BEFORE it touches the subscription", async () => {
+      // Order is the whole fix. The old code extended the period first and then
+      // tried to record that it had, leaving a window in which a second caller
+      // saw no marker but read the already-extended currentPeriodEnd.
+      paystackSays({
+        status: "success",
+        reference: "ref_order",
+        metadata: { orgId: "org1", planCode: "PRO", mode: "once" },
+      });
+      await service.verifyPayment("org1", "ref_order");
+
+      const markerAt = prisma.paymentApplication.create.mock.invocationCallOrder[0];
+      const upsertAt = prisma.subscription.upsert.mock.invocationCallOrder[0];
+      expect(markerAt).toBeLessThan(upsertAt);
+    });
+
+    it("does not swallow a marker write that fails for any other reason", async () => {
+      // `.catch(() => undefined)` on this write meant a transient database error
+      // silently removed the idempotency record, and Paystack's retry then
+      // credited the customer a second time.
+      prisma.paymentApplication.create.mockRejectedValueOnce(new Error("connection reset"));
+      paystackSays({
+        status: "success",
+        reference: "ref_boom",
+        metadata: { orgId: "org1", planCode: "PRO", mode: "once" },
+      });
+
+      await expect(service.verifyPayment("org1", "ref_boom")).rejects.toThrow(/connection reset/);
+      expect(prisma.subscription.upsert).not.toHaveBeenCalled();
+    });
+
+    it("refuses a payment with no reference rather than crediting it unguarded", async () => {
+      paystackSays({
+        status: "success",
+        metadata: { orgId: "org1", planCode: "PRO", mode: "once" },
+      });
+      await expect(service.verifyPayment("org1", "ref_missing")).resolves.toEqual({
         applied: false,
         status: "success",
       });
@@ -454,12 +553,11 @@ describe("BillingService", () => {
         metadata: { orgId: "org1", planCode: "PRO", mode: "once" },
       });
       await service.verifyPayment("org1", "ref_live_2");
-      expect(prisma.auditLog.create).toHaveBeenCalledWith(
+      // The marker, which is the constraint. The audit row still happens too,
+      // but it is a record of what occurred, not the thing that decides.
+      expect(prisma.paymentApplication.create).toHaveBeenCalledWith(
         expect.objectContaining({
-          data: expect.objectContaining({
-            action: "billing.payment_applied",
-            targetId: "ref_live_2",
-          }),
+          data: expect.objectContaining({ provider: "paystack", reference: "ref_live_2" }),
         }),
       );
     });

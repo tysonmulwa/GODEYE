@@ -6,6 +6,7 @@ import {
   type WorkspaceAccess,
 } from "@godeye/shared";
 import { PrismaService } from "../common/prisma.service";
+import { LeaderLock } from "../common/leader-lock";
 import { env } from "../common/env";
 
 const TRIAL_MS = TRIAL_HOURS * 3600 * 1000;
@@ -62,6 +63,9 @@ export interface SweepResult {
  * The workspaces GODEYE itself runs (BILLING_EXEMPT_SLUGS) are never billed and
  * never locked, locking one would shut the owner out of their own product.
  */
+/** Orphans handled per sweep. More than this and the next pass takes the rest. */
+const BACKFILL_BATCH = 500;
+
 @Injectable()
 export class WorkspaceAccessService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(WorkspaceAccessService.name);
@@ -75,15 +79,29 @@ export class WorkspaceAccessService implements OnModuleInit, OnModuleDestroy {
     // Tests drive sweep() directly; a timer there would outlive the suite and
     // hit a database that the test never configured.
     if (env.nodeEnv === "test") return;
-    this.timer = setInterval(() => void this.safeSweep(), SWEEP_INTERVAL_MS);
+    // Behind a leader lock (D-5): this used to run on EVERY replica, and
+    // backfillMissing is an unbounded anti-join over `organizations` whose cost
+    // grows with total tenant count rather than with the number of orphans —
+    // which is normally zero.
+    this.timer = setInterval(() => void this.sweepAsLeader(), SWEEP_INTERVAL_MS);
     // Unreferenced so it can never be the reason the process refuses to exit.
     this.timer.unref?.();
-    setTimeout(() => void this.safeSweep(), FIRST_SWEEP_DELAY_MS).unref?.();
+    setTimeout(() => void this.sweepAsLeader(), FIRST_SWEEP_DELAY_MS).unref?.();
   }
 
   onModuleDestroy(): void {
     if (this.timer) clearInterval(this.timer);
     this.timer = null;
+  }
+
+  /**
+   * One replica sweeps; the rest do nothing. The lock TTL comfortably exceeds a
+   * normal sweep, and expiry releases it if this process dies mid-pass.
+   */
+  private async sweepAsLeader(): Promise<void> {
+    await LeaderLock.runExclusively("workspace-access-sweep", SWEEP_INTERVAL_MS, () =>
+      this.safeSweep(),
+    );
   }
 
   // ---------- The trial itself ----------
@@ -313,6 +331,9 @@ export class WorkspaceAccessService implements OnModuleInit, OnModuleDestroy {
     const orphans = await this.prisma.organization.findMany({
       where: { subscription: { is: null } },
       select: { id: true, slug: true },
+      // Bounded (D-4/D-5). The steady-state answer here is zero rows; an
+      // unbounded query exists only to be slow on the day it is not.
+      take: BACKFILL_BATCH,
     });
     if (orphans.length === 0) return 0;
 

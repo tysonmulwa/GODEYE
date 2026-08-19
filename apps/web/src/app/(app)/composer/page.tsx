@@ -214,7 +214,10 @@ export default function ComposerPage() {
     await api(`/content/${updated.id}`, {
       method: "PATCH",
       body: { body: updated.body, hashtags: updated.hashtags },
-    }).catch(() => undefined);
+      // The edit is applied optimistically, so a swallowed failure leaves the
+      // screen showing text the server never accepted. Logged rather than
+      // discarded until there is somewhere to report it (error tracking, P2).
+    }).catch((e: unknown) => console.error("Saving composer edits failed", e));
   };
 
   // Pick a winning A/B variant: it becomes the post, and the A/B split is turned off.
@@ -224,7 +227,7 @@ export default function ComposerPage() {
     await api(`/content/${content.id}`, {
       method: "PATCH",
       body: { body: v.body, hashtags: v.hashtags, abVariants: null },
-    }).catch(() => undefined);
+    }).catch((e: unknown) => console.error("Choosing an A/B variant failed", e));
   };
 
   const generating =
@@ -520,7 +523,9 @@ export default function ComposerPage() {
                         api(`/content/${content.id}`, {
                           method: "PATCH",
                           body: { evergreen: v },
-                        }).catch(() => undefined);
+                        }).catch((e: unknown) =>
+                          console.error("Saving the evergreen flag failed", e),
+                        );
                       }}
                       label="Mark as evergreen"
                       hint="Autopilot plans with recycling can re-post this during quiet slots."

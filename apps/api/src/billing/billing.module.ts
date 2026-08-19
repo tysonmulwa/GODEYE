@@ -23,6 +23,23 @@ import { z } from "zod";
 import { AuditService } from "../common/audit.service";
 import { CurrentAuth } from "../common/current-auth.decorator";
 import { env } from "../common/env";
+import { httpRequest, TIMEOUTS } from "../common/http-client";
+import { BillingReconciliationService } from "./reconciliation.service";
+
+/**
+ * Prisma's "unique constraint failed" (P2002).
+ *
+ * Checked structurally rather than by importing Prisma.PrismaClientKnownRequestError,
+ * which is a class identity comparison that breaks the moment two copies of the
+ * client end up in the tree.
+ */
+function isUniqueViolation(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    (error as { code?: unknown }).code === "P2002"
+  );
+}
 import { AccessTokenPayload, JwtAuthGuard } from "../common/jwt-auth.guard";
 import { PrismaService } from "../common/prisma.service";
 import { Public } from "../common/public.decorator";
@@ -244,7 +261,9 @@ export class BillingService implements OnModuleInit {
    * Paystack's own reply, which is the unhelpful "Invalid Amount Sent".
    */
   private async paystackPlan(planCode: PlanCode, code: string) {
-    const res = await fetch(`https://api.paystack.co/plan/${encodeURIComponent(code)}`, {
+    const res = await httpRequest(`https://api.paystack.co/plan/${encodeURIComponent(code)}`, {
+      timeoutMs: TIMEOUTS.paystack,
+      upstream: "paystack",
       headers: { Authorization: `Bearer ${env.paystack.secretKey}` },
     });
     const data = (await res.json()) as {
@@ -305,7 +324,10 @@ export class BillingService implements OnModuleInit {
       ? await this.subscriptionRequest(planCode)
       : this.oneOffRequest(planCode, method);
 
-    const res = await fetch("https://api.paystack.co/transaction/initialize", {
+    const res = await httpRequest("https://api.paystack.co/transaction/initialize", {
+      timeoutMs: TIMEOUTS.paystack,
+      // Never retried: a retried initialize can create a second charge.
+      upstream: "paystack",
       method: "POST",
       headers: {
         Authorization: `Bearer ${env.paystack.secretKey}`,
@@ -434,9 +456,15 @@ export class BillingService implements OnModuleInit {
     if (!env.paystack.secretKey) {
       throw new BadRequestException("Payments are not configured on this server yet");
     }
-    const res = await fetch(
+    const res = await httpRequest(
       `https://api.paystack.co/transaction/verify/${encodeURIComponent(reference)}`,
-      { headers: { Authorization: `Bearer ${env.paystack.secretKey}` } },
+      {
+        headers: { Authorization: `Bearer ${env.paystack.secretKey}` },
+        timeoutMs: TIMEOUTS.paystack,
+        // Safe to retry: verify only reads. Charging is not.
+        retries: 2,
+        upstream: "paystack",
+      },
     );
     const body = (await res.json()) as {
       status?: boolean;
@@ -482,6 +510,7 @@ export class BillingService implements OnModuleInit {
     const orgId = typeof metadata.orgId === "string" ? metadata.orgId : null;
     const planCode = typeof metadata.planCode === "string" ? metadata.planCode : null;
     const reference = typeof data.reference === "string" ? data.reference : null;
+    const eventId = typeof data.id === "string" || typeof data.id === "number" ? String(data.id) : null;
 
     if (!orgId || !planCode) {
       // Loud, because the money has already moved. A payment that cannot be
@@ -492,13 +521,13 @@ export class BillingService implements OnModuleInit {
       );
       return false;
     }
-
-    if (reference) {
-      const alreadyDone = await this.prisma.auditLog.findFirst({
-        where: { action: PAYMENT_APPLIED, targetId: reference },
-        select: { id: true },
-      });
-      if (alreadyDone) return false;
+    if (!reference) {
+      // Without a reference there is nothing to be idempotent ON, and applying
+      // it would mean a retry credits again. Refusing is the safe direction:
+      // Paystack always sends one, so this is a malformed payload, not a
+      // customer we are ignoring.
+      this.logger.error(`Paystack payment for org ${orgId} carried no reference; not applied`);
+      return false;
     }
 
     const plan = await this.prisma.plan.findUnique({ where: { code: planCode } });
@@ -509,70 +538,111 @@ export class BillingService implements OnModuleInit {
 
     const customer = (data.customer ?? {}) as Record<string, unknown>;
     const once = metadata.mode === "once";
-    const existing = await this.prisma.subscription.findUnique({
-      where: { orgId },
-      select: { currentPeriodEnd: true },
-    });
 
-    // A one-off buys a month from where the current one ends, not from now:
-    // somebody who pays a week early has bought a month, not lost a week.
-    // A subscription takes Paystack's own next charge date instead.
-    const paidUntil = once
-      ? new Date(
-          Math.max(Date.now(), existing?.currentPeriodEnd?.getTime() ?? 0) +
-            ONE_MONTH_DAYS * 24 * 3600 * 1000,
-        )
-      : this.parseDate(data.next_payment_date);
-
-    const fields = {
-      planId: plan.id,
-      status: "ACTIVE" as const,
-      providerCustomerId: (customer.customer_code as string) ?? null,
-      // Deliberately left null for a one-off. Nothing renews it, and that
-      // absence is what tells the read-only guard this month has a hard end
-      // rather than a card behind it.
-      providerSubscriptionId: once ? null : ((data.subscription_code as string) ?? null),
-      // Only overwritten when there is a date to write. Clearing it on a plain
-      // charge.success would erase the renewal date the subscription event had
-      // already recorded.
-      ...(paidUntil ? { currentPeriodEnd: paidUntil } : {}),
-    };
-
-    await this.prisma.subscription.upsert({
-      where: { orgId },
-      create: { orgId, ...fields },
-      update: fields,
-    });
-
-    // Awaited, unlike the rest of the audit trail, because this row is what
-    // stops the same payment being credited a second time.
-    if (reference) {
-      await this.prisma.auditLog
-        .create({
+    // Computed inside the transaction, from the row the transaction itself
+    // read. Reading currentPeriodEnd outside was the other half of the race:
+    // two callers both read the pre-extension value, or worse, the second read
+    // the extended one and added a month on top.
+    try {
+      const paidUntil = await this.prisma.$transaction(async (tx) => {
+        // MARKER FIRST. If this reference has been applied, the unique index
+        // rejects the insert and nothing after it runs — so the subscription is
+        // never touched twice. Order matters: marker, then effect. The previous
+        // code did the effect first and then tried to record it.
+        await tx.paymentApplication.create({
           data: {
             orgId,
-            action: PAYMENT_APPLIED,
-            targetType: "PaystackTransaction",
-            targetId: reference,
-            metadata: {
-              planCode,
-              mode: once ? "once" : "subscription",
-              method: typeof metadata.method === "string" ? metadata.method : null,
-              paidUntil: paidUntil?.toISOString() ?? null,
-            } as never,
+            provider: "paystack",
+            reference,
+            eventId,
+            planCode,
+            mode: once ? "once" : "subscription",
           },
-        })
-        .catch(() => undefined);
-    }
+        });
 
-    // The workspace is paying as of this instant, so it must not wait out a
-    // cached read-only decision before it can publish again.
-    this.access.invalidate(orgId);
-    this.logger.log(
-      `Activated ${planCode} for org ${orgId}` +
-        (once ? ` until ${paidUntil?.toISOString()} (one month)` : " (subscription)"),
-    );
-    return true;
+        const existing = await tx.subscription.findUnique({
+          where: { orgId },
+          select: { currentPeriodEnd: true },
+        });
+
+        // A one-off buys a month from where the current one ends, not from now:
+        // somebody who pays a week early has bought a month, not lost a week.
+        // A subscription takes Paystack's own next charge date instead.
+        const until = once
+          ? new Date(
+              Math.max(Date.now(), existing?.currentPeriodEnd?.getTime() ?? 0) +
+                ONE_MONTH_DAYS * 24 * 3600 * 1000,
+            )
+          : this.parseDate(data.next_payment_date);
+
+        const fields = {
+          planId: plan.id,
+          status: "ACTIVE" as const,
+          providerCustomerId: (customer.customer_code as string) ?? null,
+          // Deliberately left null for a one-off. Nothing renews it, and that
+          // absence is what tells the read-only guard this month has a hard end
+          // rather than a card behind it.
+          providerSubscriptionId: once ? null : ((data.subscription_code as string) ?? null),
+          // Only overwritten when there is a date to write. Clearing it on a
+          // plain charge.success would erase the renewal date the subscription
+          // event had already recorded.
+          ...(until ? { currentPeriodEnd: until } : {}),
+        };
+
+        await tx.subscription.upsert({
+          where: { orgId },
+          create: { orgId, ...fields },
+          update: fields,
+        });
+
+        await tx.paymentApplication.update({
+          where: { provider_reference: { provider: "paystack", reference } },
+          data: { paidUntil: until },
+        });
+
+        return until;
+      });
+
+      // Outside the transaction on purpose: neither is part of the money
+      // decision, and neither should be able to roll it back.
+      this.audit.log({
+        orgId,
+        action: PAYMENT_APPLIED,
+        targetType: "PaystackTransaction",
+        targetId: reference,
+        metadata: {
+          planCode,
+          mode: once ? "once" : "subscription",
+          method: typeof metadata.method === "string" ? metadata.method : null,
+          paidUntil: paidUntil?.toISOString() ?? null,
+        } as never,
+      });
+
+      // The workspace is paying as of this instant, so it must not wait out a
+      // cached read-only decision before it can publish again.
+      this.access.invalidate(orgId);
+      this.logger.log(
+        `Activated ${planCode} for org ${orgId}` +
+          (once ? ` until ${paidUntil?.toISOString()} (one month)` : " (subscription)"),
+      );
+      return true;
+    } catch (e) {
+      if (isUniqueViolation(e)) {
+        // The other path got there first. This is the expected outcome of the
+        // webhook and the browser's verify call racing, and it is a success:
+        // the payment has been applied exactly once.
+        this.logger.log(`Payment ${reference} was already applied; ignoring duplicate`);
+        return false;
+      }
+      // NOT swallowed. `.catch(() => undefined)` on the old marker write meant
+      // a transient database error silently removed the idempotency record, and
+      // Paystack's retry then credited the customer a second time.
+      this.logger.error(
+        `Failed to apply payment ${reference} for org ${orgId}: ` +
+          (e instanceof Error ? e.message : String(e)),
+      );
+      throw e;
+    }
   }
 
   /**
@@ -717,7 +787,7 @@ export class PaystackWebhookController {
   controllers: [BillingController, PaystackWebhookController],
   // TrialLockInterceptor is not listed here: AppModule registers it as a global
   // APP_INTERCEPTOR, and providing it twice would build two of them.
-  providers: [BillingService, WorkspaceAccessService],
+  providers: [BillingService, WorkspaceAccessService, BillingReconciliationService],
   exports: [BillingService, WorkspaceAccessService],
 })
 export class BillingModule {}

@@ -197,6 +197,9 @@ class BasePublisher(ABC):
 
     def _post(self, url: str, **kwargs: Any) -> httpx.Response:
         try:
+            # lint-rules:allow — `url` is built from platform constants by each
+            # subclass (GRAPH, TIKTOK_API, discord.com). No part of it comes
+            # from a customer, so there is nothing for the egress guard to decide.
             response = httpx.post(url, timeout=self.timeout, **kwargs)
         except httpx.TransportError as e:
             raise TransientPublishError(f"Network error: {e}") from e

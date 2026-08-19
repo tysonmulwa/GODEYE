@@ -2,7 +2,7 @@
   "name": "godeye",
   "version": "0.1.0",
   "private": true,
-  "description": "GODEYE — AI Marketing Operating System",
+  "description": "GODEYE \u2014 AI Marketing Operating System",
   "packageManager": "pnpm@11.13.0",
   "engines": {
     "node": ">=22.13"
@@ -19,7 +19,8 @@
     "db:migrate": "pnpm --filter @godeye/db migrate:dev",
     "db:deploy": "pnpm --filter @godeye/db migrate:deploy",
     "db:seed": "pnpm --filter @godeye/db seed",
-    "db:studio": "pnpm --filter @godeye/db studio"
+    "db:studio": "pnpm --filter @godeye/db studio",
+    "lint:rules": "node scripts/lint-rules.mjs"
   },
   "devDependencies": {
     "turbo": "^2.3.3",

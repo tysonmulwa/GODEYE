@@ -69,6 +69,7 @@ model Organization {
   seoAudits          SeoAudit[]
   seoFixes           SeoFix[]
   productCatalogue   Product[]
+  paymentApplications PaymentApplication[]
 }
 
 enum Role {
@@ -719,6 +720,53 @@ model AuditLog {
   org  Organization? @relation(fields: [orgId], references: [id], onDelete: SetNull)
   user User?         @relation(fields: [userId], references: [id], onDelete: SetNull)
 
+  @@index([orgId, createdAt])
+  // D-1. The payment dedup query filtered on (action, targetId), neither of
+  // which was indexed, on the highest-write table in the schema — so the query
+  // deciding whether to credit a customer degraded linearly with the age of the
+  // database. The dedup itself has moved to PaymentApplication below, but
+  // "show me everything that happened to this object" is an ordinary support
+  // question and deserves an index either way.
+  @@index([action, targetId])
+}
+
+/// One row per payment this system has acted on. Finding S-8.
+///
+/// The idempotency marker was an AuditLog row, checked with a read-then-write,
+/// with no constraint behind it. Two paths race BY DESIGN — Paystack's webhook
+/// and the browser's POST /billing/verify — and between the subscription upsert
+/// and the marker insert there was a window in which the second caller found no
+/// marker but read the already-extended currentPeriodEnd, and granted a second
+/// 31-day month for one payment. The marker write also carried
+/// `.catch(() => undefined)`, so a transient database error silently removed
+/// the correctness mechanism and Paystack's retry credited again.
+///
+/// This is a separate table rather than `@@unique([action, targetId])` on
+/// AuditLog, which is what the remediation directive specified. That constraint
+/// would have been wrong here: `connection.updated`, `content.updated` and
+/// `account.profile_updated` all legitimately repeat against the same targetId,
+/// so a workspace reconnecting a channel or a user saving their name twice
+/// would start throwing P2002 on an ordinary action. An audit log records what
+/// happened; it should not also be the thing that decides whether it may.
+model PaymentApplication {
+  id        String    @id @default(cuid())
+  orgId     String
+  provider  String    @default("paystack")
+  /// The provider's transaction reference. Unique per provider, which is what
+  /// makes a second credit impossible rather than unlikely.
+  reference String
+  /// The provider's own event id, when it sends one. A retried webhook carries
+  /// the same value, so this catches a replay that changed the reference.
+  eventId   String?
+  planCode  String
+  mode      String
+  paidUntil DateTime?
+  createdAt DateTime  @default(now())
+
+  org Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, reference])
+  @@unique([provider, eventId])
   @@index([orgId, createdAt])
 }
 

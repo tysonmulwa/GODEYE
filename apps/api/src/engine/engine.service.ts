@@ -5,6 +5,7 @@ import {
   ServiceUnavailableException,
 } from "@nestjs/common";
 import { env } from "../common/env";
+import { httpRequest, TIMEOUTS, type HttpRequestOptions } from "../common/http-client";
 
 /**
  * Typed HTTP client for the Python automation engine (FastAPI).
@@ -154,7 +155,12 @@ export class EngineService {
     /** Only present when asked for, it encodes video to get the answer. */
     render?: Record<string, unknown>;
   }> {
-    return this.get(`/health${render ? `?render=${encodeURIComponent(render)}` : ""}`);
+    // 3s: a health check that can hang for five minutes is the precise inverse
+    // of a health check (B-4).
+    return this.get(
+      `/health${render ? `?render=${encodeURIComponent(render)}` : ""}`,
+      TIMEOUTS.health,
+    );
   }
 
   private async post<T>(path: string, body: unknown): Promise<T> {
@@ -162,11 +168,15 @@ export class EngineService {
       method: "POST",
       headers: this.headers(),
       body: JSON.stringify(body),
+      // Enqueues return as soon as the task is on the queue; ten seconds is
+      // already generous for that.
+      timeoutMs: TIMEOUTS.engineEnqueue,
+      upstream: "engine",
     });
   }
 
-  private async get<T>(path: string): Promise<T> {
-    return this.request<T>(path, { headers: this.headers() });
+  private async get<T>(path: string, timeoutMs: number = TIMEOUTS.engineEnqueue): Promise<T> {
+    return this.request<T>(path, { headers: this.headers(), timeoutMs, upstream: "engine" });
   }
 
   private headers() {
@@ -176,10 +186,10 @@ export class EngineService {
     };
   }
 
-  private async request<T>(path: string, init: RequestInit): Promise<T> {
+  private async request<T>(path: string, init: HttpRequestOptions): Promise<T> {
     let res: Response;
     try {
-      res = await fetch(`${env.engineUrl}${path}`, init);
+      res = await httpRequest(`${env.engineUrl}${path}`, init);
     } catch (e) {
       // Log the underlying cause, "unreachable" alone can't distinguish a
       // wrong ENGINE_URL from an engine that just died mid-request.

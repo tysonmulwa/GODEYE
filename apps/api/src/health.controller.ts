@@ -5,21 +5,78 @@ import { EngineService } from "./engine/engine.service";
 import { Public } from "./common/public.decorator";
 
 /**
- * Which build is actually running, for the API and the engine behind it.
+ * Liveness, readiness, and "which build is running".
  *
- * Answering that has meant inferring it from the data each service produced:
- * whether generated images were JPEG, whether a TikTok post id began with p_.
- * That is slow, indirect, and was wrong at least once. Railway stamps the
- * commit on every deploy, so both services can simply say.
+ * `GET /health` used to call the engine synchronously with no timeout, so the
+ * health check itself could hang for five minutes — the precise inverse of its
+ * purpose (B-4). Worse, an orchestrator pointed at it would restart a perfectly
+ * healthy API because a *different* service was slow.
+ *
+ * Split, per the Kubernetes/SRE distinction:
+ *
+ *   /health/live   the process is up. No dependencies, always fast. Point
+ *                  restart policies here.
+ *   /health/ready  dependencies answered inside a hard budget. Point load
+ *                  balancers and deploy gates here.
+ *   /health        the human-readable roll-up, unchanged in shape so nothing
+ *                  that already reads it breaks.
  *
  * Unauthenticated on purpose: it reports two commit hashes and whether the
- * engine can reach its own dependencies, and it is most wanted exactly when
- * signing in is not working.
+ * engine can reach its dependencies, and it is most wanted exactly when signing
+ * in is not working. It reveals no key and no plan code — booleans only.
  */
 @ApiTags("health")
 @Controller("health")
 export class HealthController {
+  /** Readiness is cached briefly so a load balancer polling every second does
+   *  not turn into a load test of the engine. */
+  private static readonly READY_CACHE_MS = 5_000;
+  private readyCache: { at: number; body: unknown; ok: boolean } | null = null;
+
   constructor(private readonly engine: EngineService) {}
+
+  /**
+   * Is this process alive?
+   *
+   * Deliberately answers without touching anything: a liveness probe that can
+   * fail because a dependency is slow causes restarts that make an incident
+   * worse. Restart policies belong here.
+   */
+  @Get("live")
+  @Public()
+  @ApiOperation({ summary: "Process liveness. No dependencies, always fast." })
+  live() {
+    return { status: "ok", uptimeSeconds: Math.floor(process.uptime()) };
+  }
+
+  /**
+   * Should this instance receive traffic?
+   *
+   * Checks the engine with a 3s budget. A slow dependency makes this instance
+   * "not ready", which removes it from rotation — it does not kill it.
+   */
+  @Get("ready")
+  @Public()
+  @ApiOperation({ summary: "Dependency readiness, with a hard 3s budget." })
+  async ready() {
+    const now = Date.now();
+    if (this.readyCache && now - this.readyCache.at < HealthController.READY_CACHE_MS) {
+      return this.readyCache.body;
+    }
+    let body: { status: string; checks: Record<string, string> };
+    try {
+      const engine = await this.engine.health();
+      const ok = engine.status === "ok";
+      body = { status: ok ? "ok" : "degraded", checks: { engine: engine.status } };
+    } catch (e) {
+      body = {
+        status: "degraded",
+        checks: { engine: e instanceof Error ? e.message : String(e) },
+      };
+    }
+    this.readyCache = { at: now, body, ok: body.status === "ok" };
+    return body;
+  }
 
   @Get()
   @Public()

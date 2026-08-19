@@ -175,6 +175,8 @@ export class RedisThrottlerStorage implements CountingStorage, OnModuleDestroy {
   }
 
   async onModuleDestroy(): Promise<void> {
+    // lint-rules:allow — shutdown. The connection is being discarded either
+    // way, and a failure to close one has no consequence to report.
     await this.client?.quit().catch(() => undefined);
   }
 }
