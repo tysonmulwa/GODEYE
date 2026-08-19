@@ -34,6 +34,8 @@ packages/db/generated/
 .DS_Store
 *.log
 coverage/
+# pytest-cov's data file (a file, so the bare `coverage/` rule above misses it)
+.coverage
 .idea/
 .vscode/*
 !.vscode/extensions.json

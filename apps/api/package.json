@@ -8,7 +8,9 @@
     "start": "node dist/main.js",
     "lint": "eslint \"src/**/*.ts\" --no-error-on-unmatched-pattern",
     "typecheck": "tsc --noEmit",
-    "test": "jest"
+    "test": "jest",
+    "test:exploits": "jest --config jest-exploits.config.js",
+    "test:exploits:db": "jest --config jest-exploits.config.js --testPathPattern=s8-d1"
   },
   "dependencies": {
     "@godeye/db": "workspace:*",
@@ -44,11 +46,20 @@
     "typescript": "^5.7.3"
   },
   "jest": {
-    "moduleFileExtensions": ["js", "json", "ts"],
+    "moduleFileExtensions": [
+      "js",
+      "json",
+      "ts"
+    ],
     "rootDir": "src",
     "testRegex": ".*\\.spec\\.ts$",
     "transform": {
-      "^.+\\.ts$": ["ts-jest", { "tsconfig": "tsconfig.json" }]
+      "^.+\\.ts$": [
+        "ts-jest",
+        {
+          "tsconfig": "tsconfig.json"
+        }
+      ]
     },
     "testEnvironment": "node"
   }
