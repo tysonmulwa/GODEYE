@@ -6,6 +6,7 @@ import { WorkspaceAccessService } from "../billing/workspace-access.service";
 import { AuditService } from "../common/audit.service";
 import { CryptoService } from "../common/crypto.service";
 import { AuthService } from "./auth.service";
+import { LoginBackoffService } from "./login-backoff.service";
 
 // A real 32-byte key. This was "a".repeat(64) — every byte 0xaa — which the
 // weak-key check added for S-6 now rejects, correctly. The fixture moved;
@@ -49,6 +50,7 @@ function makePrisma(): MockPrisma {
 describe("AuthService", () => {
   let prisma: MockPrisma;
   let service: AuthService;
+  let backoff: Record<string, jest.Mock>;
   let access: { startTrial: jest.Mock; state: jest.Mock };
 
   const org = { id: "org1", name: "Acme", slug: "acme" };
@@ -73,12 +75,21 @@ describe("AuthService", () => {
         planCode: "PRO",
       }),
     };
+    backoff = {
+      assertNotBackedOff: jest.fn().mockResolvedValue(undefined),
+      recordFailure: jest.fn().mockResolvedValue(undefined),
+      recordSuccess: jest.fn().mockResolvedValue(undefined),
+    };
     service = new AuthService(
       prisma as never,
       new JwtService({}),
       crypto,
       { log: jest.fn() } as unknown as AuditService,
       access as unknown as WorkspaceAccessService,
+      // Graduated sign-in backoff (NIST SP 800-63B). A no-op here: its own
+      // behaviour is covered in login-backoff.service.spec.ts, and stubbing it
+      // keeps these tests about what they were about.
+      backoff as unknown as LoginBackoffService,
     );
   });
 

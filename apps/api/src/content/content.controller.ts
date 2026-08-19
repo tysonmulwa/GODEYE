@@ -9,6 +9,7 @@ import {
 } from "@nestjs/common";
 import { ApiBearerAuth, ApiOperation, ApiTags } from "@nestjs/swagger";
 import { Throttle } from "@nestjs/throttler";
+import { Cost } from "../common/throttler.guard";
 import {
   generateContentSchema,
   reviewContentSchema,
@@ -51,6 +52,8 @@ export class ContentController {
   constructor(private readonly content: ContentService) {}
 
   @Post("generate")
+  // An LLM call per platform, plus an A/B variant when asked.
+  @Cost(2)
   @MinRole("EDITOR")
   @Throttle({ default: { limit: 20, ttl: 60_000 } })
   @ApiOperation({ summary: "Queue AI content generation (Content Agent in the Python engine)" })

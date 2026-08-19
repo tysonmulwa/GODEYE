@@ -1,4 +1,5 @@
 import { Module } from "@nestjs/common";
+import { Cost } from "../common/throttler.guard";
 import {
   BadRequestException,
   Body,
@@ -412,6 +413,8 @@ export class SeoController {
   constructor(private readonly seo: SeoService) {}
 
   @Post("audit")
+  // A crawl of up to maxPages, each an outbound request with a budget.
+  @Cost(10)
   @MinRole("ADMIN")
   @Throttle({ default: { limit: 5, ttl: 60_000 } })
   @ApiOperation({ summary: "Run a site SEO audit (crawl + rules + AI recommendations)" })
@@ -495,6 +498,7 @@ export class SeoController {
   }
 
   @Post("audits/:id/verify")
+  @Cost(5)
   @MinRole("ADMIN")
   @Throttle({ default: { limit: 5, ttl: 60_000 } })
   @ApiOperation({ summary: "Re-crawl to confirm applied fixes actually took effect" })

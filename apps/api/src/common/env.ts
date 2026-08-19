@@ -86,6 +86,20 @@ export const env = {
   // is the local-dev override. Ignoring PORT makes the platform mark the deploy
   // unhealthy because nothing is listening where it forwards traffic.
   apiPort: parseInt(process.env.PORT ?? process.env.API_PORT ?? "4000", 10),
+  /**
+   * How many reverse proxies sit in front of this process.
+   *
+   * A COUNT, never `true`. With `trust proxy: true` Express believes the whole
+   * X-Forwarded-For chain, so a client can prepend any address it likes and mint
+   * itself a fresh rate-limit bucket per request — CWE-348, and a fix that does
+   * nothing. With a count, Express takes the nth address from the right and
+   * ignores anything the client appended.
+   *
+   * Railway terminates TLS at one edge proxy, so 1. Put a CDN in front and it
+   * becomes 2. Verify it in staging by logging req.ip from two real clients —
+   * see docs/security/RATE-LIMITING.md.
+   */
+  trustProxyHops: Math.max(0, parseInt(process.env.TRUST_PROXY_HOPS ?? "1", 10) || 0),
   webUrl: url(process.env.WEB_URL, "http://localhost:3000"),
   apiUrl: url(process.env.API_URL, "http://localhost:4000"),
   engineUrl: url(process.env.ENGINE_URL, "http://localhost:8000"),

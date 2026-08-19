@@ -26,6 +26,7 @@ import { env } from "../common/env";
 import { AccessTokenPayload } from "../common/jwt-auth.guard";
 import { PrismaService } from "../common/prisma.service";
 import { signToken } from "../common/tokens";
+import { LoginBackoffService } from "./login-backoff.service";
 
 const ACCESS_TOKEN_TTL = "15m";
 const REFRESH_TOKEN_TTL_DAYS = 30;
@@ -61,6 +62,7 @@ export class AuthService {
     private readonly crypto: CryptoService,
     private readonly audit: AuditService,
     private readonly access: WorkspaceAccessService,
+    private readonly backoff: LoginBackoffService,
   ) {}
 
   // ---------- Registration & login ----------
@@ -116,22 +118,36 @@ export class AuthService {
     input: LoginInput & { mfaCode?: string },
     ctx: RequestContext,
   ): Promise<SessionResult> {
+    // Before the password check, and before the database read: an account or a
+    // client address inside its cool-off gets the same answer whether or not
+    // the account exists (NIST SP 800-63B §5.2.2).
+    await this.backoff.assertNotBackedOff(input.email, ctx.ip);
+
     const user = await this.prisma.user.findUnique({
       where: { email: input.email },
       include: { memberships: { include: { org: true }, orderBy: { createdAt: "asc" } } },
     });
     if (!user || !(await argon2.verify(user.passwordHash, input.password))) {
+      await this.backoff.recordFailure(input.email, ctx.ip);
       throw new UnauthorizedException("Invalid email or password");
     }
     if (user.mfaEnabled) {
       if (!input.mfaCode) {
         throw new UnauthorizedException({ code: "MFA_REQUIRED", message: "MFA code required" });
       }
-      this.assertValidMfaCode(user.mfaSecret, input.mfaCode, user.id);
+      try {
+        this.assertValidMfaCode(user.mfaSecret, input.mfaCode, user.id);
+      } catch (e) {
+        // A wrong second factor is a failed sign-in. Not counting it would
+        // leave the MFA code guessable at the full route-throttle rate.
+        await this.backoff.recordFailure(input.email, ctx.ip);
+        throw e;
+      }
     }
     const membership = user.memberships[0];
     if (!membership) throw new UnauthorizedException("User has no organization");
 
+    await this.backoff.recordSuccess(input.email);
     this.audit.log({
       userId: user.id,
       orgId: membership.orgId,

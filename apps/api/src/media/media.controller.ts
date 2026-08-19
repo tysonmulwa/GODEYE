@@ -10,6 +10,7 @@ import {
 } from "@nestjs/common";
 import { ApiBearerAuth, ApiOperation, ApiTags } from "@nestjs/swagger";
 import { Throttle } from "@nestjs/throttler";
+import { Cost } from "../common/throttler.guard";
 import {
   brandKitSchema,
   generateImageSchema,
@@ -49,6 +50,8 @@ export class MediaController {
   constructor(private readonly media: MediaService) {}
 
   @Post("generate-image")
+  // One image is a paid generation plus storage.
+  @Cost(4)
   @MinRole("EDITOR")
   @Throttle({ default: { limit: 15, ttl: 60_000 } })
   @ApiOperation({ summary: "Queue AI image generation (Image Agent in the Python engine)" })
@@ -60,6 +63,9 @@ export class MediaController {
   }
 
   @Post("generate-video")
+  // Video is the most expensive thing this product does: TTS, image
+  // generation, then an ffmpeg encode that can hold a worker for minutes.
+  @Cost(25)
   @MinRole("EDITOR")
   @Throttle({ default: { limit: 6, ttl: 60_000 } })
   @ApiOperation({ summary: "Queue AI short-video generation (Video Agent in the Python engine)" })

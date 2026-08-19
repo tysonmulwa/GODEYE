@@ -29,6 +29,16 @@ async function bootstrap() {
     rawBody: true, // needed for webhook HMAC validation
   });
 
+  // Before any guard runs, and before CORS: with this off — which it was —
+  // req.ips is empty and req.ip is Railway's edge proxy, so every rate-limit
+  // bucket in the system was one bucket for the whole internet, and every IP in
+  // the audit trail was the proxy's (S-4).
+  //
+  // A hop count, never `true`: `trust proxy: true` lets a client forge
+  // X-Forwarded-For and hand itself a fresh bucket per request (CWE-348).
+  app.set("trust proxy", env.trustProxyHops);
+  new Logger("Bootstrap").log(`trust proxy: ${env.trustProxyHops} hop(s)`);
+
   // CORS first, before anything that can reject a request.
   //
   // This used to sit after the body parsers, and that ordering hid a real bug

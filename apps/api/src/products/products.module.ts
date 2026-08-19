@@ -14,6 +14,7 @@ import {
 } from "@nestjs/common";
 import { ApiBearerAuth, ApiOperation, ApiTags } from "@nestjs/swagger";
 import { Throttle } from "@nestjs/throttler";
+import { Cost } from "../common/throttler.guard";
 import {
   importProductsSchema,
   productSettingsSchema,
@@ -217,6 +218,8 @@ export class ProductsController {
   }
 
   @Post("import")
+  // Fetches and parses a storefront, sometimes through a headless browser.
+  @Cost(10)
   @MinRole("ADMIN")
   // Each import is a crawl of someone's site; a few a minute is plenty.
   @Throttle({ default: { limit: 5, ttl: 60_000 } })
