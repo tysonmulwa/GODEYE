@@ -3,6 +3,8 @@ import { BillingService } from "../billing/billing.module";
 import { AuditService } from "../common/audit.service";
 import { CryptoService } from "../common/crypto.service";
 import { AccessTokenPayload } from "../common/jwt-auth.guard";
+import { MembershipService } from "../common/membership.service";
+import { RealtimeGateway } from "../realtime/realtime.gateway";
 import { MembersService } from "./members.service";
 
 // A real 32-byte key. This was "a".repeat(64) — every byte 0xaa — which the
@@ -13,6 +15,9 @@ process.env.WEB_URL = "http://localhost:3000";
 
 function makePrisma() {
   return {
+    // A role change or a removal revokes that person's refresh tokens (S-10);
+    // without them they simply mint a new access token and carry on.
+    refreshToken: { updateMany: jest.fn().mockResolvedValue({ count: 2 }) },
     membership: {
       findMany: jest.fn().mockResolvedValue([]),
       findUnique: jest.fn(),
@@ -42,14 +47,22 @@ const asAuth = (role: AccessTokenPayload["role"], sub = "caller"): AccessTokenPa
 describe("MembersService", () => {
   let prisma: ReturnType<typeof makePrisma>;
   let service: MembersService;
+  let memberships: Record<string, jest.Mock>;
+  let realtime: Record<string, jest.Mock>;
 
   beforeEach(() => {
     prisma = makePrisma();
+    memberships = { invalidate: jest.fn(), current: jest.fn().mockResolvedValue(null) };
+    realtime = { disconnectUser: jest.fn() };
     service = new MembersService(
       prisma as never,
       new CryptoService(),
       { log: jest.fn() } as unknown as AuditService,
       { assertWithinLimit: jest.fn().mockResolvedValue(undefined) } as unknown as BillingService,
+      // S-10: a role change or a removal must end that person's sessions, not
+      // wait out their access token. Spied so the assertions below can see it.
+      memberships as unknown as MembershipService,
+      realtime as unknown as RealtimeGateway,
     );
     prisma.invitation.create.mockImplementation(({ data }: never) =>
       Promise.resolve({ id: "inv1", ...(data as object) }),
@@ -122,6 +135,28 @@ describe("MembersService", () => {
       await expect(
         service.changeRole(asAuth("OWNER"), "admin-user", { role: "VIEWER" }),
       ).resolves.toEqual({ userId: "admin-user", role: "VIEWER" });
+    });
+
+    it("ends the demoted person's sessions rather than waiting them out (S-10)", async () => {
+      prisma.membership.findUnique.mockResolvedValue({ id: "m1", role: "ADMIN" });
+      await service.changeRole(asAuth("OWNER"), "admin-user", { role: "VIEWER" });
+
+      // Two windows, two mechanisms. The bump retires the access token already
+      // issued (up to 15 minutes); revoking the refresh tokens stops a new one
+      // being minted (up to 30 days). Either alone leaves a gap.
+      expect(prisma.membership.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ sessionVersion: { increment: 1 } }),
+        }),
+      );
+      expect(prisma.refreshToken.updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ userId: "admin-user", orgId: "org1" }),
+        }),
+      );
+      // And their open sockets, which stayed joined to the org room for as long
+      // as they remained connected (S-17).
+      expect(realtime.disconnectUser).toHaveBeenCalledWith("admin-user", "org1");
     });
   });
 

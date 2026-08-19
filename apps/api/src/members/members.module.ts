@@ -1,9 +1,11 @@
 import { Module } from "@nestjs/common";
-import { RolesGuard } from "../common/roles.guard";
+import { RealtimeModule } from "../realtime/realtime.module";
 import { MembersController } from "./members.controller";
 import { MembersService } from "./members.service";
 
 @Module({
+  // For disconnectUser: removing somebody must also close their sockets.
+  imports: [RealtimeModule],
   controllers: [MembersController],
   providers: [MembersService],
 })

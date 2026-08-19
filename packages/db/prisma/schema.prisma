@@ -84,6 +84,14 @@ model Membership {
   userId    String
   orgId     String
   role      Role     @default(OWNER)
+  /// Bumped whenever this person's access to this workspace changes: a role
+  /// change, a password change, an MFA change, or "sign out everywhere".
+  ///
+  /// Finding S-10: authorization read the role out of the JWT and never
+  /// consulted this row, so a demoted ADMIN kept ADMIN for the life of their
+  /// access token, and a removed member kept full access long enough to delete
+  /// every connection and export the catalogue.
+  sessionVersion Int   @default(0)
   createdAt DateTime @default(now())
 
   user User         @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -115,6 +123,17 @@ model Invitation {
 model RefreshToken {
   id        String    @id @default(cuid())
   userId    String
+  /// The workspace this session was scoped to. Finding B-1: the row recorded
+  /// only the user, so refresh() returned memberships[0] and silently moved a
+  /// session back to the first workspace. For an agency managing several
+  /// clients that means the next post goes to the wrong client's channels —
+  /// guaranteed for any session open longer than the 15-minute access token.
+  orgId     String?
+  /// Every token rotated from one original login shares a family id. Finding
+  /// S-15: a replayed token was rejected but the family was not revoked, so
+  /// theft was invisible. Reuse of an already-rotated token now revokes the
+  /// whole family and forces re-authentication (RFC 9700 §4.14.2).
+  familyId  String?
   tokenHash String    @unique
   expiresAt DateTime
   revokedAt DateTime?
@@ -125,6 +144,10 @@ model RefreshToken {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
+  @@index([familyId])
+  /// Retention (D-3) sweeps on these two columns.
+  @@index([expiresAt])
+  @@index([revokedAt])
 }
 
 model ApiKey {

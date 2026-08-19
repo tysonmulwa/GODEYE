@@ -12,7 +12,6 @@ interface InvitePreview {
   email: string;
   role: string;
   inviterName: string | null;
-  accountExists: boolean;
 }
 
 export default function InvitePage() {
@@ -58,7 +57,10 @@ export default function InvitePage() {
         body: JSON.stringify({
           token,
           password,
-          ...(preview?.accountExists ? {} : { name }),
+          // Sent when the person filled it in. The server decides whether it
+          // needs one: it knows whether the address already has an account,
+          // and telling the browser that was a user-enumeration oracle (S-16).
+          ...(name.trim() ? { name: name.trim() } : {}),
           ...(mfaCode ? { mfaCode } : {}),
         }),
       });
@@ -113,36 +115,31 @@ export default function InvitePage() {
           <Label htmlFor="email">Email</Label>
           <Input id="email" type="email" value={preview.email} disabled />
         </div>
-        {!preview.accountExists && (
-          <div>
-            <Label htmlFor="name">Your name</Label>
-            <Input
-              id="name"
-              required
-              autoComplete="name"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="Jane Mwangi"
-            />
-          </div>
-        )}
         <div>
-          <Label htmlFor="password">
-            {preview.accountExists ? "Your password" : "Choose a password"}
-          </Label>
+          <Label htmlFor="name">Your name</Label>
+          <Input
+            id="name"
+            autoComplete="name"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="Jane Mwangi"
+          />
+          <p className="mt-1 text-[14px] text-ink-3">Only needed if this is your first workspace.</p>
+        </div>
+        <div>
+          <Label htmlFor="password">Password</Label>
           <PasswordInput
             id="password"
             required
-            autoComplete={preview.accountExists ? "current-password" : "new-password"}
+            autoComplete="current-password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             placeholder="••••••••••"
           />
-          {!preview.accountExists && (
-            <p className="mt-1 text-[14px] text-ink-3">
-              At least 10 characters, with a lowercase letter and an uppercase letter or digit.
-            </p>
-          )}
+          <p className="mt-1 text-[14px] text-ink-3">
+            If you already have a GODEYE account, use that password. If not, choose one now: at
+            least 10 characters, with a lowercase letter and an uppercase letter or digit.
+          </p>
         </div>
         {needsMfa && (
           <div>
@@ -159,7 +156,7 @@ export default function InvitePage() {
         )}
         <ErrorNote message={error} />
         <Button type="submit" loading={loading} className="w-full">
-          {preview.accountExists ? "Sign in & join" : "Create account & join"}
+          Join workspace
         </Button>
       </form>
     </Card>

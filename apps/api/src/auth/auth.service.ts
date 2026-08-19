@@ -27,6 +27,7 @@ import { AccessTokenPayload } from "../common/jwt-auth.guard";
 import { PrismaService } from "../common/prisma.service";
 import { signToken } from "../common/tokens";
 import { LoginBackoffService } from "./login-backoff.service";
+import { MembershipService } from "../common/membership.service";
 
 const ACCESS_TOKEN_TTL = "15m";
 const REFRESH_TOKEN_TTL_DAYS = 30;
@@ -54,8 +55,17 @@ export interface SessionResult {
   refreshToken: string;
 }
 
+/**
+ * How long a used TOTP code stays refused: the 30-second step plus one step of
+ * drift either side, which is the whole span in which it could be accepted.
+ */
+const MFA_REPLAY_WINDOW_MS = 90_000;
+
 @Injectable()
 export class AuthService {
+  /** `<userId>:<sha256(code)>` -> when it stops being worth remembering. */
+  private readonly consumedMfaCodes = new Map<string, number>();
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly jwt: JwtService,
@@ -63,6 +73,7 @@ export class AuthService {
     private readonly audit: AuditService,
     private readonly access: WorkspaceAccessService,
     private readonly backoff: LoginBackoffService,
+    private readonly memberships: MembershipService,
   ) {}
 
   // ---------- Registration & login ----------
@@ -168,17 +179,61 @@ export class AuthService {
         user: { include: { memberships: { include: { org: true }, orderBy: { createdAt: "asc" } } } },
       },
     });
-    if (!stored || stored.revokedAt || stored.expiresAt < new Date()) {
+    if (!stored) throw new UnauthorizedException("Invalid refresh token");
+
+    if (stored.revokedAt) {
+      // S-15. An already-rotated token being presented means one of two things:
+      // the legitimate holder replayed an old value, or somebody else holds a
+      // copy. They are indistinguishable from here and one of them is theft, so
+      // the whole family is revoked and everybody re-authenticates. Rejecting
+      // just the token, which is what happened before, left the thief's rotated
+      // copy live and told nobody (RFC 9700 4.14.2).
+      if (stored.familyId) {
+        const { count } = await this.prisma.refreshToken.updateMany({
+          where: { familyId: stored.familyId, revokedAt: null },
+          data: { revokedAt: new Date() },
+        });
+        this.audit.log({
+          userId: stored.userId,
+          orgId: stored.orgId ?? undefined,
+          action: "auth.refresh_reuse_detected",
+          targetType: "RefreshToken",
+          targetId: stored.familyId,
+          metadata: { revoked: count } as never,
+          ip: ctx.ip,
+          userAgent: ctx.userAgent,
+        });
+      }
       throw new UnauthorizedException("Invalid refresh token");
     }
-    // Rotation: revoke the presented token, issue a fresh one
+    if (stored.expiresAt < new Date()) {
+      throw new UnauthorizedException("Invalid refresh token");
+    }
+
+    // Rotation: revoke the presented token, issue a fresh one.
     await this.prisma.refreshToken.update({
       where: { id: stored.id },
       data: { revokedAt: new Date() },
     });
-    const membership = stored.user.memberships[0];
+
+    // B-1: back to the workspace this session was actually scoped to. `orgId`
+    // is null only for rows written before the column existed; those fall back
+    // to the old behaviour for one rotation and are correct after it.
+    const membership =
+      (stored.orgId && stored.user.memberships.find((m) => m.orgId === stored.orgId)) ||
+      stored.user.memberships[0];
     if (!membership) throw new UnauthorizedException("User has no organization");
-    return this.createSession(stored.user, membership.org, membership.role, ctx, undefined);
+
+    // The role is re-read here too, so a demotion reaches the next access token
+    // rather than surviving another fifteen minutes.
+    return this.createSession(
+      stored.user,
+      membership.org,
+      membership.role,
+      ctx,
+      undefined,
+      stored.familyId ?? undefined,
+    );
   }
 
   async logout(refreshTokenPlain: string | undefined): Promise<void> {
@@ -194,6 +249,10 @@ export class AuthService {
 
   async me(auth: AccessTokenPayload) {
     const user = await this.prisma.user.findUniqueOrThrow({ where: { id: auth.sub } });
+    // The role the DATABASE holds, not the token's copy (S-10). Echoing the
+    // token meant the UI agreed with a claim that had already been revoked, and
+    // showed a demoted admin controls they could no longer use.
+    const live = await this.memberships.current(auth.sub, auth.orgId);
     const org = await this.prisma.organization.findUniqueOrThrow({
       where: { id: auth.orgId },
       include: { businessProfile: { select: { id: true } } },
@@ -204,7 +263,7 @@ export class AuthService {
         id: org.id,
         name: org.name,
         slug: org.slug,
-        role: auth.role,
+        role: live?.role ?? auth.role,
         type: org.type,
         hasProfile: !!org.businessProfile,
         requireApproval: org.requireApproval,
@@ -257,6 +316,11 @@ export class AuthService {
     }
 
     const passwordHash = await argon2.hash(input.newPassword, { type: argon2.argon2id });
+    // Retires every access token already issued, in every workspace. Revoking
+    // the refresh tokens alone left the current ones working for up to fifteen
+    // more minutes — which is exactly the window somebody changing a password
+    // under duress is trying to close (S-10).
+    await this.memberships.bumpAllSessions(auth.sub, "password changed");
     // Everything except the session doing this. Signing the user out of the
     // tab they are working in would be its own small betrayal, and they have
     // just proved they know the password.
@@ -318,16 +382,15 @@ export class AuthService {
   /** Public preview of an invite link: who invited you, to which org, as what role. */
   async previewInvitation(tokenPlain: string) {
     const invitation = await this.validInvitation(tokenPlain);
-    const account = await this.prisma.user.findUnique({
-      where: { email: invitation.email },
-      select: { id: true },
-    });
+    // `accountExists` used to be returned here. It is a user-enumeration oracle
+    // (S-16, CWE-204): anyone holding any invite token could ask whether a given
+    // address has an account. The accept flow handles both cases without being
+    // told which - it asks for a password either way, and the answer decides.
     return {
       orgName: invitation.org.name,
       email: invitation.email,
       role: invitation.role,
       inviterName: invitation.invitedBy?.name ?? null,
-      accountExists: !!account,
     };
   }
 
@@ -462,6 +525,9 @@ export class AuthService {
     const user = await this.prisma.user.findUniqueOrThrow({ where: { id: userId } });
     this.assertValidMfaCode(user.mfaSecret, code, userId);
     await this.prisma.user.update({ where: { id: userId }, data: { mfaEnabled: true } });
+    // Turning MFA on changes what a session is worth; sessions that predate it
+    // were established without it.
+    await this.memberships.bumpAllSessions(userId, "MFA enabled");
     this.audit.log({ userId, action: "auth.mfa_enabled" });
   }
 
@@ -488,9 +554,24 @@ export class AuthService {
       where: { id: userId },
       data: { mfaEnabled: false, mfaSecret: null },
     });
+    await this.memberships.bumpAllSessions(userId, "MFA disabled");
     this.audit.log({ userId, action: "auth.mfa_disabled" });
   }
 
+  /**
+   * Verify a TOTP code, once. Finding S-19.
+   *
+   * A code was accepted every time it was presented inside its window, so one
+   * observed over a shoulder, read from a notification, or captured in a
+   * phishing proxy stayed usable for the rest of that window. A second factor
+   * that can be replayed is a second factor in name only.
+   *
+   * `consumedMfaCodes` is deliberately in-process. It is a small, bounded map
+   * and the window is 90 seconds; the cost of getting it wrong across replicas
+   * is that a code could be replayed once on a *different* instance, which is a
+   * far smaller window than the one being closed. Moving it to Redis is a
+   * one-line change if that ever matters.
+   */
   private assertValidMfaCode(
     encryptedSecret: string | null,
     code: string,
@@ -498,8 +579,26 @@ export class AuthService {
   ): void {
     if (!encryptedSecret) throw new BadRequestException("MFA has not been set up");
     const secret = this.crypto.decrypt(encryptedSecret, `user:${userId}`);
+
+    // otplib's default window is 1 step either side (±30s), which is the drift
+    // tolerance NIST SP 800-63B §5.1.4.1 expects. Stated rather than inherited.
+    authenticator.options = { window: 1 };
     if (!authenticator.verify({ token: code, secret })) {
       throw new UnauthorizedException("Invalid MFA code");
+    }
+
+    const fingerprint = `${userId}:${this.crypto.sha256(code)}`;
+    this.forgetExpiredMfaCodes();
+    if (this.consumedMfaCodes.has(fingerprint)) {
+      throw new UnauthorizedException("That code has already been used");
+    }
+    this.consumedMfaCodes.set(fingerprint, Date.now() + MFA_REPLAY_WINDOW_MS);
+  }
+
+  private forgetExpiredMfaCodes(): void {
+    const now = Date.now();
+    for (const [key, expiresAt] of this.consumedMfaCodes) {
+      if (expiresAt <= now) this.consumedMfaCodes.delete(key);
     }
   }
 
@@ -511,11 +610,18 @@ export class AuthService {
     role: string,
     ctx: RequestContext,
     hasProfileOverride: boolean | undefined,
+    /** Continues an existing rotation chain; a fresh login starts a new one. */
+    familyId?: string,
   ): Promise<SessionResult> {
+    // The membership's current version travels in the token. RolesGuard
+    // compares it against the row, so bumping the row retires every token
+    // minted before the bump (S-10).
+    const live = await this.memberships.current(user.id, org.id);
     const payload: AccessTokenPayload = {
       sub: user.id,
       orgId: org.id,
       role: role as AccessTokenPayload["role"],
+      sv: live?.sessionVersion ?? 0,
     };
     // signToken stamps typ/iss/aud. JwtAuthGuard demands all three, so a token
     // minted for any other purpose — an OAuth state, an invite — cannot be
@@ -526,6 +632,14 @@ export class AuthService {
     await this.prisma.refreshToken.create({
       data: {
         userId: user.id,
+        // B-1: the row records WHICH workspace this session is for. Without it
+        // refresh() returned memberships[0], silently moving an agency user
+        // back to their first client - and the next post went to that client's
+        // channels.
+        orgId: org.id,
+        // S-15: every token rotated from one login shares a family, so reuse of
+        // a rotated token can revoke the whole chain rather than one token.
+        familyId: familyId ?? randomBytes(16).toString("hex"),
         tokenHash: this.crypto.sha256(refreshToken),
         expiresAt: new Date(Date.now() + REFRESH_TOKEN_TTL_DAYS * 24 * 3600 * 1000),
         ip: ctx.ip,

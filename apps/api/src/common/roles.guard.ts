@@ -4,11 +4,13 @@ import {
   ForbiddenException,
   Injectable,
   SetMetadata,
+  UnauthorizedException,
 } from "@nestjs/common";
 import { Reflector } from "@nestjs/core";
 import { JwtService } from "@nestjs/jwt";
 import { AuthenticatedRequest, JwtAuthGuard } from "./jwt-auth.guard";
 import { PUBLIC_KEY } from "./public.decorator";
+import { MembershipService } from "./membership.service";
 
 export type OrgRole = "OWNER" | "ADMIN" | "EDITOR" | "VIEWER";
 
@@ -59,6 +61,7 @@ export class RolesGuard implements CanActivate {
   constructor(
     private readonly reflector: Reflector,
     jwt: JwtService,
+    private readonly memberships: MembershipService,
   ) {
     this.jwtGuard = new JwtAuthGuard(jwt);
   }
@@ -90,10 +93,29 @@ export class RolesGuard implements CanActivate {
       );
     }
 
-    const { auth } = context.switchToHttp().getRequest<AuthenticatedRequest>();
+    const req = context.switchToHttp().getRequest<AuthenticatedRequest>();
+    const { auth } = req;
     // Missing role is never "allow". This is the fail-closed rule from §1.8: a
     // check that cannot establish authorization denies.
-    if (!auth?.role || !roleAtLeast(auth.role, required)) {
+    if (!auth?.role) throw new ForbiddenException(`Requires ${required} role or higher`);
+
+    // The live membership, not the bearer's copy of it (S-10). A demoted ADMIN
+    // used to keep ADMIN for the life of their 15-minute token, and a removed
+    // member kept full access long enough to delete every connection.
+    const live = await this.memberships.current(auth.sub, auth.orgId);
+    if (!live) {
+      throw new UnauthorizedException("You are no longer a member of this workspace");
+    }
+    if (live.sessionVersion !== (auth.sv ?? 0)) {
+      // A password change, an MFA change, a role change, or "sign out
+      // everywhere" happened after this token was minted.
+      throw new UnauthorizedException("This session has ended. Sign in again.");
+    }
+
+    // The request sees the role the database holds, so a handler that reads
+    // req.auth.role cannot act on a stale one either.
+    auth.role = live.role;
+    if (!roleAtLeast(live.role, required)) {
       throw new ForbiddenException(`Requires ${required} role or higher`);
     }
     return true;

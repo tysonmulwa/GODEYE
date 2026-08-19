@@ -7,6 +7,7 @@ import { AuditService } from "../common/audit.service";
 import { CryptoService } from "../common/crypto.service";
 import { AuthService } from "./auth.service";
 import { LoginBackoffService } from "./login-backoff.service";
+import { MembershipService } from "../common/membership.service";
 
 // A real 32-byte key. This was "a".repeat(64) — every byte 0xaa — which the
 // weak-key check added for S-6 now rejects, correctly. The fixture moved;
@@ -51,6 +52,7 @@ describe("AuthService", () => {
   let prisma: MockPrisma;
   let service: AuthService;
   let backoff: Record<string, jest.Mock>;
+  let memberships: Record<string, jest.Mock>;
   let access: { startTrial: jest.Mock; state: jest.Mock };
 
   const org = { id: "org1", name: "Acme", slug: "acme" };
@@ -75,6 +77,12 @@ describe("AuthService", () => {
         planCode: "PRO",
       }),
     };
+    memberships = {
+      current: jest.fn().mockResolvedValue({ role: "OWNER", sessionVersion: 0 }),
+      invalidate: jest.fn(),
+      bumpSessionVersion: jest.fn().mockResolvedValue(undefined),
+      bumpAllSessions: jest.fn().mockResolvedValue(undefined),
+    };
     backoff = {
       assertNotBackedOff: jest.fn().mockResolvedValue(undefined),
       recordFailure: jest.fn().mockResolvedValue(undefined),
@@ -90,6 +98,8 @@ describe("AuthService", () => {
       // behaviour is covered in login-backoff.service.spec.ts, and stubbing it
       // keeps these tests about what they were about.
       backoff as unknown as LoginBackoffService,
+      // S-10: the live membership, which is what authorization now follows.
+      memberships as unknown as MembershipService,
     );
   });
 
@@ -301,6 +311,23 @@ describe("AuthService", () => {
         service.disableMfa("user1", "not-the-password", authenticator.generate(SECRET)),
       ).rejects.toThrow(UnauthorizedException);
       expect(prisma.user.update).not.toHaveBeenCalled();
+    });
+
+    it("refuses a code that has already been used (S-19)", async () => {
+      // A code accepted every time it was presented inside its window meant one
+      // observed over a shoulder, read from a notification, or captured by a
+      // phishing proxy stayed usable. A replayable second factor is a second
+      // factor in name only.
+      prisma.user.findUniqueOrThrow.mockResolvedValue(await enabledUser());
+      prisma.user.update.mockResolvedValue({});
+      const code = authenticator.generate(SECRET);
+
+      await service.disableMfa("user1", "correct-horse-9X", code);
+
+      prisma.user.findUniqueOrThrow.mockResolvedValue(await enabledUser());
+      await expect(service.disableMfa("user1", "correct-horse-9X", code)).rejects.toThrow(
+        /already been used/i,
+      );
     });
 
     it("refuses a wrong code even with the right password", async () => {

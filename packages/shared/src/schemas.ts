@@ -3,6 +3,21 @@ import { PLATFORMS } from "./platforms";
 import { IMAGE_PRESET_IDS } from "./image-presets";
 import { TTS_VOICES, VIDEO_PRESET_IDS } from "./video-presets";
 
+/**
+ * An email address, normalised. Finding B-2.
+ *
+ * `User.email` is `@unique` in Postgres, which is case-SENSITIVE, while
+ * `changeEmail` already lowercased its input — and that mismatch is the tell.
+ * Registering as `Tyson@example.com` and signing in as `tyson@example.com` gave
+ * "Invalid email or password" with no way to discover why; two accounts could
+ * exist for one person; and an invitation whose case did not match created a
+ * second account instead of joining the existing one.
+ *
+ * Trim as well as lowercase: a trailing space pasted from an email client is the
+ * same address to a human and a different one to a unique index.
+ */
+export const emailSchema = z.string().trim().toLowerCase().email();
+
 export const platformSchema = z.enum(PLATFORMS);
 export const imagePresetSchema = z.enum(IMAGE_PRESET_IDS as [string, ...string[]]);
 export const videoPresetSchema = z.enum(VIDEO_PRESET_IDS as [string, ...string[]]);
@@ -24,7 +39,7 @@ export type AccountType = z.infer<typeof accountTypeSchema>;
 export const registerSchema = z
   .object({
     name: z.string().min(2).max(80),
-    email: z.string().email(),
+    email: emailSchema,
     password: passwordSchema,
     accountType: accountTypeSchema.default("BUSINESS"),
     // Optional for creators (defaults to their own name); required for businesses.
@@ -58,7 +73,7 @@ export const changePasswordSchema = z
 export type ChangePasswordInput = z.infer<typeof changePasswordSchema>;
 
 export const changeEmailSchema = z.object({
-  email: z.string().email(),
+  email: emailSchema,
   // An email address is how an account is recovered, so changing it is a
   // password-gated action rather than a profile edit.
   password: z.string().min(1),
@@ -66,7 +81,7 @@ export const changeEmailSchema = z.object({
 export type ChangeEmailInput = z.infer<typeof changeEmailSchema>;
 
 export const loginSchema = z.object({
-  email: z.string().email(),
+  email: emailSchema,
   password: z.string().min(1),
 });
 export type LoginInput = z.infer<typeof loginSchema>;
@@ -78,7 +93,7 @@ export const assignableRoleSchema = z.enum(["ADMIN", "EDITOR", "VIEWER"]);
 export type AssignableRole = z.infer<typeof assignableRoleSchema>;
 
 export const inviteMemberSchema = z.object({
-  email: z.string().email(),
+  email: emailSchema,
   role: assignableRoleSchema.default("EDITOR"),
 });
 export type InviteMemberInput = z.infer<typeof inviteMemberSchema>;

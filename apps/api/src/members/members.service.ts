@@ -3,6 +3,7 @@ import {
   ConflictException,
   ForbiddenException,
   Injectable,
+  Logger,
   NotFoundException,
 } from "@nestjs/common";
 import type { InviteMemberInput, OrgSettingsInput, UpdateMemberRoleInput } from "@godeye/shared";
@@ -12,18 +13,24 @@ import { AuditService } from "../common/audit.service";
 import { CryptoService } from "../common/crypto.service";
 import { env } from "../common/env";
 import { AccessTokenPayload } from "../common/jwt-auth.guard";
+import { MembershipService } from "../common/membership.service";
 import { PrismaService } from "../common/prisma.service";
+import { RealtimeGateway } from "../realtime/realtime.gateway";
 import { ROLE_RANK, type OrgRole } from "../common/roles.guard";
 
 const INVITE_TTL_DAYS = 7;
 
 @Injectable()
 export class MembersService {
+  private readonly logger = new Logger(MembersService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly crypto: CryptoService,
     private readonly audit: AuditService,
     private readonly billing: BillingService,
+    private readonly memberships: MembershipService,
+    private readonly realtime: RealtimeGateway,
   ) {}
 
   async list(orgId: string) {
@@ -145,8 +152,14 @@ export class MembersService {
 
     await this.prisma.membership.update({
       where: { id: target.id },
-      data: { role: input.role },
+      // The bump is what makes the change take effect NOW. Without it the
+      // demoted person kept the old role for the life of their access token,
+      // and could mint a fresh one from a refresh token for thirty days (S-10).
+      data: { role: input.role, sessionVersion: { increment: 1 } },
     });
+    this.memberships.invalidate(targetUserId, auth.orgId);
+    await this.revokeSessions(targetUserId, auth.orgId, "role changed");
+
     this.audit.log({
       orgId: auth.orgId,
       userId: auth.sub,
@@ -174,6 +187,11 @@ export class MembersService {
     }
 
     await this.prisma.membership.delete({ where: { id: target.id } });
+    this.memberships.invalidate(targetUserId, auth.orgId);
+    // A removed member kept full access for up to fifteen minutes, which is
+    // long enough to delete every social connection and export the catalogue.
+    await this.revokeSessions(targetUserId, auth.orgId, "removed from workspace");
+
     this.audit.log({
       orgId: auth.orgId,
       userId: auth.sub,
@@ -183,6 +201,37 @@ export class MembersService {
       metadata: { role: target.role },
     });
     return { ok: true };
+  }
+
+  /**
+   * End the affected person's sessions in this workspace.
+   *
+   * Two mechanisms, because they cover different windows: revoking the refresh
+   * tokens stops a NEW access token being minted (up to 30 days), and the
+   * sessionVersion bump retires the ones already issued (up to 15 minutes).
+   * Either alone leaves a gap.
+   *
+   * `orgId` scopes the refresh revocation, so removing somebody from one
+   * workspace does not sign them out of the others they belong to.
+   */
+  private async revokeSessions(userId: string, orgId: string, reason: string): Promise<void> {
+    const { count } = await this.prisma.refreshToken.updateMany({
+      where: { userId, orgId, revokedAt: null },
+      data: { revokedAt: new Date() },
+    });
+    try {
+      this.realtime.disconnectUser(userId, orgId);
+    } catch (e) {
+      // The database half of the revocation has already happened and is what
+      // actually matters; a socket layer problem must not roll it back or turn
+      // a successful removal into a 500. The gateway re-validates every open
+      // socket on a timer, so anything missed here closes within a minute.
+      this.logger.error(
+        `Could not close sockets for ${userId} in ${orgId}: ` +
+          (e instanceof Error ? e.message : String(e)),
+      );
+    }
+    this.logger.log(`Revoked ${count} refresh token(s) for ${userId} in ${orgId}: ${reason}`);
   }
 
   async updateSettings(auth: AccessTokenPayload, input: OrgSettingsInput) {

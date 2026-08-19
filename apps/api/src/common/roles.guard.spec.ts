@@ -16,6 +16,7 @@ import { ExecutionContext, ForbiddenException, UnauthorizedException } from "@ne
 import { Reflector } from "@nestjs/core";
 import { JwtService } from "@nestjs/jwt";
 import { MIN_ROLE_KEY, roleAtLeast, RolesGuard, type OrgRole } from "./roles.guard";
+import type { MembershipService } from "./membership.service";
 import { PUBLIC_KEY } from "./public.decorator";
 import { signToken } from "./tokens";
 
@@ -34,17 +35,30 @@ function context(token: string | undefined): ExecutionContext {
   } as unknown as ExecutionContext;
 }
 
-function guard(meta: { required?: OrgRole; isPublic?: boolean }): RolesGuard {
+/**
+ * `live` is what the database says right now. `undefined` means "still an
+ * OWNER at version 0"; `null` means the membership is gone.
+ */
+function guard(meta: {
+  required?: OrgRole;
+  isPublic?: boolean;
+  live?: { role: OrgRole; sessionVersion: number } | null;
+}): RolesGuard {
   const reflector = {
     getAllAndOverride: jest.fn((key: string) =>
       key === MIN_ROLE_KEY ? meta.required : key === PUBLIC_KEY ? meta.isPublic : undefined,
     ),
   } as unknown as Reflector;
-  return new RolesGuard(reflector, jwt);
+  const memberships = {
+    current: jest.fn().mockResolvedValue(
+      meta.live === undefined ? { role: "OWNER" as OrgRole, sessionVersion: 0 } : meta.live,
+    ),
+  } as unknown as MembershipService;
+  return new RolesGuard(reflector, jwt, memberships);
 }
 
-const tokenFor = (role: OrgRole) =>
-  signToken(jwt, "access", { sub: "u1", orgId: "o1", role }, "5m");
+const tokenFor = (role: OrgRole, sv = 0) =>
+  signToken(jwt, "access", { sub: "u1", orgId: "o1", role, sv }, "5m");
 
 describe("roleAtLeast", () => {
   it("orders OWNER > ADMIN > EDITOR > VIEWER", () => {
@@ -70,14 +84,62 @@ describe("RolesGuard", () => {
   });
 
   it("allows equal or higher roles", async () => {
-    await expect(guard({ required: "EDITOR" }).canActivate(context(await tokenFor("EDITOR")))).resolves.toBe(true);
-    await expect(guard({ required: "EDITOR" }).canActivate(context(await tokenFor("OWNER")))).resolves.toBe(true);
+    const editor = { role: "EDITOR" as OrgRole, sessionVersion: 0 };
+    await expect(
+      guard({ required: "EDITOR", live: editor }).canActivate(context(await tokenFor("EDITOR"))),
+    ).resolves.toBe(true);
+    await expect(
+      guard({ required: "EDITOR" }).canActivate(context(await tokenFor("OWNER"))),
+    ).resolves.toBe(true);
   });
 
   it("rejects lower roles", async () => {
     await expect(
-      guard({ required: "ADMIN" }).canActivate(context(await tokenFor("EDITOR"))),
+      guard({
+        required: "ADMIN",
+        live: { role: "EDITOR", sessionVersion: 0 },
+      }).canActivate(context(await tokenFor("EDITOR"))),
     ).rejects.toThrow(ForbiddenException);
+  });
+
+  // ---------- S-10: the database decides, not the token ----------
+
+  it("refuses a token that still claims ADMIN once the row says VIEWER", async () => {
+    // The demotion has landed. The token has not expired. Before this, the
+    // holder kept ADMIN for the rest of its 15 minutes.
+    await expect(
+      guard({
+        required: "ADMIN",
+        live: { role: "VIEWER", sessionVersion: 0 },
+      }).canActivate(context(await tokenFor("ADMIN"))),
+    ).rejects.toThrow(ForbiddenException);
+  });
+
+  it("refuses a token whose membership has been removed", async () => {
+    await expect(
+      guard({ required: "VIEWER", live: null }).canActivate(context(await tokenFor("OWNER"))),
+    ).rejects.toThrow(UnauthorizedException);
+  });
+
+  it("refuses a token minted before the session version was bumped", async () => {
+    // A password change, an MFA change or "sign out everywhere".
+    await expect(
+      guard({
+        required: "VIEWER",
+        live: { role: "OWNER", sessionVersion: 3 },
+      }).canActivate(context(await tokenFor("OWNER", 2))),
+    ).rejects.toThrow(/session has ended/i);
+  });
+
+  it("promotes as well as demotes — the live role is the one the handler sees", async () => {
+    // A token minted as VIEWER, whose holder has since been made ADMIN, must
+    // work. Following the database means following it in both directions.
+    await expect(
+      guard({
+        required: "ADMIN",
+        live: { role: "ADMIN", sessionVersion: 0 },
+      }).canActivate(context(await tokenFor("VIEWER"))),
+    ).resolves.toBe(true);
   });
 
   it("rejects an unauthenticated caller before it looks at roles", async () => {

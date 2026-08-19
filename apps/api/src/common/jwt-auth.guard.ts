@@ -7,6 +7,15 @@ export interface AccessTokenPayload {
   sub: string; // user id
   orgId: string;
   role: "OWNER" | "ADMIN" | "EDITOR" | "VIEWER";
+  /**
+   * The membership's sessionVersion when this token was minted. RolesGuard
+   * compares it against the live row, so bumping the row retires every token
+   * issued before the bump (S-10).
+   *
+   * Optional only so tokens issued by the previous release keep working through
+   * one rotation; the guard treats a missing value as version 0.
+   */
+  sv?: number;
 }
 
 export interface AuthenticatedRequest extends Request {
@@ -50,7 +59,12 @@ export class JwtAuthGuard implements CanActivate {
     if (!claims.sub || !claims.orgId || !claims.role) {
       throw new UnauthorizedException("Invalid or expired access token");
     }
-    req.auth = { sub: claims.sub, orgId: claims.orgId, role: claims.role };
+    req.auth = {
+      sub: claims.sub,
+      orgId: claims.orgId,
+      role: claims.role,
+      sv: typeof claims.sv === "number" ? claims.sv : 0,
+    };
     return true;
   }
 }
