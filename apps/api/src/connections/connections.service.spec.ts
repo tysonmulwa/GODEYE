@@ -1,11 +1,11 @@
 import { Test } from "@nestjs/testing";
-import { JwtService } from "@nestjs/jwt";
 import { BillingService } from "../billing/billing.module";
 import { AuditService } from "../common/audit.service";
 import { CryptoService } from "../common/crypto.service";
 import { PrismaService } from "../common/prisma.service";
 import { EngineService } from "../engine/engine.service";
 import { ConnectionsService } from "./connections.service";
+import { OAuthStateService } from "./oauth-state.service";
 
 /**
  * What a channel card is allowed to say is wrong with it.
@@ -41,7 +41,9 @@ describe("ConnectionsService, which errors are worth showing", () => {
         { provide: PrismaService, useValue: prisma },
         { provide: CryptoService, useValue: {} },
         { provide: AuditService, useValue: { log: jest.fn() } },
-        { provide: JwtService, useValue: {} },
+        // OAuth state moved out of this service into OAuthStateService, which
+        // owns the single-use record, the browser binding and the key choice.
+        { provide: OAuthStateService, useValue: {} },
         { provide: EngineService, useValue: {} },
         { provide: BillingService, useValue: {} },
       ],

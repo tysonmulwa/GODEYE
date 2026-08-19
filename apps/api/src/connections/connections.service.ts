@@ -1,5 +1,10 @@
-import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
-import { JwtService } from "@nestjs/jwt";
+import {
+  BadRequestException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from "@nestjs/common";
+import type { Request, Response } from "express";
 import Redis from "ioredis";
 import type {
   DiscordConnectInput,
@@ -13,6 +18,7 @@ import { CryptoService } from "../common/crypto.service";
 import { env } from "../common/env";
 import { PrismaService } from "../common/prisma.service";
 import { EngineService } from "../engine/engine.service";
+import { OAuthStateService, type OAuthProvider } from "./oauth-state.service";
 import {
   instagramAuthorizeUrl,
   instagramExchangeCode,
@@ -34,14 +40,14 @@ import {
 } from "./platform-clients";
 
 /**
- * Lifetime of the signed OAuth `state` token. It has to outlast the whole
- * detour through the provider, signing in, 2FA, choosing a page, granting
- * permissions, which routinely exceeds 10 minutes on a first connection and
- * then fails at the callback with an opaque "invalid state".
+ * How long X's request-token pair is parked between the two legs of OAuth 1.0a.
+ *
+ * The OAuth 2.0 flows no longer keep a TTL here: OAuthStateService owns it, and
+ * it is 10 minutes rather than the 30 this used to be. Thirty minutes was long
+ * enough that a `state` leaked through a provider's logs or a Referer header
+ * was still worth stealing when somebody got round to reading them.
  */
-const OAUTH_STATE_TTL = "30m";
-/** The same window as OAUTH_STATE_TTL, in the unit Redis expects. */
-const OAUTH_STATE_TTL_SECONDS = 30 * 60;
+const X_PENDING_TTL_SECONDS = 10 * 60;
 
 /**
  * How long a failure stays worth showing on a channel that is otherwise fine.
@@ -72,7 +78,7 @@ export class ConnectionsService {
     private readonly prisma: PrismaService,
     private readonly crypto: CryptoService,
     private readonly audit: AuditService,
-    private readonly jwt: JwtService,
+    private readonly oauthState: OAuthStateService,
     private readonly engine: EngineService,
     private readonly billing: BillingService,
   ) {}
@@ -194,7 +200,7 @@ export class ConnectionsService {
       `x_oauth:${oauthToken}`,
       JSON.stringify({ orgId, userId, oauthTokenSecret }),
       "EX",
-      OAUTH_STATE_TTL_SECONDS,
+      X_PENDING_TTL_SECONDS,
     );
     return { url: xAuthorizeUrl(oauthToken) };
   }
@@ -231,25 +237,27 @@ export class ConnectionsService {
     return { connected: 1 };
   }
 
-  // ---------- Reddit OAuth (click-to-connect) ----------
+  // ---------- OAuth 2.0 flows (Reddit, LinkedIn, TikTok, Instagram, Meta) ----------
+  //
+  // All five share one shape now. Each `authorize` mints a single-use, browser
+  // bound state through OAuthStateService and each `callback` consumes it. The
+  // five used to differ only in the string they put in `purpose`, and all five
+  // signed that state with the session key — which is C-1.
 
-  async redditAuthorize(orgId: string, userId: string): Promise<{ url: string }> {
-    const state = await this.jwt.signAsync(
-      { orgId, sub: userId, purpose: "reddit_oauth" },
-      { secret: env.jwtAccessSecret(), expiresIn: OAUTH_STATE_TTL },
-    );
+  async redditAuthorize(res: Response, orgId: string, userId: string): Promise<{ url: string }> {
+    const { state } = await this.oauthState.issue(res, "reddit", orgId, userId);
     return { url: redditAuthorizeUrl(state) };
   }
 
-  async redditCallback(code: string, state: string): Promise<{ connected: number }> {
-    const payload = await this.jwt.verifyAsync<{ orgId: string; sub: string; purpose: string }>(
-      state,
-      { secret: env.jwtAccessSecret() },
-    );
-    if (payload.purpose !== "reddit_oauth") throw new NotFoundException("Invalid state");
-
+  async redditCallback(
+    req: Request,
+    res: Response,
+    code: string,
+    state: string,
+  ): Promise<{ connected: number }> {
+    const { orgId, userId } = await this.beginCallback(req, res, "reddit", state);
     const account = await redditExchangeCode(code);
-    await this.upsertConnection(payload.orgId, payload.sub, {
+    await this.upsertConnection(orgId, userId, {
       platform: "REDDIT",
       externalId: account.username,
       // Zero-config default: posts go to the user's own Reddit profile (u/<name>),
@@ -266,30 +274,25 @@ export class ConnectionsService {
     return { connected: 1 };
   }
 
-  // ---------- LinkedIn OAuth ----------
-
-  async linkedinAuthorize(orgId: string, userId: string): Promise<{ url: string }> {
+  async linkedinAuthorize(res: Response, orgId: string, userId: string): Promise<{ url: string }> {
     if (!env.linkedin.clientId) {
       throw new NotFoundException(
         "LinkedIn is not configured on this server (LINKEDIN_CLIENT_ID missing)",
       );
     }
-    const state = await this.jwt.signAsync(
-      { orgId, sub: userId, purpose: "linkedin_oauth" },
-      { secret: env.jwtAccessSecret(), expiresIn: OAUTH_STATE_TTL },
-    );
+    const { state } = await this.oauthState.issue(res, "linkedin", orgId, userId);
     return { url: linkedinAuthorizeUrl(state) };
   }
 
-  async linkedinCallback(code: string, state: string): Promise<{ connected: number }> {
-    const payload = await this.jwt.verifyAsync<{ orgId: string; sub: string; purpose: string }>(
-      state,
-      { secret: env.jwtAccessSecret() },
-    );
-    if (payload.purpose !== "linkedin_oauth") throw new NotFoundException("Invalid state");
-
+  async linkedinCallback(
+    req: Request,
+    res: Response,
+    code: string,
+    state: string,
+  ): Promise<{ connected: number }> {
+    const { orgId, userId } = await this.beginCallback(req, res, "linkedin", state);
     const account = await linkedinExchangeCode(code);
-    await this.upsertConnection(payload.orgId, payload.sub, {
+    await this.upsertConnection(orgId, userId, {
       platform: "LINKEDIN",
       externalId: account.memberUrn,
       displayName: account.name,
@@ -299,25 +302,20 @@ export class ConnectionsService {
     return { connected: 1 };
   }
 
-  // ---------- TikTok OAuth ----------
-
-  async tiktokAuthorize(orgId: string, userId: string): Promise<{ url: string }> {
-    const state = await this.jwt.signAsync(
-      { orgId, sub: userId, purpose: "tiktok_oauth" },
-      { secret: env.jwtAccessSecret(), expiresIn: OAUTH_STATE_TTL },
-    );
-    return { url: tiktokAuthorizeUrl(state) };
+  async tiktokAuthorize(res: Response, orgId: string, userId: string): Promise<{ url: string }> {
+    const { state, codeChallenge } = await this.oauthState.issue(res, "tiktok", orgId, userId);
+    return { url: tiktokAuthorizeUrl(state, codeChallenge) };
   }
 
-  async tiktokCallback(code: string, state: string): Promise<{ connected: number }> {
-    const payload = await this.jwt.verifyAsync<{ orgId: string; sub: string; purpose: string }>(
-      state,
-      { secret: env.jwtAccessSecret() },
-    );
-    if (payload.purpose !== "tiktok_oauth") throw new NotFoundException("Invalid state");
-
-    const account = await tiktokExchangeCode(code);
-    await this.upsertConnection(payload.orgId, payload.sub, {
+  async tiktokCallback(
+    req: Request,
+    res: Response,
+    code: string,
+    state: string,
+  ): Promise<{ connected: number }> {
+    const { orgId, userId, codeVerifier } = await this.beginCallback(req, res, "tiktok", state);
+    const account = await tiktokExchangeCode(code, codeVerifier);
+    await this.upsertConnection(orgId, userId, {
       platform: "TIKTOK",
       externalId: account.openId,
       displayName: `@${account.displayName}`,
@@ -331,30 +329,25 @@ export class ConnectionsService {
     return { connected: 1 };
   }
 
-  // ---------- Instagram OAuth (Instagram Login, no Facebook Page needed) ----------
-
-  async instagramAuthorize(orgId: string, userId: string): Promise<{ url: string }> {
+  async instagramAuthorize(res: Response, orgId: string, userId: string): Promise<{ url: string }> {
     if (!env.instagram.appId) {
       throw new NotFoundException(
         "Instagram direct login is not configured on this server (INSTAGRAM_APP_ID missing)",
       );
     }
-    const state = await this.jwt.signAsync(
-      { orgId, sub: userId, purpose: "instagram_oauth" },
-      { secret: env.jwtAccessSecret(), expiresIn: OAUTH_STATE_TTL },
-    );
+    const { state } = await this.oauthState.issue(res, "instagram", orgId, userId);
     return { url: instagramAuthorizeUrl(state) };
   }
 
-  async instagramCallback(code: string, state: string): Promise<{ connected: number }> {
-    const payload = await this.jwt.verifyAsync<{ orgId: string; sub: string; purpose: string }>(
-      state,
-      { secret: env.jwtAccessSecret() },
-    );
-    if (payload.purpose !== "instagram_oauth") throw new NotFoundException("Invalid state");
-
+  async instagramCallback(
+    req: Request,
+    res: Response,
+    code: string,
+    state: string,
+  ): Promise<{ connected: number }> {
+    const { orgId, userId } = await this.beginCallback(req, res, "instagram", state);
     const account = await instagramExchangeCode(code);
-    await this.upsertConnection(payload.orgId, payload.sub, {
+    await this.upsertConnection(orgId, userId, {
       platform: "INSTAGRAM",
       externalId: account.igUserId,
       displayName: `@${account.username}`,
@@ -370,27 +363,52 @@ export class ConnectionsService {
     return { connected: 1 };
   }
 
-  // ---------- Meta OAuth ----------
-
-  async metaAuthorize(orgId: string, userId: string): Promise<{ url: string }> {
-    const state = await this.jwt.signAsync(
-      { orgId, sub: userId, purpose: "meta_oauth" },
-      { secret: env.jwtAccessSecret(), expiresIn: OAUTH_STATE_TTL },
-    );
+  async metaAuthorize(res: Response, orgId: string, userId: string): Promise<{ url: string }> {
+    const { state } = await this.oauthState.issue(res, "meta", orgId, userId);
     return { url: metaAuthorizeUrl(state) };
   }
 
   /** Handles the browser redirect from Facebook. Returns pages connected. */
-  async metaCallback(code: string, state: string): Promise<{ connected: number }> {
-    const payload = await this.jwt.verifyAsync<{ orgId: string; sub: string; purpose: string }>(
-      state,
-      { secret: env.jwtAccessSecret() },
-    );
-    if (payload.purpose !== "meta_oauth") throw new NotFoundException("Invalid state");
-
+  async metaCallback(
+    req: Request,
+    res: Response,
+    code: string,
+    state: string,
+  ): Promise<{ connected: number }> {
+    const { orgId, userId } = await this.beginCallback(req, res, "meta", state);
     const userToken = await metaExchangeCode(code);
     const pages = await metaListPages(userToken);
-    return { connected: await this.storeMetaPages(payload.orgId, payload.sub, pages) };
+    return { connected: await this.storeMetaPages(orgId, userId, pages) };
+  }
+
+  /**
+   * Consume the state, then re-check that the person who started the flow may
+   * still finish it.
+   *
+   * The membership re-check matters because a state lives up to ten minutes, and
+   * in that window somebody can be demoted or removed. Without it, a member
+   * removed mid-flow could still attach a channel to the workspace they just
+   * left. RFC 9700 §4.7 covers the state binding; this is the authorization half
+   * of the same idea.
+   */
+  private async beginCallback(
+    req: Request,
+    res: Response,
+    provider: OAuthProvider,
+    state: string,
+  ): Promise<{ orgId: string; userId: string; codeVerifier?: string }> {
+    const consumed = await this.oauthState.consume(req, res, provider, state);
+    const membership = await this.prisma.membership.findUnique({
+      where: { userId_orgId: { userId: consumed.userId, orgId: consumed.orgId } },
+      select: { role: true },
+    });
+    if (!membership) {
+      throw new ForbiddenException("You are no longer a member of that workspace.");
+    }
+    if (membership.role !== "OWNER" && membership.role !== "ADMIN") {
+      throw new ForbiddenException("Connecting a channel needs the Admin role.");
+    }
+    return consumed;
   }
 
   /**

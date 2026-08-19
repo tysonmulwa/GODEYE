@@ -281,7 +281,7 @@ export interface TikTokAccount {
   expiresInSeconds: number;
 }
 
-export function tiktokAuthorizeUrl(state: string): string {
+export function tiktokAuthorizeUrl(state: string, codeChallenge?: string): string {
   if (!env.tiktok.clientKey) {
     throw new BadRequestException(
       "TikTok is not configured on this server (TIKTOK_CLIENT_KEY missing)",
@@ -299,20 +299,34 @@ export function tiktokAuthorizeUrl(state: string): string {
     redirect_uri: env.tiktok.redirectUri,
     state,
   });
+  // PKCE (RFC 7636). TikTok v2 is the one provider here that documents support
+  // for the web flow; the others reject or ignore these parameters, so the
+  // caller decides. See oauth-state.service.ts PKCE_SUPPORTED.
+  if (codeChallenge) {
+    params.set("code_challenge", codeChallenge);
+    params.set("code_challenge_method", "S256");
+  }
   return `https://www.tiktok.com/v2/auth/authorize/?${params}`;
 }
 
-export async function tiktokExchangeCode(code: string): Promise<TikTokAccount> {
+export async function tiktokExchangeCode(
+  code: string,
+  codeVerifier?: string,
+): Promise<TikTokAccount> {
+  const body = new URLSearchParams({
+    client_key: env.tiktok.clientKey,
+    client_secret: env.tiktok.clientSecret,
+    code,
+    grant_type: "authorization_code",
+    redirect_uri: env.tiktok.redirectUri,
+  });
+  // Proves this exchange came from whoever started the authorize request, even
+  // if the code itself was intercepted.
+  if (codeVerifier) body.set("code_verifier", codeVerifier);
   const tokenRes = await fetch(`${TIKTOK_API}/oauth/token/`, {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({
-      client_key: env.tiktok.clientKey,
-      client_secret: env.tiktok.clientSecret,
-      code,
-      grant_type: "authorization_code",
-      redirect_uri: env.tiktok.redirectUri,
-    }),
+    body,
   });
   const token: any = await tokenRes.json().catch(() => ({}));
   if (!tokenRes.ok || !token.access_token) {

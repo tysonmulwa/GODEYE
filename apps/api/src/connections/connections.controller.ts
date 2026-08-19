@@ -7,6 +7,7 @@ import {
   Param,
   Post,
   Query,
+  Req,
   Res,
 } from "@nestjs/common";
 import { ApiBearerAuth, ApiOperation, ApiTags } from "@nestjs/swagger";
@@ -19,7 +20,7 @@ import {
   type TelegramConnectInput,
   type XConnectInput,
 } from "@godeye/shared";
-import type { Response } from "express";
+import type { Request, Response } from "express";
 import { CurrentAuth } from "../common/current-auth.decorator";
 import { AccessTokenPayload, JwtAuthGuard } from "../common/jwt-auth.guard";
 import { env } from "../common/env";
@@ -77,8 +78,11 @@ export class ConnectionsController {
   @MinRole("ADMIN")
   @ApiBearerAuth()
   @ApiOperation({ summary: "Get the Reddit OAuth dialog URL (click-to-connect)" })
-  redditAuthorize(@CurrentAuth() auth: AccessTokenPayload) {
-    return this.connections.redditAuthorize(auth.orgId, auth.sub);
+  redditAuthorize(
+    @CurrentAuth() auth: AccessTokenPayload,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    return this.connections.redditAuthorize(res, auth.orgId, auth.sub);
   }
 
   @Get("reddit/callback")
@@ -88,6 +92,7 @@ export class ConnectionsController {
     @Query("code") code: string,
     @Query("state") state: string,
     @Query("error") error: string | undefined,
+    @Req() req: Request,
     @Res() res: Response,
   ) {
     const base = `${env.webUrl}/connections`;
@@ -97,7 +102,7 @@ export class ConnectionsController {
       );
     }
     try {
-      await this.connections.redditCallback(code, state);
+      await this.connections.redditCallback(req, res, code, state);
       return res.redirect(`${base}?connected=reddit&count=1`);
     } catch (e) {
       const message = e instanceof Error ? e.message : "Reddit connection failed";
@@ -158,8 +163,11 @@ export class ConnectionsController {
   @MinRole("ADMIN")
   @ApiBearerAuth()
   @ApiOperation({ summary: "Get the LinkedIn OAuth dialog URL" })
-  linkedinAuthorize(@CurrentAuth() auth: AccessTokenPayload) {
-    return this.connections.linkedinAuthorize(auth.orgId, auth.sub);
+  linkedinAuthorize(
+    @CurrentAuth() auth: AccessTokenPayload,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    return this.connections.linkedinAuthorize(res, auth.orgId, auth.sub);
   }
 
   @Get("linkedin/callback")
@@ -169,6 +177,7 @@ export class ConnectionsController {
     @Query("code") code: string,
     @Query("state") state: string,
     @Query("error_description") errorDescription: string | undefined,
+    @Req() req: Request,
     @Res() res: Response,
   ) {
     const base = `${env.webUrl}/connections`;
@@ -178,7 +187,7 @@ export class ConnectionsController {
       );
     }
     try {
-      await this.connections.linkedinCallback(code, state);
+      await this.connections.linkedinCallback(req, res, code, state);
       return res.redirect(`${base}?connected=linkedin&count=1`);
     } catch (e) {
       const message = e instanceof Error ? e.message : "LinkedIn connection failed";
@@ -190,8 +199,11 @@ export class ConnectionsController {
   @MinRole("ADMIN")
   @ApiBearerAuth()
   @ApiOperation({ summary: "Get the TikTok OAuth dialog URL" })
-  tiktokAuthorize(@CurrentAuth() auth: AccessTokenPayload) {
-    return this.connections.tiktokAuthorize(auth.orgId, auth.sub);
+  tiktokAuthorize(
+    @CurrentAuth() auth: AccessTokenPayload,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    return this.connections.tiktokAuthorize(res, auth.orgId, auth.sub);
   }
 
   @Get("tiktok/callback")
@@ -201,6 +213,7 @@ export class ConnectionsController {
     @Query("code") code: string,
     @Query("state") state: string,
     @Query("error_description") errorDescription: string | undefined,
+    @Req() req: Request,
     @Res() res: Response,
   ) {
     const base = `${env.webUrl}/connections`;
@@ -210,7 +223,7 @@ export class ConnectionsController {
       );
     }
     try {
-      const result = await this.connections.tiktokCallback(code, state);
+      const result = await this.connections.tiktokCallback(req, res, code, state);
       return res.redirect(`${base}?connected=tiktok&count=${result.connected}`);
     } catch (e) {
       const message = e instanceof Error ? e.message : "TikTok connection failed";
@@ -228,8 +241,11 @@ export class ConnectionsController {
   @ApiOperation({
     summary: "Get the Instagram OAuth dialog URL (no Facebook Page required)",
   })
-  instagramAuthorize(@CurrentAuth() auth: AccessTokenPayload) {
-    return this.connections.instagramAuthorize(auth.orgId, auth.sub);
+  instagramAuthorize(
+    @CurrentAuth() auth: AccessTokenPayload,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    return this.connections.instagramAuthorize(res, auth.orgId, auth.sub);
   }
 
   @Get("instagram/callback")
@@ -239,6 +255,7 @@ export class ConnectionsController {
     @Query("code") code: string,
     @Query("state") state: string,
     @Query("error_description") errorDescription: string | undefined,
+    @Req() req: Request,
     @Res() res: Response,
   ) {
     const base = `${env.webUrl}/connections`;
@@ -248,7 +265,7 @@ export class ConnectionsController {
       );
     }
     try {
-      const result = await this.connections.instagramCallback(code, state);
+      const result = await this.connections.instagramCallback(req, res, code, state);
       return res.redirect(`${base}?connected=instagram&count=${result.connected}`);
     } catch (e) {
       const message = e instanceof Error ? e.message : "Instagram connection failed";
@@ -264,8 +281,11 @@ export class ConnectionsController {
   @MinRole("ADMIN")
   @ApiBearerAuth()
   @ApiOperation({ summary: "Get the Facebook OAuth dialog URL (Facebook Pages + Instagram)" })
-  metaAuthorize(@CurrentAuth() auth: AccessTokenPayload) {
-    return this.connections.metaAuthorize(auth.orgId, auth.sub);
+  metaAuthorize(
+    @CurrentAuth() auth: AccessTokenPayload,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    return this.connections.metaAuthorize(res, auth.orgId, auth.sub);
   }
 
   @Get("meta/callback")
@@ -275,6 +295,7 @@ export class ConnectionsController {
     @Query("code") code: string,
     @Query("state") state: string,
     @Query("error_description") errorDescription: string | undefined,
+    @Req() req: Request,
     @Res() res: Response,
   ) {
     const base = `${env.webUrl}/connections`;
@@ -282,7 +303,7 @@ export class ConnectionsController {
       return res.redirect(`${base}?error=${encodeURIComponent(errorDescription ?? "Meta authorization failed")}`);
     }
     try {
-      const result = await this.connections.metaCallback(code, state);
+      const result = await this.connections.metaCallback(req, res, code, state);
       return res.redirect(`${base}?connected=meta&count=${result.connected}`);
     } catch (e) {
       // Log it: the message otherwise only exists in the redirect URL, which the
