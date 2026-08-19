@@ -260,6 +260,9 @@ export function validateConfig(): void {
   read("OAUTH_STATE_SECRET", () => env.oauthStateSecret());
   read("TOKEN_ENCRYPTION_KEY", () => env.tokenEncryptionKey());
   read("ENGINE_INTERNAL_SECRET", () => env.engineInternalSecret);
+  // Only when Meta is configured at all: a deployment that does not use
+  // Facebook should not be forced to invent a webhook token.
+  if (env.meta.appId) read("META_WEBHOOK_VERIFY_TOKEN", () => env.meta.webhookVerifyToken);
 
   try {
     const access = env.jwtAccessSecret();

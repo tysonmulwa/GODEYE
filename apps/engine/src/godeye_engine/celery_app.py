@@ -24,6 +24,7 @@ app = Celery(
         "godeye_engine.tasks.diagnostics",
         "godeye_engine.tasks.products",
         "godeye_engine.tasks.product_posts",
+        "godeye_engine.tasks.retention",
     ],
 )
 
@@ -79,6 +80,12 @@ app.conf.update(
         "recycle-evergreen": {
             "task": "godeye_engine.tasks.planner.recycle_evergreen",
             "schedule": 6 * 3600.0,  # every 6 hours
+        },
+        # Webhook deliveries and spent refresh tokens. Daily is often enough:
+        # the point is that these tables stop growing, not that they are empty.
+        "purge-expired-rows": {
+            "task": "godeye_engine.tasks.retention.purge_expired_rows",
+            "schedule": 24 * 3600.0,
         },
     },
 )
