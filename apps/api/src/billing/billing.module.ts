@@ -193,7 +193,7 @@ export class BillingService implements OnModuleInit {
     const [{ plan, subscription }, usage, plans, access] = await Promise.all([
       this.effectivePlan(orgId),
       this.usage(orgId),
-      this.prisma.plan.findMany({ orderBy: { priceMonthlyUsd: "asc" } }),
+      this.prisma.plan.findMany({ orderBy: { priceMonthlyUsd: "asc" }, take: 50 }),
       this.access.state(orgId),
     ]);
     return {

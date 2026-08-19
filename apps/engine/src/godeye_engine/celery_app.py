@@ -49,6 +49,32 @@ app.conf.update(
     # task would wedge the next worker that picked it up.
     task_soft_time_limit=20 * 60,
     task_time_limit=25 * 60,
+    # ---- Isolated queues -------------------------------------------------
+    #
+    # Everything shared one queue, so a five-minute video render sat in front of
+    # a publish that was already late. With --concurrency=2 it took two of them
+    # to stop publishing entirely, and the posts that missed their slot were
+    # indistinguishable from posts nobody scheduled.
+    #
+    # Three queues, by what they cost rather than by what they are:
+    #   publish     seconds, latency-critical, must never wait behind anything
+    #   media       minutes of CPU: image and video generation
+    #   background  everything else — crawls, imports, sweeps, metrics
+    #
+    # A worker still consumes all three by default, so nothing changes until
+    # somebody runs a second worker with `-Q publish`. That is the point: the
+    # split has to exist in the code before it can be used in the deployment.
+    # See docs/ops/CAPACITY.md.
+    task_default_queue="background",
+    task_routes={
+        "godeye_engine.tasks.scheduler.dispatch_due_posts": {"queue": "publish"},
+        "godeye_engine.tasks.scheduler.publish_post": {"queue": "publish"},
+        "godeye_engine.tasks.scheduler.reap_stale_runs": {"queue": "publish"},
+        "godeye_engine.tasks.scheduler.reap_stuck_posts": {"queue": "publish"},
+        "godeye_engine.tasks.image.*": {"queue": "media"},
+        "godeye_engine.tasks.video.*": {"queue": "media"},
+        "godeye_engine.tasks.diagnostics.*": {"queue": "media"},
+    },
     beat_schedule={
         "dispatch-due-posts": {
             "task": "godeye_engine.tasks.scheduler.dispatch_due_posts",

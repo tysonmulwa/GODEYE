@@ -409,6 +409,11 @@ AnalyticsSnapshot = Table(
     Column("connectionId", String),
     Column("metric", String, nullable=False),
     Column("value", Numeric, nullable=False),
+    # D-4. This lived only inside `dimensions`, so the A/B report could not
+    # filter on it and read the org's entire engagement history instead. Written
+    # to BOTH places during the expand phase: the previous release still reads
+    # the JSON, and a rollback must not lose the value.
+    Column("scheduledPostId", String),
     Column("dimensions", JSONB),
     Column("capturedAt", DateTime(timezone=False)),
 )

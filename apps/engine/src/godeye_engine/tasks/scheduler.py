@@ -6,7 +6,7 @@ import logging
 from collections.abc import Callable
 from datetime import datetime, timedelta
 
-from sqlalchemy import and_, or_, select, update
+from sqlalchemy import and_, func, or_, select, update
 
 from ..celery_app import app
 from ..db import (
@@ -80,16 +80,48 @@ IMAGE_WAIT_MINUTES = 45
 APPROVAL_SATISFIED_STATUSES = ("APPROVED", "SCHEDULED", "PUBLISHED")
 
 
-def due_posts_query(now, stale_lock):
-    """Selects due, unclaimed posts, approval-gated orgs only release reviewed content.
+#: Posts claimed per dispatcher tick, across all workspaces.
+DISPATCH_BATCH = 20
+#: Posts claimed per WORKSPACE per tick. The fairness knob.
+#:
+#: Without it, one workspace with 500 due posts takes the whole batch on every
+#: tick and everybody else waits behind it — for hours, silently, with their
+#: posts still reading PENDING. The old query had no ORDER BY at all, so which
+#: workspace won was whatever order Postgres happened to return.
+#:
+#: 4 of 20 means a single tenant can use at most a fifth of a tick while any
+#: other tenant has work, and the whole batch when nobody else does.
+PER_ORG_PER_TICK = 4
 
-    A workspace whose trial ran out unpaid publishes nothing. Without this line
+
+def due_posts_query(now, stale_lock, batch=DISPATCH_BATCH, per_org=PER_ORG_PER_TICK):
+    """Due, unclaimed posts, fairly shared between workspaces.
+
+    A workspace whose trial ran out unpaid publishes nothing. Without that line
     a customer could queue a month of posts during the 24 hours and have them
     go out for free long after the workspace went read-only, the paywall would
     hold in the browser and leak everywhere it actually costs money.
+
+    The ranking is the fairness half. `row_number() OVER (PARTITION BY orgId
+    ORDER BY scheduledAt)` numbers each workspace's due posts independently, and
+    taking `rn <= per_org` spreads one tick across as many workspaces as have
+    work. Oldest-first within a workspace, so nothing starves inside one either.
+
+    The window function sits in a subquery on purpose: Postgres refuses
+    FOR UPDATE alongside a window function, and the row-level claim is what
+    makes two dispatchers safe. The outer select is a plain lookup by id, so it
+    keeps `FOR UPDATE ... SKIP LOCKED`.
     """
-    return (
-        select(ScheduledPost.c.id)
+    due = (
+        select(
+            ScheduledPost.c.id.label("id"),
+            func.row_number()
+            .over(
+                partition_by=ScheduledPost.c.orgId,
+                order_by=ScheduledPost.c.scheduledAt.asc(),
+            )
+            .label("rn"),
+        )
         .select_from(
             ScheduledPost.join(
                 ContentItem, ContentItem.c.id == ScheduledPost.c.contentItemId
@@ -107,8 +139,17 @@ def due_posts_query(now, stale_lock):
                 ScheduledPost.c.orgId.notin_(locked_org_ids(now)),
             )
         )
+        .subquery("due")
+    )
+
+    fair = (
+        select(due.c.id).where(due.c.rn <= per_org).limit(batch).subquery("fair")
+    )
+
+    return (
+        select(ScheduledPost.c.id)
+        .where(ScheduledPost.c.id.in_(select(fair.c.id)))
         .with_for_update(skip_locked=True, of=ScheduledPost)
-        .limit(20)
     )
 
 

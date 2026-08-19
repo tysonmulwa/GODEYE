@@ -127,6 +127,20 @@ const RULES = [
     test: (line) => /jwtAccessSecret/.test(line),
   },
   {
+    // D-4. `abReport` loaded an org's ENTIRE analytics history into memory and
+    // discarded nearly all of it in a JS loop — ~43,000 rows for a workspace
+    // with ten channels running six months, to pick two numbers. A findMany
+    // with no `take` is a query whose cost is set by the customer's age.
+    //
+    // Multi-line calls are checked by the block rule below; this catches the
+    // single-line form, which is how they usually start.
+    id: "no-unbounded-findMany",
+    message: "give findMany a `take` — a query with no bound is one the data grows [D-4]",
+    appliesTo: (rel) => rel.startsWith("apps/api/src/") && rel.endsWith(".ts"),
+    test: (line) =>
+      /\.findMany\(\{.*\}\)/.test(line) && !/\btake\s*:/.test(line) && !/where:\s*\{\s*id:/.test(line),
+  },
+  {
     // S-1. The guard is global now; a per-controller @UseGuards(RolesGuard) is a
     // sign somebody is re-introducing the pattern that let VIEWER write.
     id: "no-per-controller-roles-guard",
@@ -138,6 +152,44 @@ const RULES = [
 ];
 
 for (const file of files) for (const rule of RULES) check(file, rule);
+
+/**
+ * D-4, the multi-line form.
+ *
+ * The line rule above only sees `findMany({ … })` written on one line, and
+ * almost none of them are — `abReport`'s was four lines and read an entire
+ * workspace's analytics history. This walks the braces so the shape of the
+ * formatting cannot decide whether a rule applies.
+ */
+for (const file of files) {
+  const rel = relative(ROOT, file).split(sep).join("/");
+  if (!rel.startsWith("apps/api/src/") || !rel.endsWith(".ts") || rel.endsWith(".spec.ts")) continue;
+  const src = readFileSync(file, "utf8");
+
+  for (const match of src.matchAll(/\.findMany\(\{/g)) {
+    const open = src.indexOf("{", match.index);
+    let depth = 0;
+    let end = open;
+    while (end < src.length) {
+      if (src[end] === "{") depth++;
+      else if (src[end] === "}" && --depth === 0) break;
+      end++;
+    }
+    const block = src.slice(open, end + 1);
+    if (/\btake\s*:/.test(block)) continue;
+
+    const line = src.slice(0, match.index).split("\n").length;
+    // The escape hatch is read from the three lines above the call, same as
+    // everywhere else.
+    const preceding = src.split("\n").slice(Math.max(0, line - 4), line).join("\n");
+    if (preceding.includes("lint-rules:allow")) continue;
+
+    violations.push(
+      `${rel}:${line}  give findMany a \`take\` — a query with no bound is one the data grows [D-4]` +
+        `\n    ${block.replace(/\s+/g, " ").slice(0, 100)}`,
+    );
+  }
+}
 
 if (violations.length) {
   process.stderr.write(

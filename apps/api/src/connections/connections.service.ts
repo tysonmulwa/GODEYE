@@ -87,6 +87,9 @@ export class ConnectionsService {
     const rows = await this.prisma.socialConnection.findMany({
       where: { orgId },
       orderBy: { createdAt: "asc" },
+      // Plan limits cap connections far below this. The bound exists so the
+      // page cannot be made slow by a workspace nobody capped.
+      take: 200,
     });
     return rows.map((c) => ({
       id: c.id,

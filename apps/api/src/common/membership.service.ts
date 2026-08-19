@@ -106,6 +106,7 @@ export class MembershipService {
     const memberships = await this.prisma.membership.findMany({
       where: { userId },
       select: { orgId: true },
+      take: 100,
     });
     await this.prisma.membership.updateMany({
       where: { userId },

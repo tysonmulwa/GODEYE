@@ -39,11 +39,15 @@ export class MembersService {
         where: { orgId },
         include: { user: { select: { id: true, name: true, email: true } } },
         orderBy: { createdAt: "asc" },
+        // Seat limits cap this far lower. The bound is so the members page
+        // cannot be made slow by a workspace nobody capped (D-4).
+        take: 500,
       }),
       this.prisma.invitation.findMany({
         where: { orgId, acceptedAt: null, revokedAt: null, expiresAt: { gt: new Date() } },
         include: { invitedBy: { select: { name: true } } },
         orderBy: { createdAt: "desc" },
+        take: 200,
       }),
     ]);
     return {

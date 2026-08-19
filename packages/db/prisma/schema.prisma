@@ -560,6 +560,15 @@ model ScheduledPost {
 
   @@index([status, scheduledAt])
   @@index([orgId, scheduledAt])
+  /// D-7. The A/B report, the duplicate-publish check and the cascade on
+  /// content deletion all filter on this, and none of them had an index. On a
+  /// table that grows with every scheduled post, that is a sequential scan on a
+  /// page a customer loads.
+  @@index([contentItemId])
+  /// The dispatcher claims by (status, scheduledAt) and then excludes locked
+  /// orgs; the fairness ranking orders within an org. Without this the window
+  /// function sorts the whole due set on every tick.
+  @@index([orgId, status, scheduledAt])
 }
 
 // ============================================================
@@ -724,6 +733,12 @@ model AnalyticsSnapshot {
   connectionId String?
   metric       String // followers | engagement | reach | impressions | clicks | ...
   value        Float
+  /// D-4. This lived inside `dimensions` as JSON, so the A/B report could not
+  /// filter on it: it loaded the org's ENTIRE engagement history into memory
+  /// and threw nearly all of it away in a JS loop. A workspace with ten
+  /// channels running six months holds ~43,000 rows, and the API pod OOMs
+  /// before it finishes deciding which two posts won.
+  scheduledPostId String?
   dimensions   Json?
   capturedAt   DateTime @default(now())
 
@@ -731,6 +746,9 @@ model AnalyticsSnapshot {
   connection SocialConnection? @relation(fields: [connectionId], references: [id], onDelete: SetNull)
 
   @@index([orgId, metric, capturedAt])
+  /// DISTINCT ON (scheduledPostId) ORDER BY capturedAt DESC — the latest
+  /// measurement per post, read directly off the index.
+  @@index([scheduledPostId, capturedAt])
 }
 
 // ============================================================

@@ -169,6 +169,9 @@ export class SeoService {
 
   /** Wipe every audit (and its agent run) for the workspace, so the user can start clean. */
   async clearAll(orgId: string, userId: string) {
+    // lint-rules:allow — a delete-everything path. A `take` here would leave
+    // orphaned AgentRun rows behind and report a clean wipe, which is a worse
+    // failure than a slow one.
     const audits = await this.prisma.seoAudit.findMany({
       where: { orgId },
       select: { agentRunId: true },
@@ -231,6 +234,9 @@ export class SeoService {
     const rows = await this.prisma.seoFix.findMany({
       where: { auditId, orgId },
       orderBy: { createdAt: "asc" },
+      // One crawl of at most maxPages produces findings in the hundreds, not
+      // the thousands. A bound here is a guard, not a paginator (D-4).
+      take: 2000,
     });
     // Severity is a string, and "critical" < "info" < "warning" alphabetically,
     // which is not the order a human wants to read them in, so rank in code.
@@ -351,6 +357,9 @@ export class SeoService {
     const fixes = await this.prisma.seoFix.findMany({
       where: { auditId, orgId },
       orderBy: { createdAt: "asc" },
+      // One crawl of at most maxPages produces findings in the hundreds, not
+      // the thousands. A bound here is a guard, not a paginator (D-4).
+      take: 2000,
     });
     return renderFixPack(audit, fixes);
   }
@@ -381,6 +390,7 @@ export class SeoService {
     if (targets.length === 0) {
       const verified = await this.prisma.seoFix.findMany({
         where: { auditId, orgId, status: "VERIFIED", kind: { not: "FILE" } },
+        take: 2000,
         select: { targetUrl: true },
         distinct: ["targetUrl"],
       });

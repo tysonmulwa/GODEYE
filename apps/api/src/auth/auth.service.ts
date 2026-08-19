@@ -464,6 +464,10 @@ export class AuthService {
       where: { userId },
       include: { org: { select: { id: true, name: true, slug: true } } },
       orderBy: { createdAt: "asc" },
+      // Somebody in more workspaces than this is a support conversation, not a
+      // page render (D-4: no query's cost may be set by how long a customer has
+      // been here).
+      take: 100,
     });
     return memberships.map((m) => ({
       orgId: m.org.id,

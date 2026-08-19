@@ -19,3 +19,4 @@ allowBuilds:
   esbuild: true
   prisma: true
   sharp: true
+  protobufjs: set this to true or false

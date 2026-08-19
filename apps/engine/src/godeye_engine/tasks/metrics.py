@@ -63,6 +63,9 @@ def collect_metrics() -> int:
                 "connectionId": row.connectionId,
                 "metric": "post_engagement",
                 "value": value,
+                # Both: the column the A/B report now filters on, and the JSON
+                # the previously-deployed release still reads (D-4, expand phase).
+                "scheduledPostId": row.id,
                 "dimensions": {"scheduledPostId": row.id, "variantKey": row.variantKey},
                 "capturedAt": utcnow(),
             }

@@ -6,6 +6,7 @@ import type {
 } from "@godeye/shared";
 import { BillingService } from "../billing/billing.module";
 import { AuditService } from "../common/audit.service";
+import { Prisma } from "@godeye/db";
 import { PrismaService } from "../common/prisma.service";
 import { EngineService } from "../engine/engine.service";
 
@@ -43,6 +44,7 @@ export class SchedulingService {
 
     const connections = await this.prisma.socialConnection.findMany({
       where: { id: { in: input.connectionIds }, orgId, status: "ACTIVE" },
+      take: 100,
     });
     if (connections.length !== input.connectionIds.length) {
       throw new BadRequestException("One or more connections not found or inactive");
@@ -340,7 +342,11 @@ export class SchedulingService {
   }
 
   listPlans(orgId: string) {
-    return this.prisma.postingPlan.findMany({ where: { orgId }, orderBy: { createdAt: "asc" } });
+    return this.prisma.postingPlan.findMany({
+      where: { orgId },
+      orderBy: { createdAt: "asc" },
+      take: 100,
+    });
   }
 
   /** Ask the engine for engagement-driven best posting times (with heuristic fallback). */
@@ -361,17 +367,38 @@ export class SchedulingService {
     const posts = await this.prisma.scheduledPost.findMany({
       where: { orgId, contentItemId, variantKey: { not: null } },
       select: { id: true, variantKey: true, status: true },
-    });
-    const snapshots = await this.prisma.analyticsSnapshot.findMany({
-      where: { orgId, metric: "post_engagement" },
-      orderBy: { capturedAt: "desc" },
+      // Bounded. An A/B test is two variants across a handful of channels; a
+      // number this size means something else has gone wrong upstream, and the
+      // report should not be the thing that discovers it by running out of
+      // memory.
+      take: 200,
     });
 
-    // latest snapshot per scheduledPost id (via dimensions.scheduledPostId)
+    /**
+     * The latest engagement measurement for each of THESE posts. Finding D-4.
+     *
+     * This used to be `findMany({ where: { orgId, metric } })` with no `take`
+     * and no post filter, followed by a JS loop that threw nearly all of it
+     * away. A workspace with ten channels running six months holds ~43,000
+     * snapshot rows, and the API pod runs out of memory before it finishes
+     * deciding which of two variants won.
+     *
+     * DISTINCT ON is the right primitive and Postgres has it: one row per
+     * scheduledPostId, most recent first, read straight off
+     * (scheduledPostId, capturedAt DESC). Raw rather than Prisma's `distinct`
+     * so the plan is the one written here rather than one inferred.
+     */
     const latestByPost = new Map<string, number>();
-    for (const snap of snapshots) {
-      const spId = (snap.dimensions as { scheduledPostId?: string } | null)?.scheduledPostId;
-      if (spId && !latestByPost.has(spId)) latestByPost.set(spId, snap.value);
+    if (posts.length) {
+      const rows = await this.prisma.$queryRaw<{ scheduledPostId: string; value: number }[]>`
+        SELECT DISTINCT ON ("scheduledPostId") "scheduledPostId", "value"
+        FROM "AnalyticsSnapshot"
+        WHERE "orgId" = ${orgId}
+          AND "metric" = 'post_engagement'
+          AND "scheduledPostId" IN (${Prisma.join(posts.map((p) => p.id))})
+        ORDER BY "scheduledPostId", "capturedAt" DESC
+      `;
+      for (const row of rows) latestByPost.set(row.scheduledPostId, Number(row.value));
     }
 
     const variants: Record<string, { posts: number; totalEngagement: number; measured: number }> = {

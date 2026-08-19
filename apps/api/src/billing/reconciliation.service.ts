@@ -111,6 +111,9 @@ export class BillingReconciliationService implements OnModuleInit, OnModuleDestr
     const known = await this.prisma.paymentApplication.findMany({
       where: { provider: "paystack", reference: { in: references } },
       select: { reference: true },
+      // `references` is already capped at Paystack's page size; this bounds the
+      // query even if that ever changes underneath us.
+      take: 500,
     });
     const seen = new Set(known.map((k) => k.reference));
 

@@ -6,6 +6,7 @@ import { SchedulingService } from "./scheduling.service";
 
 function makePrisma() {
   return {
+    $queryRaw: jest.fn().mockResolvedValue([]),
     contentItem: {
       findFirst: jest.fn(),
       update: jest.fn().mockReturnValue({ then: undefined }),
@@ -270,15 +271,45 @@ describe("SchedulingService", () => {
       { id: "spA", variantKey: "A", status: "PUBLISHED" },
       { id: "spB", variantKey: "B", status: "PUBLISHED" },
     ]);
-    prisma.analyticsSnapshot.findMany.mockResolvedValue([
-      { value: 100, dimensions: { scheduledPostId: "spB" }, capturedAt: new Date() },
-      { value: 10, dimensions: { scheduledPostId: "spA" }, capturedAt: new Date() },
+    // D-4: the latest measurement PER POST now comes from a DISTINCT ON query
+    // scoped to these two ids. It used to be `findMany` over the workspace's
+    // entire engagement history, filtered in a JS loop — ~43,000 rows for a
+    // workspace with ten channels running six months, all to pick two numbers.
+    prisma.$queryRaw.mockResolvedValue([
+      { scheduledPostId: "spB", value: 100 },
+      { scheduledPostId: "spA", value: 10 },
     ]);
 
     const report = await service.abReport("org1", "content1");
     expect(report.winner).toBe("B");
     const varA = report.variants.find((v) => v.variant === "A");
     expect(varA?.avgEngagement).toBe(10);
+  });
+
+  it("does not read the workspace's whole analytics history (D-4)", async () => {
+    prisma.contentItem.findFirst.mockResolvedValue({ id: "content1" });
+    prisma.scheduledPost.findMany.mockResolvedValue([
+      { id: "spA", variantKey: "A", status: "PUBLISHED" },
+    ]);
+    prisma.$queryRaw.mockResolvedValue([{ scheduledPostId: "spA", value: 7 }]);
+
+    await service.abReport("org1", "content1");
+
+    // The unbounded read is gone entirely...
+    expect(prisma.analyticsSnapshot.findMany).not.toHaveBeenCalled();
+    // ...and the post lookup that remains is bounded.
+    const [args] = prisma.scheduledPost.findMany.mock.calls.at(-1) as [{ take?: number }];
+    expect(args.take).toBeGreaterThan(0);
+  });
+
+  it("asks for nothing at all when there are no variant posts", async () => {
+    prisma.contentItem.findFirst.mockResolvedValue({ id: "content1" });
+    prisma.scheduledPost.findMany.mockResolvedValue([]);
+
+    const report = await service.abReport("org1", "content1");
+
+    expect(prisma.$queryRaw).not.toHaveBeenCalled();
+    expect(report.winner).toBeNull();
   });
 
   describe("editing a posting plan", () => {
