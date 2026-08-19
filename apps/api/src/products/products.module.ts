@@ -11,7 +11,6 @@ import {
   Post,
   Put,
   Query,
-  UseGuards,
 } from "@nestjs/common";
 import { ApiBearerAuth, ApiOperation, ApiTags } from "@nestjs/swagger";
 import { Throttle } from "@nestjs/throttler";
@@ -27,6 +26,7 @@ import { AccessTokenPayload, JwtAuthGuard } from "../common/jwt-auth.guard";
 import { PrismaService } from "../common/prisma.service";
 import { ZodPipe } from "../common/zod.pipe";
 import { EngineService } from "../engine/engine.service";
+import { MinRole } from "../common/roles.guard";
 
 @Injectable()
 export class ProductsService {
@@ -141,7 +141,7 @@ export class ProductsService {
     if (id) {
       const product = await this.prisma.product.findFirst({ where: { id, orgId } });
       if (!product) throw new NotFoundException("Product not found");
-      await this.prisma.product.delete({ where: { id } });
+      await this.prisma.product.delete({ where: { id, orgId } });
       this.auditLog.log({
         orgId,
         userId,
@@ -195,18 +195,19 @@ export class ProductsService {
 
 @ApiTags("products")
 @Controller("products")
-@UseGuards(JwtAuthGuard)
 @ApiBearerAuth()
 export class ProductsController {
   constructor(private readonly products: ProductsService) {}
 
   @Get("settings")
+  @MinRole("VIEWER")
   @ApiOperation({ summary: "Whether this workspace allows its website to be read" })
   getSettings(@CurrentAuth() auth: AccessTokenPayload) {
     return this.products.getSettings(auth.orgId);
   }
 
   @Put("settings")
+  @MinRole("ADMIN")
   @ApiOperation({ summary: "Allow or withdraw product import, and how it runs" })
   saveSettings(
     @CurrentAuth() auth: AccessTokenPayload,
@@ -216,6 +217,7 @@ export class ProductsController {
   }
 
   @Post("import")
+  @MinRole("ADMIN")
   // Each import is a crawl of someone's site; a few a minute is plenty.
   @Throttle({ default: { limit: 5, ttl: 60_000 } })
   @ApiOperation({ summary: "Read the workspace's shop now" })
@@ -227,18 +229,21 @@ export class ProductsController {
   }
 
   @Get()
+  @MinRole("VIEWER")
   @ApiOperation({ summary: "The imported catalogue" })
   list(@CurrentAuth() auth: AccessTokenPayload, @Query("limit") limit?: string) {
     return this.products.list(auth.orgId, limit ? Number(limit) : undefined);
   }
 
   @Delete(":id")
+  @MinRole("ADMIN")
   @ApiOperation({ summary: "Remove one imported product" })
   removeOne(@CurrentAuth() auth: AccessTokenPayload, @Param("id") id: string) {
     return this.products.remove(auth.orgId, auth.sub, id);
   }
 
   @Delete()
+  @MinRole("ADMIN")
   @ApiOperation({ summary: "Remove the whole imported catalogue" })
   clear(@CurrentAuth() auth: AccessTokenPayload) {
     return this.products.remove(auth.orgId, auth.sub);

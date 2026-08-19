@@ -1,7 +1,7 @@
 import { CanActivate, ExecutionContext, Injectable, UnauthorizedException } from "@nestjs/common";
 import { JwtService } from "@nestjs/jwt";
 import { Request } from "express";
-import { env } from "./env";
+import { verifyToken } from "./tokens";
 
 export interface AccessTokenPayload {
   sub: string; // user id
@@ -13,6 +13,18 @@ export interface AuthenticatedRequest extends Request {
   auth: AccessTokenPayload;
 }
 
+/**
+ * Authenticates a request from a bearer access token.
+ *
+ * This guard used to verify signature and expiry and nothing else, which is
+ * finding C-1: an OAuth `state` token — signed with the same key, and designed
+ * to travel through Meta, TikTok, LinkedIn and Reddit — passed it, and
+ * POST /auth/switch-org would then mint a full session from it.
+ *
+ * verifyToken() closes that four ways at once: a different key for state
+ * tokens, an explicit `typ: "access"` claim, `iss`/`aud` validation, and an
+ * HS256 allow-list so a forged header cannot choose the algorithm.
+ */
 @Injectable()
 export class JwtAuthGuard implements CanActivate {
   constructor(private readonly jwt: JwtService) {}
@@ -23,13 +35,22 @@ export class JwtAuthGuard implements CanActivate {
     if (!header?.startsWith("Bearer ")) {
       throw new UnauthorizedException("Missing access token");
     }
+    let claims: AccessTokenPayload;
     try {
-      req.auth = await this.jwt.verifyAsync<AccessTokenPayload>(header.slice(7), {
-        secret: env.jwtAccessSecret(),
-      });
-      return true;
+      claims = await verifyToken<AccessTokenPayload>(this.jwt, "access", header.slice(7));
     } catch {
+      // Deliberately one message for every cause. Distinguishing "expired" from
+      // "wrong type" from "wrong audience" tells an attacker which of their
+      // guesses was closest.
       throw new UnauthorizedException("Invalid or expired access token");
     }
+    // A token that verifies but names no role is not "role-free", it is
+    // malformed. RolesGuard fails closed on this too; refusing here means a
+    // route that somehow escapes RolesGuard still cannot see it as authorized.
+    if (!claims.sub || !claims.orgId || !claims.role) {
+      throw new UnauthorizedException("Invalid or expired access token");
+    }
+    req.auth = { sub: claims.sub, orgId: claims.orgId, role: claims.role };
+    return true;
   }
 }

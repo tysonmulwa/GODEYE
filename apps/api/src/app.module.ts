@@ -1,11 +1,13 @@
 import { Module } from "@nestjs/common";
-import { APP_GUARD, APP_INTERCEPTOR } from "@nestjs/core";
+import { APP_GUARD, APP_INTERCEPTOR, DiscoveryModule } from "@nestjs/core";
 import { ThrottlerGuard, ThrottlerModule } from "@nestjs/throttler";
 import { AuthModule } from "./auth/auth.module";
 import { BillingModule } from "./billing/billing.module";
 import { TrialLockInterceptor } from "./billing/trial-lock.interceptor";
 import { BusinessProfileModule } from "./business-profile/business-profile.module";
 import { CommonModule } from "./common/common.module";
+import { RolesGuard } from "./common/roles.guard";
+import { RouteAuditService } from "./common/route-audit.service";
 import { ConnectionsModule } from "./connections/connections.module";
 import { ContentModule } from "./content/content.module";
 import { EngineModule } from "./engine/engine.module";
@@ -21,6 +23,7 @@ import { WebhooksModule } from "./webhooks/webhooks.module";
 
 @Module({
   imports: [
+    DiscoveryModule, // route enumeration for the boot-time authorization audit
     ThrottlerModule.forRoot([{ ttl: 60_000, limit: 100 }]),
     CommonModule,
     EngineModule,
@@ -39,7 +42,16 @@ import { WebhooksModule } from "./webhooks/webhooks.module";
   ],
   controllers: [SiteVerificationController, HealthController],
   providers: [
+    // Order matters: guards run in registration order.
+    //
+    // RolesGuard first, so the throttler can key on the authenticated user and
+    // org rather than on an IP alone. It is registered globally rather than
+    // per-controller because per-controller wiring is what produced S-1 — five
+    // controllers where @MinRole would have compiled and enforced nothing.
+    { provide: APP_GUARD, useClass: RolesGuard },
     { provide: APP_GUARD, useClass: ThrottlerGuard },
+    // Refuses to boot if any route declares neither @Public() nor @MinRole().
+    RouteAuditService,
     // Read-only once a workspace's trial ends unpaid. Global so a new
     // controller is covered the day it is written rather than the day somebody
     // remembers to decorate it.

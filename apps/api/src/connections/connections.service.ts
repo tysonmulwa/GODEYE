@@ -97,7 +97,9 @@ export class ConnectionsService {
   async remove(orgId: string, id: string, userId: string) {
     const conn = await this.prisma.socialConnection.findFirst({ where: { id, orgId } });
     if (!conn) throw new NotFoundException("Connection not found");
-    await this.prisma.socialConnection.delete({ where: { id } });
+    // orgId in the write, not only in the read above: ownership is part of the
+    // query rather than a check that a later refactor could drop (OWASP API1).
+    await this.prisma.socialConnection.delete({ where: { id, orgId } });
     this.audit.log({
       orgId,
       userId,

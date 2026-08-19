@@ -1,4 +1,12 @@
-import { Body, Controller, Get, Param, Patch, Post, Query, UseGuards } from "@nestjs/common";
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  Patch,
+  Post,
+  Query,
+} from "@nestjs/common";
 import { ApiBearerAuth, ApiOperation, ApiTags } from "@nestjs/swagger";
 import { Throttle } from "@nestjs/throttler";
 import {
@@ -38,7 +46,6 @@ const updateContentSchema = z.object({
 
 @ApiTags("content")
 @Controller("content")
-@UseGuards(JwtAuthGuard, RolesGuard)
 @ApiBearerAuth()
 export class ContentController {
   constructor(private readonly content: ContentService) {}
@@ -55,17 +62,20 @@ export class ContentController {
   }
 
   @Get("agent-runs/:id")
+  @MinRole("VIEWER")
   @ApiOperation({ summary: "Poll an agent run (fallback to the WebSocket stream)" })
   getAgentRun(@CurrentAuth() auth: AccessTokenPayload, @Param("id") id: string) {
     return this.content.getAgentRun(auth.orgId, id);
   }
 
   @Get()
+  @MinRole("VIEWER")
   list(@CurrentAuth() auth: AccessTokenPayload, @Query("status") status?: string) {
     return this.content.listContent(auth.orgId, status);
   }
 
   @Get(":id")
+  @MinRole("VIEWER")
   get(@CurrentAuth() auth: AccessTokenPayload, @Param("id") id: string) {
     return this.content.getContent(auth.orgId, id);
   }

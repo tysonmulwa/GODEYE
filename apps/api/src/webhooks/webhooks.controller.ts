@@ -15,6 +15,7 @@ import { createHmac, timingSafeEqual } from "crypto";
 import type { Request } from "express";
 import { env } from "../common/env";
 import { PrismaService } from "../common/prisma.service";
+import { Public } from "../common/public.decorator";
 
 @ApiExcludeController()
 @Controller("webhooks")
@@ -25,6 +26,7 @@ export class WebhooksController {
 
   /** Meta webhook subscription verification (GET with hub.challenge). */
   @Get("meta")
+  @Public()
   verifyMeta(
     @Query("hub.mode") mode: string,
     @Query("hub.verify_token") verifyToken: string,
@@ -38,6 +40,7 @@ export class WebhooksController {
 
   /** Meta event delivery. HMAC-validated with the app secret. */
   @Post("meta")
+  @Public()
   @HttpCode(200)
   async receiveMeta(
     @Req() req: RawBodyRequest<Request>,

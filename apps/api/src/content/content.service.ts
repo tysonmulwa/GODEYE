@@ -150,7 +150,7 @@ export class ContentService {
     const existing = await this.prisma.contentItem.findFirst({ where: { id, orgId } });
     if (!existing) throw new NotFoundException("Content not found");
     const row = await this.prisma.contentItem.update({
-      where: { id },
+      where: { id, orgId },
       data: {
         title: input.title,
         body: input.body,
@@ -180,7 +180,7 @@ export class ContentService {
       throw new BadRequestException(`Only drafts can be submitted (status: ${content.status})`);
     }
     const row = await this.prisma.contentItem.update({
-      where: { id },
+      where: { id, orgId },
       data: {
         status: "PENDING_APPROVAL",
         submittedAt: new Date(),
@@ -208,7 +208,7 @@ export class ContentService {
       throw new BadRequestException(`Only pending content can be approved (status: ${content.status})`);
     }
     const row = await this.prisma.contentItem.update({
-      where: { id },
+      where: { id, orgId },
       data: { status: "APPROVED", reviewedAt: new Date(), reviewedById: userId, reviewNote: null },
       include: this.reviewerInclude,
     });
@@ -234,7 +234,7 @@ export class ContentService {
     }
     const [row] = await this.prisma.$transaction([
       this.prisma.contentItem.update({
-        where: { id },
+        where: { id, orgId },
         data: {
           status: "DRAFT",
           reviewedAt: new Date(),

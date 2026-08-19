@@ -1,5 +1,6 @@
 import { Controller, Get, Header, NotFoundException, Param } from "@nestjs/common";
 import { ApiExcludeController } from "@nestjs/swagger";
+import { Public } from "./public.decorator";
 
 /**
  * Serves platform domain-verification files from the API host.
@@ -21,6 +22,7 @@ export class SiteVerificationController {
    * registering the callback URL as the prefix is the natural thing to do.
    */
   @Get(["tiktok:token.txt", "connections/tiktok/callback/tiktok:token.txt"])
+  @Public()
   @Header("Content-Type", "text/plain; charset=utf-8")
   tiktok(@Param("token") token: string): string {
     // Accept any of the tokens listed, so re-issuing one (TikTok mints a new

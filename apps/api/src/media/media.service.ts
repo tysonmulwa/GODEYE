@@ -195,7 +195,7 @@ export class MediaService {
   async remove(orgId: string, mediaId: string) {
     const media = await this.prisma.mediaAsset.findFirst({ where: { id: mediaId, orgId } });
     if (!media) throw new NotFoundException("Media not found");
-    await this.prisma.mediaAsset.delete({ where: { id: mediaId } });
+    await this.prisma.mediaAsset.delete({ where: { id: mediaId, orgId } });
     return { ok: true };
   }
 

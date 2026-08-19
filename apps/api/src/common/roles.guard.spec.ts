@@ -1,23 +1,50 @@
-import { ExecutionContext, ForbiddenException } from "@nestjs/common";
-import { Reflector } from "@nestjs/core";
-import { MIN_ROLE_KEY, roleAtLeast, RolesGuard, type OrgRole } from "./roles.guard";
+/**
+ * S-1 — the guard is now global, and default-deny.
+ *
+ * The previous version of this file asserted that "routes without a @MinRole
+ * requirement" pass. That assertion was the defect in test form: it is exactly
+ * why connections, media, seo, products and business-profile were writable by a
+ * VIEWER, and why adding @MinRole to any of them would have been a silent
+ * no-op. It has been replaced, not deleted — the route it described is now
+ * refused, and refuses the whole boot as well (route-audit.service.ts).
+ */
+process.env.JWT_ACCESS_SECRET = "roles-guard-spec-access-secret-9f2c1a";
+process.env.JWT_REFRESH_SECRET = "roles-guard-spec-refresh-secret-4b8e2d";
+process.env.OAUTH_STATE_SECRET = "roles-guard-spec-state-secret-7c3a9e11";
 
-function contextWithRole(role: OrgRole | undefined): ExecutionContext {
+import { ExecutionContext, ForbiddenException, UnauthorizedException } from "@nestjs/common";
+import { Reflector } from "@nestjs/core";
+import { JwtService } from "@nestjs/jwt";
+import { MIN_ROLE_KEY, roleAtLeast, RolesGuard, type OrgRole } from "./roles.guard";
+import { PUBLIC_KEY } from "./public.decorator";
+import { signToken } from "./tokens";
+
+const jwt = new JwtService({});
+
+function context(token: string | undefined): ExecutionContext {
+  const req = { headers: token ? { authorization: `Bearer ${token}` } : {} } as {
+    headers: Record<string, string>;
+    auth?: unknown;
+  };
   return {
+    getType: () => "http",
     getHandler: () => ({}),
     getClass: () => ({}),
-    switchToHttp: () => ({
-      getRequest: () => ({ auth: role ? { sub: "u1", orgId: "o1", role } : undefined }),
-    }),
+    switchToHttp: () => ({ getRequest: () => req }),
   } as unknown as ExecutionContext;
 }
 
-function guardRequiring(required: OrgRole | undefined): RolesGuard {
+function guard(meta: { required?: OrgRole; isPublic?: boolean }): RolesGuard {
   const reflector = {
-    getAllAndOverride: jest.fn((key: string) => (key === MIN_ROLE_KEY ? required : undefined)),
+    getAllAndOverride: jest.fn((key: string) =>
+      key === MIN_ROLE_KEY ? meta.required : key === PUBLIC_KEY ? meta.isPublic : undefined,
+    ),
   } as unknown as Reflector;
-  return new RolesGuard(reflector);
+  return new RolesGuard(reflector, jwt);
 }
+
+const tokenFor = (role: OrgRole) =>
+  signToken(jwt, "access", { sub: "u1", orgId: "o1", role }, "5m");
 
 describe("roleAtLeast", () => {
   it("orders OWNER > ADMIN > EDITOR > VIEWER", () => {
@@ -30,24 +57,48 @@ describe("roleAtLeast", () => {
 });
 
 describe("RolesGuard", () => {
-  it("passes routes without a @MinRole requirement", () => {
-    expect(guardRequiring(undefined).canActivate(contextWithRole("VIEWER"))).toBe(true);
-  });
-
-  it("allows equal or higher roles", () => {
-    expect(guardRequiring("EDITOR").canActivate(contextWithRole("EDITOR"))).toBe(true);
-    expect(guardRequiring("EDITOR").canActivate(contextWithRole("OWNER"))).toBe(true);
-  });
-
-  it("rejects lower roles", () => {
-    expect(() => guardRequiring("ADMIN").canActivate(contextWithRole("EDITOR"))).toThrow(
+  it("DENIES a route that declares no access level", async () => {
+    await expect(guard({ required: undefined }).canActivate(context(await tokenFor("OWNER")))).rejects.toThrow(
       ForbiddenException,
     );
   });
 
-  it("rejects when auth is missing entirely", () => {
-    expect(() => guardRequiring("VIEWER").canActivate(contextWithRole(undefined))).toThrow(
-      ForbiddenException,
+  it("says why, so the missing annotation is the obvious fix", async () => {
+    await expect(
+      guard({}).canActivate(context(await tokenFor("OWNER"))),
+    ).rejects.toThrow(/@Public\(\) or @MinRole\(\)/);
+  });
+
+  it("allows equal or higher roles", async () => {
+    await expect(guard({ required: "EDITOR" }).canActivate(context(await tokenFor("EDITOR")))).resolves.toBe(true);
+    await expect(guard({ required: "EDITOR" }).canActivate(context(await tokenFor("OWNER")))).resolves.toBe(true);
+  });
+
+  it("rejects lower roles", async () => {
+    await expect(
+      guard({ required: "ADMIN" }).canActivate(context(await tokenFor("EDITOR"))),
+    ).rejects.toThrow(ForbiddenException);
+  });
+
+  it("rejects an unauthenticated caller before it looks at roles", async () => {
+    await expect(guard({ required: "VIEWER" }).canActivate(context(undefined))).rejects.toThrow(
+      UnauthorizedException,
     );
+  });
+
+  it("lets a @Public() route through without a token", async () => {
+    await expect(guard({ isPublic: true }).canActivate(context(undefined))).resolves.toBe(true);
+  });
+
+  it("refuses an OAuth state token on an authenticated route (C-1)", async () => {
+    const state = await signToken(jwt, "oauth_state", { orgId: "o1", sub: "u1" }, "10m");
+    await expect(guard({ required: "VIEWER" }).canActivate(context(state))).rejects.toThrow(
+      UnauthorizedException,
+    );
+  });
+
+  it("does not judge non-HTTP contexts", async () => {
+    const ws = { getType: () => "ws" } as unknown as ExecutionContext;
+    await expect(guard({ required: "OWNER" }).canActivate(ws)).resolves.toBe(true);
   });
 });

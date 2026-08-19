@@ -25,6 +25,7 @@ import { CryptoService } from "../common/crypto.service";
 import { env } from "../common/env";
 import { AccessTokenPayload } from "../common/jwt-auth.guard";
 import { PrismaService } from "../common/prisma.service";
+import { signToken } from "../common/tokens";
 
 const ACCESS_TOKEN_TTL = "15m";
 const REFRESH_TOKEN_TTL_DAYS = 30;
@@ -500,10 +501,10 @@ export class AuthService {
       orgId: org.id,
       role: role as AccessTokenPayload["role"],
     };
-    const accessToken = await this.jwt.signAsync(payload, {
-      secret: env.jwtAccessSecret(),
-      expiresIn: ACCESS_TOKEN_TTL,
-    });
+    // signToken stamps typ/iss/aud. JwtAuthGuard demands all three, so a token
+    // minted for any other purpose — an OAuth state, an invite — cannot be
+    // presented as a session (finding C-1).
+    const accessToken = await signToken(this.jwt, "access", payload, ACCESS_TOKEN_TTL);
 
     const refreshToken = randomBytes(64).toString("hex");
     await this.prisma.refreshToken.create({

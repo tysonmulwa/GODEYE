@@ -8,7 +8,6 @@ import {
   Post,
   Query,
   Res,
-  UseGuards,
 } from "@nestjs/common";
 import { ApiBearerAuth, ApiOperation, ApiTags } from "@nestjs/swagger";
 import { Throttle } from "@nestjs/throttler";
@@ -26,6 +25,8 @@ import { AccessTokenPayload, JwtAuthGuard } from "../common/jwt-auth.guard";
 import { env } from "../common/env";
 import { ZodPipe } from "../common/zod.pipe";
 import { ConnectionsService } from "./connections.service";
+import { Public } from "../common/public.decorator";
+import { MinRole } from "../common/roles.guard";
 
 @ApiTags("connections")
 @Controller("connections")
@@ -35,21 +36,21 @@ export class ConnectionsController {
   constructor(private readonly connections: ConnectionsService) {}
 
   @Get()
-  @UseGuards(JwtAuthGuard)
+  @MinRole("VIEWER")
   @ApiBearerAuth()
   list(@CurrentAuth() auth: AccessTokenPayload) {
     return this.connections.list(auth.orgId);
   }
 
   @Delete(":id")
-  @UseGuards(JwtAuthGuard)
+  @MinRole("ADMIN")
   @ApiBearerAuth()
   remove(@CurrentAuth() auth: AccessTokenPayload, @Param("id") id: string) {
     return this.connections.remove(auth.orgId, id, auth.sub);
   }
 
   @Post("telegram")
-  @UseGuards(JwtAuthGuard)
+  @MinRole("ADMIN")
   @ApiBearerAuth()
   @Throttle({ default: { limit: 10, ttl: 60_000 } })
   @ApiOperation({ summary: "Connect a Telegram bot + channel" })
@@ -61,7 +62,7 @@ export class ConnectionsController {
   }
 
   @Post("discord")
-  @UseGuards(JwtAuthGuard)
+  @MinRole("ADMIN")
   @ApiBearerAuth()
   @Throttle({ default: { limit: 10, ttl: 60_000 } })
   @ApiOperation({ summary: "Connect a Discord bot + channel" })
@@ -73,7 +74,7 @@ export class ConnectionsController {
   }
 
   @Get("reddit/authorize")
-  @UseGuards(JwtAuthGuard)
+  @MinRole("ADMIN")
   @ApiBearerAuth()
   @ApiOperation({ summary: "Get the Reddit OAuth dialog URL (click-to-connect)" })
   redditAuthorize(@CurrentAuth() auth: AccessTokenPayload) {
@@ -81,6 +82,7 @@ export class ConnectionsController {
   }
 
   @Get("reddit/callback")
+  @Public()
   @ApiOperation({ summary: "OAuth redirect target for Reddit, do not call directly" })
   async redditCallback(
     @Query("code") code: string,
@@ -104,7 +106,7 @@ export class ConnectionsController {
   }
 
   @Get("x/authorize")
-  @UseGuards(JwtAuthGuard)
+  @MinRole("ADMIN")
   @ApiBearerAuth()
   @Throttle({ default: { limit: 10, ttl: 60_000 } })
   @ApiOperation({ summary: "Get the X OAuth dialog URL (click-to-connect)" })
@@ -113,6 +115,7 @@ export class ConnectionsController {
   }
 
   @Get("x/callback")
+  @Public()
   @ApiOperation({ summary: "OAuth redirect target for X, do not call directly" })
   async xCallback(
     @Query("oauth_token") oauthToken: string,
@@ -137,7 +140,7 @@ export class ConnectionsController {
   }
 
   @Post("x")
-  @UseGuards(JwtAuthGuard)
+  @MinRole("ADMIN")
   @ApiBearerAuth()
   @Throttle({ default: { limit: 10, ttl: 60_000 } })
   @ApiOperation({
@@ -152,7 +155,7 @@ export class ConnectionsController {
   }
 
   @Get("linkedin/authorize")
-  @UseGuards(JwtAuthGuard)
+  @MinRole("ADMIN")
   @ApiBearerAuth()
   @ApiOperation({ summary: "Get the LinkedIn OAuth dialog URL" })
   linkedinAuthorize(@CurrentAuth() auth: AccessTokenPayload) {
@@ -160,6 +163,7 @@ export class ConnectionsController {
   }
 
   @Get("linkedin/callback")
+  @Public()
   @ApiOperation({ summary: "OAuth redirect target for LinkedIn, do not call directly" })
   async linkedinCallback(
     @Query("code") code: string,
@@ -183,7 +187,7 @@ export class ConnectionsController {
   }
 
   @Get("tiktok/authorize")
-  @UseGuards(JwtAuthGuard)
+  @MinRole("ADMIN")
   @ApiBearerAuth()
   @ApiOperation({ summary: "Get the TikTok OAuth dialog URL" })
   tiktokAuthorize(@CurrentAuth() auth: AccessTokenPayload) {
@@ -191,6 +195,7 @@ export class ConnectionsController {
   }
 
   @Get("tiktok/callback")
+  @Public()
   @ApiOperation({ summary: "OAuth redirect target for TikTok, do not call directly" })
   async tiktokCallback(
     @Query("code") code: string,
@@ -218,7 +223,7 @@ export class ConnectionsController {
   }
 
   @Get("instagram/authorize")
-  @UseGuards(JwtAuthGuard)
+  @MinRole("ADMIN")
   @ApiBearerAuth()
   @ApiOperation({
     summary: "Get the Instagram OAuth dialog URL (no Facebook Page required)",
@@ -228,6 +233,7 @@ export class ConnectionsController {
   }
 
   @Get("instagram/callback")
+  @Public()
   @ApiOperation({ summary: "OAuth redirect target for Instagram, do not call directly" })
   async instagramCallback(
     @Query("code") code: string,
@@ -255,7 +261,7 @@ export class ConnectionsController {
   }
 
   @Get("meta/authorize")
-  @UseGuards(JwtAuthGuard)
+  @MinRole("ADMIN")
   @ApiBearerAuth()
   @ApiOperation({ summary: "Get the Facebook OAuth dialog URL (Facebook Pages + Instagram)" })
   metaAuthorize(@CurrentAuth() auth: AccessTokenPayload) {
@@ -263,6 +269,7 @@ export class ConnectionsController {
   }
 
   @Get("meta/callback")
+  @Public()
   @ApiOperation({ summary: "OAuth redirect target for Meta, do not call directly" })
   async metaCallback(
     @Query("code") code: string,

@@ -1,4 +1,12 @@
-import { Body, Controller, Get, Param, Patch, Post, Query, UseGuards } from "@nestjs/common";
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  Patch,
+  Post,
+  Query,
+} from "@nestjs/common";
 import { ApiBearerAuth, ApiOperation, ApiTags } from "@nestjs/swagger";
 import {
   postingPlanSchema,
@@ -26,7 +34,6 @@ const editScheduledPostSchema = z
 
 @ApiTags("scheduling")
 @Controller()
-@UseGuards(JwtAuthGuard, RolesGuard)
 @ApiBearerAuth()
 export class SchedulingController {
   constructor(private readonly scheduling: SchedulingService) {}
@@ -42,6 +49,7 @@ export class SchedulingController {
   }
 
   @Get("schedule")
+  @MinRole("VIEWER")
   list(
     @CurrentAuth() auth: AccessTokenPayload,
     @Query("from") from?: string,
@@ -84,6 +92,7 @@ export class SchedulingController {
   }
 
   @Get("posting-plans")
+  @MinRole("VIEWER")
   listPlans(@CurrentAuth() auth: AccessTokenPayload) {
     return this.scheduling.listPlans(auth.orgId);
   }
@@ -100,6 +109,7 @@ export class SchedulingController {
   }
 
   @Get("best-times")
+  @MinRole("VIEWER")
   @ApiOperation({ summary: "Engagement-driven best posting times for a platform" })
   bestTimes(
     @CurrentAuth() auth: AccessTokenPayload,
@@ -110,6 +120,7 @@ export class SchedulingController {
   }
 
   @Get("content/:id/ab-report")
+  @MinRole("VIEWER")
   @ApiOperation({ summary: "A/B test engagement report for a content item" })
   abReport(@CurrentAuth() auth: AccessTokenPayload, @Param("id") id: string) {
     return this.scheduling.abReport(auth.orgId, id);

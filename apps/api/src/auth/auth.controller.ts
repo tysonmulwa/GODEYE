@@ -8,7 +8,6 @@ import {
   Post,
   Req,
   Res,
-  UseGuards,
 } from "@nestjs/common";
 import { ApiBearerAuth, ApiOperation, ApiTags } from "@nestjs/swagger";
 import { Throttle } from "@nestjs/throttler";
@@ -31,6 +30,8 @@ import { AccessTokenPayload, JwtAuthGuard } from "../common/jwt-auth.guard";
 import { env } from "../common/env";
 import { ZodPipe } from "../common/zod.pipe";
 import { AuthService, SessionResult } from "./auth.service";
+import { Public } from "../common/public.decorator";
+import { MinRole } from "../common/roles.guard";
 
 const REFRESH_COOKIE = "godeye_refresh";
 const loginWithMfaSchema = loginSchema.extend({ mfaCode: z.string().optional() });
@@ -68,6 +69,7 @@ export class AuthController {
   constructor(private readonly auth: AuthService) {}
 
   @Post("register")
+  @Public()
   @Throttle({ default: { limit: 10, ttl: 60_000 } })
   @ApiOperation({ summary: "Create an account and organization" })
   async register(
@@ -80,6 +82,7 @@ export class AuthController {
   }
 
   @Post("login")
+  @Public()
   @HttpCode(200)
   @Throttle({ default: { limit: 10, ttl: 60_000 } })
   @ApiOperation({ summary: "Log in (include mfaCode if MFA is enabled)" })
@@ -93,6 +96,7 @@ export class AuthController {
   }
 
   @Post("refresh")
+  @Public()
   @HttpCode(200)
   @Throttle({ default: { limit: 30, ttl: 60_000 } })
   @ApiOperation({ summary: "Rotate the refresh token and get a new access token" })
@@ -103,6 +107,7 @@ export class AuthController {
   }
 
   @Post("logout")
+  @Public()
   @HttpCode(200)
   async logout(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
     await this.auth.logout(req.cookies?.[REFRESH_COOKIE] as string | undefined);
@@ -111,14 +116,14 @@ export class AuthController {
   }
 
   @Get("me")
-  @UseGuards(JwtAuthGuard)
+  @MinRole("VIEWER")
   @ApiBearerAuth()
   me(@CurrentAuth() auth: AccessTokenPayload) {
     return this.auth.me(auth);
   }
 
   @Patch("me")
-  @UseGuards(JwtAuthGuard)
+  @MinRole("VIEWER")
   @ApiBearerAuth()
   @ApiOperation({ summary: "Change your own name or avatar" })
   updateProfile(
@@ -129,8 +134,8 @@ export class AuthController {
   }
 
   @Post("change-password")
+  @MinRole("VIEWER")
   @HttpCode(200)
-  @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   // Guessing the current password is the attack this endpoint invites.
   @Throttle({ default: { limit: 5, ttl: 60_000 } })
@@ -149,8 +154,8 @@ export class AuthController {
   }
 
   @Post("change-email")
+  @MinRole("VIEWER")
   @HttpCode(200)
-  @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   @Throttle({ default: { limit: 5, ttl: 60_000 } })
   @ApiOperation({ summary: "Change the address your account signs in with" })
@@ -162,6 +167,7 @@ export class AuthController {
   }
 
   @Get("invitations/:token")
+  @Public()
   @Throttle({ default: { limit: 10, ttl: 60_000 } })
   @ApiOperation({ summary: "Preview an invite link (public)" })
   previewInvitation(@Param("token") token: string) {
@@ -169,6 +175,7 @@ export class AuthController {
   }
 
   @Post("accept-invitation")
+  @Public()
   @HttpCode(200)
   @Throttle({ default: { limit: 10, ttl: 60_000 } })
   @ApiOperation({ summary: "Accept an invite, creates the account if the email is new" })
@@ -182,7 +189,7 @@ export class AuthController {
   }
 
   @Get("orgs")
-  @UseGuards(JwtAuthGuard)
+  @MinRole("VIEWER")
   @ApiBearerAuth()
   @ApiOperation({ summary: "List every organization the caller belongs to" })
   listOrgs(@CurrentAuth() auth: AccessTokenPayload) {
@@ -190,8 +197,8 @@ export class AuthController {
   }
 
   @Post("switch-org")
+  @MinRole("VIEWER")
   @HttpCode(200)
-  @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: "Get a session scoped to another org you belong to" })
   async switchOrg(
@@ -205,7 +212,7 @@ export class AuthController {
   }
 
   @Post("mfa/setup")
-  @UseGuards(JwtAuthGuard)
+  @MinRole("VIEWER")
   @ApiBearerAuth()
   @ApiOperation({ summary: "Begin TOTP MFA setup, returns otpauth:// URL for authenticator apps" })
   setupMfa(@CurrentAuth() auth: AccessTokenPayload) {
@@ -213,7 +220,7 @@ export class AuthController {
   }
 
   @Post("mfa/enable")
-  @UseGuards(JwtAuthGuard)
+  @MinRole("VIEWER")
   @ApiBearerAuth()
   async enableMfa(
     @CurrentAuth() auth: AccessTokenPayload,
@@ -224,7 +231,7 @@ export class AuthController {
   }
 
   @Post("mfa/disable")
-  @UseGuards(JwtAuthGuard)
+  @MinRole("VIEWER")
   @ApiBearerAuth()
   @Throttle({ default: { limit: 5, ttl: 60_000 } })
   @ApiOperation({

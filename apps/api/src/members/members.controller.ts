@@ -1,4 +1,12 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, UseGuards } from "@nestjs/common";
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Patch,
+  Post,
+} from "@nestjs/common";
 import { ApiBearerAuth, ApiOperation, ApiTags } from "@nestjs/swagger";
 import { Throttle } from "@nestjs/throttler";
 import {
@@ -17,12 +25,12 @@ import { MembersService } from "./members.service";
 
 @ApiTags("members")
 @Controller("members")
-@UseGuards(JwtAuthGuard, RolesGuard)
 @ApiBearerAuth()
 export class MembersController {
   constructor(private readonly members: MembersService) {}
 
   @Get()
+  @MinRole("VIEWER")
   @ApiOperation({ summary: "List members and pending invitations" })
   list(@CurrentAuth() auth: AccessTokenPayload) {
     return this.members.list(auth.orgId);
@@ -47,7 +55,9 @@ export class MembersController {
   }
 
   @Patch(":userId")
-  @MinRole("ADMIN")
+  // Who holds which role is the owner's decision. An ADMIN promoting themselves
+  // to OWNER would be a one-request takeover of the workspace.
+  @MinRole("OWNER")
   @ApiOperation({ summary: "Change a member's role" })
   changeRole(
     @CurrentAuth() auth: AccessTokenPayload,
@@ -58,6 +68,10 @@ export class MembersController {
   }
 
   @Delete(":userId")
+  // VIEWER at the route because anyone may leave a workspace they are in.
+  // Removing *someone else* needs ADMIN and needs to outrank them, which
+  // MembersService.remove enforces — see docs/security/AUTHORIZATION.md.
+  @MinRole("VIEWER")
   @ApiOperation({ summary: "Remove a member (admins) or leave the org (yourself)" })
   remove(@CurrentAuth() auth: AccessTokenPayload, @Param("userId") userId: string) {
     return this.members.remove(auth, userId);

@@ -6,7 +6,6 @@ import {
   Injectable,
   NotFoundException,
   Put,
-  UseGuards,
 } from "@nestjs/common";
 import { ApiBearerAuth, ApiTags } from "@nestjs/swagger";
 import { businessProfileSchema, type BusinessProfileInput } from "@godeye/shared";
@@ -15,6 +14,7 @@ import { CurrentAuth } from "../common/current-auth.decorator";
 import { AccessTokenPayload, JwtAuthGuard } from "../common/jwt-auth.guard";
 import { PrismaService } from "../common/prisma.service";
 import { ZodPipe } from "../common/zod.pipe";
+import { MinRole } from "../common/roles.guard";
 
 @Injectable()
 export class BusinessProfileService {
@@ -62,17 +62,18 @@ export class BusinessProfileService {
 
 @ApiTags("business-profile")
 @Controller("business-profile")
-@UseGuards(JwtAuthGuard)
 @ApiBearerAuth()
 export class BusinessProfileController {
   constructor(private readonly service: BusinessProfileService) {}
 
   @Get()
+  @MinRole("VIEWER")
   get(@CurrentAuth() auth: AccessTokenPayload) {
     return this.service.get(auth.orgId);
   }
 
   @Put()
+  @MinRole("ADMIN")
   upsert(
     @CurrentAuth() auth: AccessTokenPayload,
     @Body(new ZodPipe(businessProfileSchema)) body: BusinessProfileInput,

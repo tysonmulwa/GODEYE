@@ -2,6 +2,7 @@ import { Controller, Get, Query } from "@nestjs/common";
 import { ApiOperation, ApiTags } from "@nestjs/swagger";
 import { env } from "./common/env";
 import { EngineService } from "./engine/engine.service";
+import { Public } from "./common/public.decorator";
 
 /**
  * Which build is actually running, for the API and the engine behind it.
@@ -21,6 +22,7 @@ export class HealthController {
   constructor(private readonly engine: EngineService) {}
 
   @Get()
+  @Public()
   @ApiOperation({ summary: "Deployed build of the API and the engine" })
   async health(@Query("render") render?: string) {
     const sha = process.env.RAILWAY_GIT_COMMIT_SHA ?? "";

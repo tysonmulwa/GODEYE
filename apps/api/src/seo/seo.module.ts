@@ -12,7 +12,6 @@ import {
   Param,
   Patch,
   Post,
-  UseGuards,
 } from "@nestjs/common";
 import { ApiBearerAuth, ApiOperation, ApiTags } from "@nestjs/swagger";
 import { Throttle } from "@nestjs/throttler";
@@ -25,6 +24,7 @@ import { PrismaService } from "../common/prisma.service";
 import { ZodPipe } from "../common/zod.pipe";
 import { EngineService } from "../engine/engine.service";
 import { renderFixPack } from "./fix-pack";
+import { MinRole } from "../common/roles.guard";
 
 const updateFixSchema = z.object({
   status: z.enum(["PROPOSED", "APPLIED", "DISMISSED"]),
@@ -254,7 +254,7 @@ export class SeoService {
     const fix = await this.prisma.seoFix.findFirst({ where: { id, orgId } });
     if (!fix) throw new NotFoundException("Fix not found");
     const updated = await this.prisma.seoFix.update({
-      where: { id },
+      where: { id, orgId },
       data: {
         status,
         appliedAt: status === "APPLIED" ? new Date() : null,
@@ -407,12 +407,12 @@ export class SeoService {
 
 @ApiTags("seo")
 @Controller("seo")
-@UseGuards(JwtAuthGuard)
 @ApiBearerAuth()
 export class SeoController {
   constructor(private readonly seo: SeoService) {}
 
   @Post("audit")
+  @MinRole("ADMIN")
   @Throttle({ default: { limit: 5, ttl: 60_000 } })
   @ApiOperation({ summary: "Run a site SEO audit (crawl + rules + AI recommendations)" })
   runAudit(
@@ -423,22 +423,26 @@ export class SeoController {
   }
 
   @Get("audits")
+  @MinRole("VIEWER")
   list(@CurrentAuth() auth: AccessTokenPayload) {
     return this.seo.list(auth.orgId);
   }
 
   @Delete("audits")
+  @MinRole("ADMIN")
   @ApiOperation({ summary: "Delete all SEO audits for the workspace" })
   clear(@CurrentAuth() auth: AccessTokenPayload) {
     return this.seo.clearAll(auth.orgId, auth.sub);
   }
 
   @Get("audits/:id")
+  @MinRole("VIEWER")
   get(@CurrentAuth() auth: AccessTokenPayload, @Param("id") id: string) {
     return this.seo.get(auth.orgId, id);
   }
 
   @Get("audits/:id/sitemap.xml")
+  @MinRole("VIEWER")
   @Header("Content-Type", "application/xml")
   @Header("Content-Disposition", 'attachment; filename="sitemap.xml"')
   sitemap(@CurrentAuth() auth: AccessTokenPayload, @Param("id") id: string) {
@@ -446,6 +450,7 @@ export class SeoController {
   }
 
   @Get("audits/:id/robots.txt")
+  @MinRole("VIEWER")
   @Header("Content-Type", "text/plain")
   @Header("Content-Disposition", 'attachment; filename="robots.txt"')
   robots(@CurrentAuth() auth: AccessTokenPayload, @Param("id") id: string) {
@@ -453,12 +458,14 @@ export class SeoController {
   }
 
   @Get("audits/:id/fixes")
+  @MinRole("VIEWER")
   @ApiOperation({ summary: "Actionable fixes derived from an audit's findings" })
   listFixes(@CurrentAuth() auth: AccessTokenPayload, @Param("id") id: string) {
     return this.seo.listFixes(auth.orgId, id);
   }
 
   @Get("audits/:id/fix-pack.md")
+  @MinRole("VIEWER")
   @Header("Content-Type", "text/markdown; charset=utf-8")
   @Header("Content-Disposition", 'attachment; filename="godeye-seo-fixes.md"')
   @ApiOperation({ summary: "Every fix as one Markdown document, ready to hand to a developer" })
@@ -467,6 +474,7 @@ export class SeoController {
   }
 
   @Patch("fixes/:id")
+  @MinRole("EDITOR")
   @ApiOperation({ summary: "Mark a fix applied, dismissed, or back to proposed" })
   updateFix(
     @CurrentAuth() auth: AccessTokenPayload,
@@ -477,6 +485,7 @@ export class SeoController {
   }
 
   @Post("fixes/bulk")
+  @MinRole("EDITOR")
   @ApiOperation({ summary: "Apply the same status change to several fixes" })
   bulkUpdateFixes(
     @CurrentAuth() auth: AccessTokenPayload,
@@ -486,6 +495,7 @@ export class SeoController {
   }
 
   @Post("audits/:id/verify")
+  @MinRole("ADMIN")
   @Throttle({ default: { limit: 5, ttl: 60_000 } })
   @ApiOperation({ summary: "Re-crawl to confirm applied fixes actually took effect" })
   verify(@CurrentAuth() auth: AccessTokenPayload, @Param("id") id: string) {
@@ -493,12 +503,14 @@ export class SeoController {
   }
 
   @Get("audits/:id/indexnow")
+  @MinRole("VIEWER")
   @ApiOperation({ summary: "IndexNow key and whether the site publishes it yet" })
   indexNowStatus(@CurrentAuth() auth: AccessTokenPayload, @Param("id") id: string) {
     return this.seo.indexNowStatus(auth.orgId, id);
   }
 
   @Post("audits/:id/indexnow")
+  @MinRole("ADMIN")
   @Throttle({ default: { limit: 10, ttl: 60_000 } })
   @ApiOperation({ summary: "Submit changed URLs to Bing, Yandex, Seznam and Naver" })
   submitIndexNow(

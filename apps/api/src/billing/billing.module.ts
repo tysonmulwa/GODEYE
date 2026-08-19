@@ -13,7 +13,6 @@ import {
   Post,
   RawBodyRequest,
   Req,
-  UseGuards,
 } from "@nestjs/common";
 import { ApiBearerAuth, ApiOperation, ApiTags } from "@nestjs/swagger";
 import { Throttle } from "@nestjs/throttler";
@@ -26,6 +25,7 @@ import { CurrentAuth } from "../common/current-auth.decorator";
 import { env } from "../common/env";
 import { AccessTokenPayload, JwtAuthGuard } from "../common/jwt-auth.guard";
 import { PrismaService } from "../common/prisma.service";
+import { Public } from "../common/public.decorator";
 import { MinRole, RolesGuard } from "../common/roles.guard";
 import { ZodPipe } from "../common/zod.pipe";
 import { WorkspaceAccessService } from "./workspace-access.service";
@@ -631,19 +631,20 @@ export class BillingService implements OnModuleInit {
 
 @ApiTags("billing")
 @Controller("billing")
-@UseGuards(JwtAuthGuard, RolesGuard)
 @ApiBearerAuth()
 export class BillingController {
   constructor(private readonly billing: BillingService) {}
 
   @Get()
+  @MinRole("VIEWER")
   @ApiOperation({ summary: "Current plan, trial state, limits, and this month's usage" })
   overview(@CurrentAuth() auth: AccessTokenPayload) {
     return this.billing.overview(auth.orgId);
   }
 
   @Post("checkout")
-  @MinRole("ADMIN")
+  // Spending the workspace's money is the owner's call, not an admin's.
+  @MinRole("OWNER")
   @Throttle({ default: { limit: 5, ttl: 60_000 } })
   @ApiOperation({
     summary:
@@ -658,7 +659,7 @@ export class BillingController {
   }
 
   @Post("verify")
-  @MinRole("ADMIN")
+  @MinRole("OWNER")
   @Throttle({ default: { limit: 20, ttl: 60_000 } })
   @ApiOperation({
     summary:
@@ -689,6 +690,8 @@ export class PaystackWebhookController {
    * activation for a payment that already happened.
    */
   @Post("paystack")
+  // Authenticated by its HMAC signature over the raw body, not by a session.
+  @Public()
   @HttpCode(200)
   @ApiOperation({ summary: "Paystack events (signature-verified)" })
   async paystack(
@@ -714,7 +717,7 @@ export class PaystackWebhookController {
   controllers: [BillingController, PaystackWebhookController],
   // TrialLockInterceptor is not listed here: AppModule registers it as a global
   // APP_INTERCEPTOR, and providing it twice would build two of them.
-  providers: [BillingService, WorkspaceAccessService, RolesGuard],
+  providers: [BillingService, WorkspaceAccessService],
   exports: [BillingService, WorkspaceAccessService],
 })
 export class BillingModule {}

@@ -1,4 +1,13 @@
-import { Body, Controller, Delete, Get, Param, Post, Put, Query, UseGuards } from "@nestjs/common";
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Post,
+  Put,
+  Query,
+} from "@nestjs/common";
 import { ApiBearerAuth, ApiOperation, ApiTags } from "@nestjs/swagger";
 import { Throttle } from "@nestjs/throttler";
 import {
@@ -16,6 +25,7 @@ import { CurrentAuth } from "../common/current-auth.decorator";
 import { AccessTokenPayload, JwtAuthGuard } from "../common/jwt-auth.guard";
 import { ZodPipe } from "../common/zod.pipe";
 import { MediaService } from "./media.service";
+import { MinRole } from "../common/roles.guard";
 
 const attachSchema = z.object({ contentItemId: z.string().min(1) });
 const logoSchema = z.object({
@@ -34,12 +44,12 @@ const brandMusicSchema = z.object({
 
 @ApiTags("media")
 @Controller("media")
-@UseGuards(JwtAuthGuard)
 @ApiBearerAuth()
 export class MediaController {
   constructor(private readonly media: MediaService) {}
 
   @Post("generate-image")
+  @MinRole("EDITOR")
   @Throttle({ default: { limit: 15, ttl: 60_000 } })
   @ApiOperation({ summary: "Queue AI image generation (Image Agent in the Python engine)" })
   generate(
@@ -50,6 +60,7 @@ export class MediaController {
   }
 
   @Post("generate-video")
+  @MinRole("EDITOR")
   @Throttle({ default: { limit: 6, ttl: 60_000 } })
   @ApiOperation({ summary: "Queue AI short-video generation (Video Agent in the Python engine)" })
   generateVideo(
@@ -60,6 +71,7 @@ export class MediaController {
   }
 
   @Post("upload")
+  @MinRole("EDITOR")
   @Throttle({ default: { limit: 30, ttl: 60_000 } })
   @ApiOperation({ summary: "Upload your own photo and attach it to a content item" })
   upload(
@@ -70,11 +82,13 @@ export class MediaController {
   }
 
   @Get()
+  @MinRole("VIEWER")
   list(@CurrentAuth() auth: AccessTokenPayload, @Query("contentItemId") contentItemId?: string) {
     return this.media.list(auth.orgId, contentItemId);
   }
 
   @Post(":id/attach")
+  @MinRole("EDITOR")
   attach(
     @CurrentAuth() auth: AccessTokenPayload,
     @Param("id") id: string,
@@ -84,6 +98,7 @@ export class MediaController {
   }
 
   @Delete(":id")
+  @MinRole("EDITOR")
   remove(@CurrentAuth() auth: AccessTokenPayload, @Param("id") id: string) {
     return this.media.remove(auth.orgId, id);
   }
@@ -91,11 +106,13 @@ export class MediaController {
   // ---------- Brand kit ----------
 
   @Get("brand-kit")
+  @MinRole("VIEWER")
   getBrandKit(@CurrentAuth() auth: AccessTokenPayload) {
     return this.media.getBrandKit(auth.orgId);
   }
 
   @Put("brand-kit")
+  @MinRole("ADMIN")
   upsertBrandKit(
     @CurrentAuth() auth: AccessTokenPayload,
     @Body(new ZodPipe(brandKitSchema)) body: BrandKitInput,
@@ -104,6 +121,7 @@ export class MediaController {
   }
 
   @Post("brand-kit/logo")
+  @MinRole("ADMIN")
   @Throttle({ default: { limit: 10, ttl: 60_000 } })
   @ApiOperation({ summary: "Upload a brand logo (base64 PNG/JPEG, max ~5 MB)" })
   uploadLogo(
@@ -114,6 +132,7 @@ export class MediaController {
   }
 
   @Post("brand-kit/music")
+  @MinRole("ADMIN")
   @Throttle({ default: { limit: 10, ttl: 60_000 } })
   @ApiOperation({
     summary: "Upload the background track mixed under generated video (base64 audio)",
@@ -126,6 +145,7 @@ export class MediaController {
   }
 
   @Delete("brand-kit/music")
+  @MinRole("ADMIN")
   @ApiOperation({ summary: "Remove the background track" })
   removeBrandMusic(@CurrentAuth() auth: AccessTokenPayload) {
     return this.media.removeBrandMusic(auth.orgId, auth.sub);

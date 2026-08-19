@@ -140,7 +140,7 @@ export class SchedulingService {
       throw new BadRequestException(`Cannot cancel a post in status ${post.status}`);
     }
     const updated = await this.prisma.scheduledPost.update({
-      where: { id },
+      where: { id, orgId },
       data: { status: "CANCELLED" },
     });
     this.audit.log({
@@ -190,7 +190,7 @@ export class SchedulingService {
     }
 
     const updated = await this.prisma.scheduledPost.update({
-      where: { id },
+      where: { id, orgId },
       data: {
         // Editing re-queues it: the point is to send the corrected version.
         status: "PENDING",
@@ -222,7 +222,7 @@ export class SchedulingService {
       throw new BadRequestException(`Only failed posts can be retried (status ${post.status})`);
     }
     const updated = await this.prisma.scheduledPost.update({
-      where: { id },
+      where: { id, orgId },
       data: { status: "PENDING", error: null, lockedAt: null, attempts: 0 },
     });
     this.audit.log({
@@ -291,7 +291,7 @@ export class SchedulingService {
         input.platforms.join() !== existing.platforms.join());
 
     const plan = await this.prisma.postingPlan.update({
-      where: { id },
+      where: { id, orgId },
       data: {
         name: input.name,
         cadence: input.cadence,
