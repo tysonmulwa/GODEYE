@@ -10,6 +10,7 @@ from .credentials import (  # noqa: F401
     WeakKeyError,
     assert_strong_key,
     decrypt_credentials,
+    encrypt_credentials,
 )
 from .egress import (  # noqa: F401
     EgressBlocked,
@@ -26,6 +27,7 @@ __all__ = [
     "WeakKeyError",
     "assert_strong_key",
     "decrypt_credentials",
+    "encrypt_credentials",
     "safe_fetch",
     "validate",
 ]

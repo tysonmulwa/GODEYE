@@ -231,6 +231,10 @@ SocialConnection = Table(
     Column("lastCheckedAt", DateTime(timezone=False)),
     Column("lastErrorAt", DateTime(timezone=False)),
     Column("lastError", String),
+    # Finding B-7. This column was written in four places by the API and read
+    # nowhere, by anything. Mapping it is the first half of giving it a reader;
+    # tasks/token_refresh.py is the second.
+    Column("expiresAt", DateTime(timezone=False)),
     Column("updatedAt", DateTime(timezone=False)),
 )
 

@@ -206,7 +206,16 @@ enum Platform {
 
 enum ConnectionStatus {
   ACTIVE
+  /// Inside the refresh window and not yet renewed. Finding B-7: expiresAt was
+  /// written in four places and read in none, so a TikTok connection stopped
+  /// working a day after it was made while still displaying ACTIVE.
+  EXPIRING_SOON
+  /// The token has lapsed and a refresh failed or was never possible. The
+  /// scheduler skips these rather than attempting a publish that cannot work.
   EXPIRED
+  /// The platform told us the grant is gone — the person revoked it, or removed
+  /// the app. Distinct from EXPIRED because reconnecting is the only remedy.
+  REVOKED
   ERROR
   DISCONNECTED
 }

@@ -97,6 +97,7 @@ const RULES = [
       "seo/indexnow.py", // api.indexnow.org, a constant
       "ai/provider.py", // Anthropic / OpenAI / Google endpoints, all constants
       "products/render.py", // BROWSER_RENDER_URL, set by the operator, not a customer
+      "tasks/token_refresh.py", // the three platform token endpoints, all constants
     ],
     test: (line) => /httpx\.(Client|get|post)\(|requests\.(get|post)\(/.test(line),
   },

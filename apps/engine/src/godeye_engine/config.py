@@ -117,6 +117,12 @@ class Settings(BaseSettings):
     # "playwright" runs it in-process instead, for anyone who accepts the cost.
     browser_render_provider: str = ""
 
+    # Needed by the hourly token-refresh sweep (B-7). TikTok access tokens live
+    # 24 hours and TikTok rotates the refresh token on every use, so renewing one
+    # needs the app credentials, not just the stored connection.
+    tiktok_client_key: str = ""
+    tiktok_client_secret: str = ""
+
     reddit_client_id: str = ""
     reddit_client_secret: str = ""
     reddit_user_agent: str = "godeye/0.1"

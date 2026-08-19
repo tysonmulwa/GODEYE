@@ -184,6 +184,11 @@ DIRECT_HTTPX_ALLOWED = {
     "publishers/x.py",  # api.twitter.com
     "publishers/discord.py",  # discord.com
     "publishers/reddit.py",  # reddit.com
+    "publishers/tiktok.py",  # TikTok's own upload URLs, returned by TikTok
+    "seo/indexnow.py",  # api.indexnow.org
+    "ai/provider.py",  # Anthropic / OpenAI / Google endpoints
+    "products/render.py",  # BROWSER_RENDER_URL, set by the operator
+    "tasks/token_refresh.py",  # the three platform token endpoints
 }
 
 

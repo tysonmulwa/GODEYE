@@ -16,6 +16,7 @@ import base64
 import hashlib
 import hmac
 import json
+import os
 from typing import Any
 
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
@@ -110,3 +111,29 @@ def decrypt_credentials(payload: str, org_id: str | None = None) -> dict[str, An
         except Exception as e:  # noqa: BLE001 - try the next key during a rotation
             last = e
     raise ValueError("Unable to decrypt credentials with any configured key") from last
+
+
+def encrypt_credentials(payload: dict[str, Any], org_id: str) -> str:
+    """Write a credential blob in the v1 format the API reads.
+
+    The engine only ever decrypted before. Finding B-7 needs it to WRITE too:
+    refreshing a platform token produces a new access token, and several
+    providers rotate the refresh token on use, so a refresh that cannot persist
+    the result bricks the connection on the next cycle.
+
+    Always v1, always with the org bound as AAD. Nothing here should be able to
+    produce the legacy format; that branch exists to read history, not to make
+    more of it.
+    """
+    key = _key_bytes("TOKEN_ENCRYPTION_KEY", get_settings().require("token_encryption_key"))
+    iv = os.urandom(12)  # 96-bit, fresh per encryption (NIST SP 800-38D)
+    aad = f"org:{org_id}".encode()
+    sealed = AESGCM(key).encrypt(iv, json.dumps(payload).encode(), aad)
+    ciphertext, tag = sealed[:-16], sealed[-16:]
+    return ".".join(
+        [
+            "v1",
+            _key_id(key),
+            *(base64.b64encode(part).decode() for part in (iv, tag, ciphertext)),
+        ]
+    )

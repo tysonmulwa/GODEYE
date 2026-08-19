@@ -208,6 +208,22 @@ def publish_post(scheduled_post_id: str, claimed_at: str | None = None) -> dict:
         return {"status": "FAILED"}
 
     platform = connection["platform"]
+
+    # B-7. Never attempt a publish through a connection the platform will
+    # refuse. Attempting produced a generic platform error attributed to the
+    # post, which read as "this post failed" rather than "this channel needs
+    # reconnecting" — so nobody reconnected, and every subsequent post failed
+    # the same way.
+    if connection["status"] in ("EXPIRED", "REVOKED", "DISCONNECTED"):
+        _finish(
+            scheduled_post_id,
+            post["orgId"],
+            error=(
+                f"{platform} connection \"{connection['displayName']}\" needs to be "
+                f"reconnected before it can publish (status: {connection['status']})."
+            ),
+        )
+        return {"status": "FAILED", "reason": "connection_not_usable"}
     media_urls = [row.url for row in media if row.kind == "IMAGE"]
     video_urls = [row.url for row in media if row.kind == "VIDEO"]
 

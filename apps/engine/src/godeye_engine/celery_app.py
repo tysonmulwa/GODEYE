@@ -25,6 +25,7 @@ app = Celery(
         "godeye_engine.tasks.products",
         "godeye_engine.tasks.product_posts",
         "godeye_engine.tasks.retention",
+        "godeye_engine.tasks.token_refresh",
     ],
 )
 
@@ -83,6 +84,14 @@ app.conf.update(
         },
         # Webhook deliveries and spent refresh tokens. Daily is often enough:
         # the point is that these tables stop growing, not that they are empty.
+        # B-7. expiresAt was written in four places and read in none, and there
+        # was no refresh task at all — so every TikTok connection stopped working
+        # a day after it was made while still displaying ACTIVE. Hourly, against
+        # a 24-hour window, so a token gets several attempts before it lapses.
+        "refresh-expiring-connections": {
+            "task": "godeye_engine.tasks.token_refresh.refresh_expiring_connections",
+            "schedule": 3600.0,
+        },
         "purge-expired-rows": {
             "task": "godeye_engine.tasks.retention.purge_expired_rows",
             "schedule": 24 * 3600.0,
