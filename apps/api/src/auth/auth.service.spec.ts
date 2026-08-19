@@ -7,9 +7,16 @@ import { AuditService } from "../common/audit.service";
 import { CryptoService } from "../common/crypto.service";
 import { AuthService } from "./auth.service";
 
-process.env.TOKEN_ENCRYPTION_KEY = "a".repeat(64);
-process.env.JWT_ACCESS_SECRET = "test-access-secret";
-process.env.JWT_REFRESH_SECRET = "test-refresh-secret";
+// A real 32-byte key. This was "a".repeat(64) — every byte 0xaa — which the
+// weak-key check added for S-6 now rejects, correctly. The fixture moved;
+// the rule did not weaken.
+process.env.TOKEN_ENCRYPTION_KEY = "b3126e1542fa317004bc1c192e87c6afc2bbfae1674ffae2b159df41d7743209";
+// >= 32 chars and distinct from each other, because requiredSecret() now
+// enforces both (finding S-5). "test-access-secret" was 18 characters, which is
+// a length a real deployment could plausibly ship.
+process.env.JWT_ACCESS_SECRET = "test-access-secret-0123456789abcdef";
+process.env.JWT_REFRESH_SECRET = "test-refresh-secret-0123456789abcdef";
+process.env.OAUTH_STATE_SECRET = "test-oauth-state-secret-0123456789ab";
 
 type MockPrisma = {
   $transaction: jest.Mock;
@@ -256,7 +263,9 @@ describe("AuthService", () => {
       return {
         ...baseUser,
         mfaEnabled: true,
-        mfaSecret: new CryptoService().encrypt(SECRET),
+        // AAD is the user the secret belongs to, so a TOTP secret lifted from
+        // one row cannot be decrypted against another (NIST SP 800-38D).
+        mfaSecret: new CryptoService().encrypt(SECRET, `user:${baseUser.id}`),
         passwordHash: await argon2.hash("correct-horse-9X", { type: argon2.argon2id }),
       };
     }

@@ -44,12 +44,14 @@ def derive_key(org_id: str, url: str) -> str:
     the host, and deriving it means there is no extra table and no way for the
     key on file to drift from the key we submit with.
 
-    It is keyed on TOKEN_ENCRYPTION_KEY, which is already the one secret in this
-    system that can never be rotated without invalidating stored credentials. If
-    it ever were rotated, the only consequence here is that the next audit
-    proposes a new key file to publish.
+    Keyed on INDEXNOW_KEY_SECRET, which exists for this and nothing else. It
+    used to be keyed on TOKEN_ENCRYPTION_KEY, and that was wrong in a way worth
+    naming: the derived key is *published*, as a file at the root of the
+    customer's own website. One secret must not both encrypt platform
+    credentials at rest and seed a value we hand out (finding S-6b). Rotating
+    this one costs a new key file in the next audit and nothing else.
     """
-    secret = get_settings().token_encryption_key.encode()
+    secret = get_settings().require("indexnow_key_secret").encode()
     message = f"indexnow:{org_id}:{host_of(url)}".encode()
     return hmac.new(secret, message, hashlib.sha256).hexdigest()[:32]
 

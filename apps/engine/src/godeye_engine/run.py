@@ -10,7 +10,7 @@ import subprocess
 import sys
 import time
 
-from .config import get_settings
+from .config import get_settings, validate_config
 
 PROCESSES: list[tuple[str, list[str]]] = [
     (
@@ -38,6 +38,8 @@ PROCESSES: list[tuple[str, list[str]]] = [
 
 
 def main() -> None:
+    # Fail the boot, not the first request that happens to need a secret.
+    validate_config()
     children: list[subprocess.Popen] = []
     try:
         for name, cmd in PROCESSES:

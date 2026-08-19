@@ -269,7 +269,9 @@ def publish_post(scheduled_post_id: str, claimed_at: str | None = None) -> dict:
 
     try:
         try:
-            credentials = decrypt_credentials(connection["encryptedCredentials"])
+            credentials = decrypt_credentials(
+                connection["encryptedCredentials"], post["orgId"]
+            )
         except Exception as e:  # noqa: BLE001
             # AES-GCM raises InvalidTag, whose str() is empty, a failure with no
             # message at all. Almost always TOKEN_ENCRYPTION_KEY differing from

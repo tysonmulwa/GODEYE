@@ -5,7 +5,10 @@ import { CryptoService } from "../common/crypto.service";
 import { AccessTokenPayload } from "../common/jwt-auth.guard";
 import { MembersService } from "./members.service";
 
-process.env.TOKEN_ENCRYPTION_KEY = "a".repeat(64);
+// A real 32-byte key. This was "a".repeat(64) — every byte 0xaa — which the
+// weak-key check added for S-6 now rejects, correctly. The fixture moved;
+// the rule did not weaken.
+process.env.TOKEN_ENCRYPTION_KEY = "b3126e1542fa317004bc1c192e87c6afc2bbfae1674ffae2b159df41d7743209";
 process.env.WEB_URL = "http://localhost:3000";
 
 function makePrisma() {

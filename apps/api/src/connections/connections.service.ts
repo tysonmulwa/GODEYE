@@ -432,7 +432,9 @@ export class ConnectionsService {
       expiresAt?: Date;
     },
   ) {
-    const encryptedCredentials = this.crypto.encryptJson(data.credentials);
+    // AAD binds the ciphertext to the workspace it belongs to, so a row copied
+    // between tenants no longer decrypts (NIST SP 800-38D).
+    const encryptedCredentials = this.crypto.encryptJson(data.credentials, `org:${orgId}`);
     const existing = await this.prisma.socialConnection.findFirst({
       where: { orgId, platform: data.platform, externalId: data.externalId },
     });

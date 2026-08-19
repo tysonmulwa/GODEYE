@@ -126,7 +126,7 @@ export class AuthService {
       if (!input.mfaCode) {
         throw new UnauthorizedException({ code: "MFA_REQUIRED", message: "MFA code required" });
       }
-      this.assertValidMfaCode(user.mfaSecret, input.mfaCode);
+      this.assertValidMfaCode(user.mfaSecret, input.mfaCode, user.id);
     }
     const membership = user.memberships[0];
     if (!membership) throw new UnauthorizedException("User has no organization");
@@ -335,7 +335,7 @@ export class AuthService {
         if (!input.mfaCode) {
           throw new UnauthorizedException({ code: "MFA_REQUIRED", message: "MFA code required" });
         }
-        this.assertValidMfaCode(user.mfaSecret, input.mfaCode);
+        this.assertValidMfaCode(user.mfaSecret, input.mfaCode, user.id);
       }
       if (user.memberships.some((m) => m.orgId === invitation.orgId)) {
         await this.markInvitationAccepted(invitation.id);
@@ -433,7 +433,7 @@ export class AuthService {
     const secret = authenticator.generateSecret();
     await this.prisma.user.update({
       where: { id: userId },
-      data: { mfaSecret: this.crypto.encrypt(secret) },
+      data: { mfaSecret: this.crypto.encrypt(secret, `user:${userId}`) },
     });
     return {
       secret,
@@ -443,7 +443,7 @@ export class AuthService {
 
   async enableMfa(userId: string, code: string): Promise<void> {
     const user = await this.prisma.user.findUniqueOrThrow({ where: { id: userId } });
-    this.assertValidMfaCode(user.mfaSecret, code);
+    this.assertValidMfaCode(user.mfaSecret, code, userId);
     await this.prisma.user.update({ where: { id: userId }, data: { mfaEnabled: true } });
     this.audit.log({ userId, action: "auth.mfa_enabled" });
   }
@@ -466,7 +466,7 @@ export class AuthService {
     if (!(await argon2.verify(user.passwordHash, password))) {
       throw new UnauthorizedException("Incorrect password");
     }
-    this.assertValidMfaCode(user.mfaSecret, code);
+    this.assertValidMfaCode(user.mfaSecret, code, userId);
     await this.prisma.user.update({
       where: { id: userId },
       data: { mfaEnabled: false, mfaSecret: null },
@@ -474,9 +474,13 @@ export class AuthService {
     this.audit.log({ userId, action: "auth.mfa_disabled" });
   }
 
-  private assertValidMfaCode(encryptedSecret: string | null, code: string): void {
+  private assertValidMfaCode(
+    encryptedSecret: string | null,
+    code: string,
+    userId: string,
+  ): void {
     if (!encryptedSecret) throw new BadRequestException("MFA has not been set up");
-    const secret = this.crypto.decrypt(encryptedSecret);
+    const secret = this.crypto.decrypt(encryptedSecret, `user:${userId}`);
     if (!authenticator.verify({ token: code, secret })) {
       throw new UnauthorizedException("Invalid MFA code");
     }

@@ -1,4 +1,5 @@
 import { config } from "dotenv";
+import { requiredHexKey, requiredSecret } from "./secrets";
 import { existsSync } from "fs";
 import { dirname, join } from "path";
 
@@ -90,10 +91,31 @@ export const env = {
   engineUrl: url(process.env.ENGINE_URL, "http://localhost:8000"),
   databaseUrl: () => required("DATABASE_URL"),
   redisUrl: process.env.REDIS_URL ?? "redis://localhost:6379/0",
-  jwtAccessSecret: () => required("JWT_ACCESS_SECRET"),
-  jwtRefreshSecret: () => required("JWT_REFRESH_SECRET"),
-  tokenEncryptionKey: () => required("TOKEN_ENCRYPTION_KEY"),
-  engineInternalSecret: process.env.ENGINE_INTERNAL_SECRET ?? "dev-engine-secret",
+  jwtAccessSecret: () => requiredSecret("JWT_ACCESS_SECRET"),
+  jwtRefreshSecret: () => requiredSecret("JWT_REFRESH_SECRET"),
+  /**
+   * Signs the OAuth `state` parameter, and nothing else.
+   *
+   * Separate key material because `state` travels through Meta, TikTok,
+   * LinkedIn and Reddit by design, and lands in their logs, in browser history
+   * and in Referer headers. Signed with the session key it *was* a session
+   * credential (C-1). Split, a leaked state proves only that somebody started
+   * an OAuth flow. NIST SP 800-57 calls this key-purpose separation; RFC 8725
+   * §3.8 says the same thing for JWTs specifically.
+   */
+  oauthStateSecret: () => requiredSecret("OAUTH_STATE_SECRET"),
+  tokenEncryptionKey: () => requiredHexKey("TOKEN_ENCRYPTION_KEY").toString("hex"),
+  /**
+   * Identifies tokens this API minted, so a token from any other issuer is
+   * refused before its claims are read (RFC 8725 §3.8).
+   */
+  get jwtIssuer(): string {
+    return this.apiUrl;
+  },
+  jwtAudience: "godeye-api",
+  get engineInternalSecret(): string {
+    return requiredSecret("ENGINE_INTERNAL_SECRET");
+  },
   /**
    * True when the browser would treat an API call from the web app as
    * cross-site, which forces the session cookie to SameSite=None, and means
@@ -203,7 +225,64 @@ export const env = {
     appId: (process.env.META_APP_ID ?? "").trim(),
     appSecret: (process.env.META_APP_SECRET ?? "").trim(),
     redirectUri: callbackUrl("meta", process.env.META_REDIRECT_URI),
-    webhookVerifyToken: process.env.META_WEBHOOK_VERIFY_TOKEN ?? "godeye-verify",
+    get webhookVerifyToken(): string {
+      return requiredSecret("META_WEBHOOK_VERIFY_TOKEN", { minLength: 16 });
+    },
     graphVersion: "v21.0",
   },
 };
+
+/**
+ * Boot-time configuration gate.
+ *
+ * Every secret above throws when it is missing, published, or entropy-free, but
+ * a lazy getter only throws on the first request that happens to need it — so a
+ * misconfigured deploy passes its health check and fails hours later on one
+ * endpoint. This reads them all once, at startup, and refuses to boot.
+ *
+ * It also asserts key *separation*: reusing JWT_ACCESS_SECRET as
+ * OAUTH_STATE_SECRET reintroduces C-1 exactly, and nothing else in the system
+ * would notice.
+ */
+export function validateConfig(): void {
+  const problems: string[] = [];
+  const read = (label: string, fn: () => unknown) => {
+    try {
+      fn();
+    } catch (e) {
+      problems.push(`  - ${e instanceof Error ? e.message : `${label}: ${String(e)}`}`);
+    }
+  };
+
+  read("DATABASE_URL", () => env.databaseUrl());
+  read("JWT_ACCESS_SECRET", () => env.jwtAccessSecret());
+  read("JWT_REFRESH_SECRET", () => env.jwtRefreshSecret());
+  read("OAUTH_STATE_SECRET", () => env.oauthStateSecret());
+  read("TOKEN_ENCRYPTION_KEY", () => env.tokenEncryptionKey());
+  read("ENGINE_INTERNAL_SECRET", () => env.engineInternalSecret);
+
+  try {
+    const access = env.jwtAccessSecret();
+    const refresh = env.jwtRefreshSecret();
+    const state = env.oauthStateSecret();
+    if (state === access) {
+      problems.push("  - OAUTH_STATE_SECRET must not equal JWT_ACCESS_SECRET (finding C-1)");
+    }
+    if (state === refresh) {
+      problems.push("  - OAUTH_STATE_SECRET must not equal JWT_REFRESH_SECRET");
+    }
+    if (access === refresh) {
+      problems.push("  - JWT_ACCESS_SECRET must not equal JWT_REFRESH_SECRET");
+    }
+  } catch {
+    // Already reported above; the separation check needs all three present.
+  }
+
+  if (problems.length) {
+    throw new Error(
+      `Refusing to start: ${problems.length} configuration problem(s)\n${problems.join("\n")}\n` +
+        `\nSee docs/CONFIGURATION.md. For a local box only, set NODE_ENV=development and ` +
+        `ALLOW_INSECURE_DEV_DEFAULTS=true.`,
+    );
+  }
+}

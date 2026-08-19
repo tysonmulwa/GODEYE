@@ -2,6 +2,7 @@
 
 import pytest
 
+from godeye_engine.config import get_settings
 from godeye_engine.seo import crawler, fixes, indexnow
 from godeye_engine.seo.audit import Finding
 from godeye_engine.seo.crawler import CrawlResult, PageData
@@ -282,6 +283,20 @@ def test_indexnow_key_fix_is_included_when_a_key_is_given():
 # --------------------------------------------------------------------------
 # IndexNow
 # --------------------------------------------------------------------------
+
+
+@pytest.fixture(autouse=True)
+def indexnow_secret(monkeypatch):
+    """INDEXNOW_KEY_SECRET is now required and separate from TOKEN_ENCRYPTION_KEY.
+
+    The key derived here is *published* at the root of the customer's website,
+    so seeding it from the credential-encryption key made one secret both
+    encrypt tokens at rest and seed a public artefact (finding S-6b).
+    """
+    monkeypatch.setenv("INDEXNOW_KEY_SECRET", "test-indexnow-secret-0123456789abcdef")
+    get_settings.cache_clear()
+    yield
+    get_settings.cache_clear()
 
 
 def test_key_is_stable_and_scoped_to_org_and_host():

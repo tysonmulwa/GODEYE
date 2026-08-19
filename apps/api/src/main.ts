@@ -7,9 +7,14 @@ import { DocumentBuilder, SwaggerModule } from "@nestjs/swagger";
 import cookieParser from "cookie-parser";
 import helmet from "helmet";
 import { AppModule } from "./app.module";
-import { env } from "./common/env";
+import { env, validateConfig } from "./common/env";
 
 async function bootstrap() {
+  // Before Nest builds anything. A secret that is missing, published in this
+  // repository, or format-valid but entropy-free must fail the boot — not the
+  // one request, hours later, that happened to be the first to need it.
+  validateConfig();
+
   const app = await NestFactory.create<NestExpressApplication>(AppModule, {
     rawBody: true, // needed for webhook HMAC validation
   });

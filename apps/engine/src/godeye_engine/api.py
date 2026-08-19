@@ -2,20 +2,52 @@
 
 from __future__ import annotations
 
+import hmac
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
+
 from fastapi import Depends, FastAPI, Header, HTTPException
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import text
 
 from .celery_app import worker_builds
-from .config import get_settings
+from .config import get_settings, validate_config
 from .db import get_engine
 
-app = FastAPI(title="GODEYE Engine", version="0.1.0", docs_url=None, redoc_url=None)
+@asynccontextmanager
+async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
+    """Refuse to serve on a missing, published, or entropy-free secret.
+
+    At startup, not per-request: a misconfigured engine must fail its boot
+    rather than pass a health check and reject one endpoint hours later.
+    """
+    validate_config()
+    yield
+
+
+app = FastAPI(
+    title="GODEYE Engine",
+    version="0.1.0",
+    docs_url=None,
+    redoc_url=None,
+    lifespan=lifespan,
+)
 
 
 def verify_internal_secret(x_internal_secret: str = Header(default="")) -> None:
-    if x_internal_secret != get_settings().engine_internal_secret:
+    """Authenticate the NestJS API.
+
+    compare_digest, not `!=`: the old comparison short-circuited on the first
+    differing byte, which leaks the secret one character at a time to anyone who
+    can measure response time.
+
+    require() raises when the secret is unset or is the value published in this
+    repository, so a misconfigured engine refuses every call rather than
+    accepting the one string an attacker already knows (S-5).
+    """
+    expected = get_settings().require("engine_internal_secret")
+    if not hmac.compare_digest(x_internal_secret, expected):
         raise HTTPException(status_code=401, detail="Invalid internal secret")
 
 
