@@ -9,6 +9,16 @@ import helmet from "helmet";
 import { AppModule } from "./app.module";
 import { env, validateConfig } from "./common/env";
 
+/** The OpenAPI 3.1 document. Exported so CI can emit it without booting a server. */
+export function buildOpenApi() {
+  return new DocumentBuilder()
+    .setTitle("GODEYE API")
+    .setDescription("AI Marketing Operating System API")
+    .setVersion("0.1.0")
+    .addBearerAuth()
+    .build();
+}
+
 async function bootstrap() {
   // Before Nest builds anything. A secret that is missing, published in this
   // repository, or format-valid but entropy-free must fail the boot — not the
@@ -68,13 +78,20 @@ async function bootstrap() {
   app.use(cookieParser());
   app.enableShutdownHooks();
 
-  const swagger = new DocumentBuilder()
-    .setTitle("GODEYE API")
-    .setDescription("AI Marketing Operating System API")
-    .setVersion("0.1.0")
-    .addBearerAuth()
-    .build();
-  SwaggerModule.setup("api/docs", app, SwaggerModule.createDocument(app, swagger));
+  // /api/docs is a reconnaissance map: every route, every DTO shape, and the
+  // @ApiOperation text describing what each one does. It made S-1 — five
+  // controllers with no RolesGuard — discoverable in a single request.
+  //
+  // The *contract* is still valuable, so it is still generated: `pnpm openapi`
+  // writes the same document to a file for CI to diff. Only the public UI is
+  // withdrawn. Set ENABLE_API_DOCS=true to mount it somewhere non-production
+  // deliberately (a staging box behind auth), never as a default.
+  const docsEnabled = env.nodeEnv !== "production" || process.env.ENABLE_API_DOCS === "true";
+  if (docsEnabled) {
+    SwaggerModule.setup("api/docs", app, SwaggerModule.createDocument(app, buildOpenApi()));
+  } else {
+    new Logger("Swagger").log("API docs disabled in production (set ENABLE_API_DOCS=true to mount)");
+  }
 
   // Bind 0.0.0.0, not localhost, a container host can't reach a loopback-only
   // listener, and the deploy gets killed as unhealthy.
