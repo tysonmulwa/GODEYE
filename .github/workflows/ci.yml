@@ -5,8 +5,38 @@ on:
     branches: [main]
   pull_request:
 
+# Test-only values. Every one is >= 32 characters, distinct from the others, and
+# the encryption key has real byte variety, because the validators added for
+# findings S-5 and S-6 refuse anything less — a published default, a placeholder,
+# or a format-valid key made of one repeated byte. The previous values here were
+# `ci-access` and 64 "a"s, both of which are now correctly rejected.
+env:
+  JWT_ACCESS_SECRET: ci-access-secret-4f8c1e2a9d7b3e5c0a
+  JWT_REFRESH_SECRET: ci-refresh-secret-7b3d5f0c2e9a1d4f6b
+  OAUTH_STATE_SECRET: ci-oauth-state-secret-9a1e6c4b8d2f7e3a
+  ENGINE_INTERNAL_SECRET: ci-engine-internal-secret-3c8f1b6d9e
+  INDEXNOW_KEY_SECRET: ci-indexnow-secret-5e2a9c7f1b4d8e6a
+  META_WEBHOOK_VERIFY_TOKEN: ci-meta-webhook-verify-2d7f9b1c4e
+  TOKEN_ENCRYPTION_KEY: b3126e1542fa317004bc1c192e87c6afc2bbfae1674ffae2b159df41d7743209
+
 jobs:
+  # ---------------------------------------------------------------------------
+  # Rules whose reason is a specific finding. No install step on purpose: a CI
+  # job must not be able to skip a security rule because a dependency failed to
+  # resolve.
+  # ---------------------------------------------------------------------------
+  rules:
+    name: Lint rules
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: node scripts/lint-rules.mjs
+
   node:
+    name: Node
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -23,10 +53,6 @@ jobs:
         run: pnpm typecheck
       - name: API unit tests
         run: pnpm --filter @godeye/api test
-        env:
-          TOKEN_ENCRYPTION_KEY: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
-          JWT_ACCESS_SECRET: ci-access
-          JWT_REFRESH_SECRET: ci-refresh
       # `next build` passing does not mean the site can ship. The Cloudflare
       # adapter has its own rules, and breaking one of them fails here rather
       # than at deploy time: an `export const runtime = "edge"` on the
@@ -40,7 +66,59 @@ jobs:
           NEXT_PUBLIC_API_URL: ${{ vars.NEXT_PUBLIC_API_URL || 'https://api.godeyeautomation.com' }}
           NEXT_PUBLIC_SITE_URL: ${{ vars.NEXT_PUBLIC_SITE_URL || 'https://godeyeautomation.com' }}
 
+  # ---------------------------------------------------------------------------
+  # One test per audit finding, each of which was RED before its fix. This is
+  # the job that must never be allowed to go yellow: a skipped exploit suite is
+  # indistinguishable from a passing one in a status badge.
+  # ---------------------------------------------------------------------------
+  exploits:
+    name: Exploit suite
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: godeye_test
+          POSTGRES_PASSWORD: godeye_test
+          POSTGRES_DB: godeye_test
+        ports: ["55432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U godeye_test"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+      redis:
+        image: redis:7-alpine
+        ports: ["56379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+    env:
+      TEST_DATABASE_URL: postgresql://godeye_test:godeye_test@127.0.0.1:55432/godeye_test?schema=public
+      DATABASE_URL: postgresql://godeye_test:godeye_test@127.0.0.1:55432/godeye_test?schema=public
+      REDIS_URL: redis://127.0.0.1:56379/0
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @godeye/db generate
+      # Real migrations against a real Postgres. The S-8/D-1 tests assert a
+      # unique index and an EXPLAIN plan; neither can be faked.
+      - name: Apply migrations
+        run: pnpm --filter @godeye/db migrate:deploy
+      - name: Exploit suite
+        run: pnpm --filter @godeye/api test:exploits
+      # Fails the build if a route was added without an access decision, or if
+      # any role can reach a route the matrix says it cannot.
+      - name: Authorization matrix
+        run: pnpm --filter @godeye/api test:exploits -- --testPathPattern=authorization-matrix
+
   engine:
+    name: Engine
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -56,7 +134,52 @@ jobs:
       - name: Tests
         run: python -m pytest -q
 
+  # ---------------------------------------------------------------------------
+  # Supply chain. Advisory in the sense that it does not gate a merge on a
+  # transitive advisory nobody can act on today, but it never goes quiet: the
+  # SBOM is an artifact on every build, so "what was in that release" is a
+  # download rather than an investigation (NIST SP 800-218, CycloneDX 1.6).
+  # ---------------------------------------------------------------------------
+  supply-chain:
+    name: Supply chain
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # gitleaks needs the whole history, not just the tip
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Known vulnerabilities
+        run: pnpm audit --audit-level high || true
+      - name: SBOM (CycloneDX)
+        run: pnpm dlx @cyclonedx/cyclonedx-npm --output-file sbom.json || true
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sbom
+          path: sbom.json
+          if-no-files-found: warn
+      # Secrets in history, not just in the working tree. The audit scanned for
+      # AWS/Stripe/Paystack/GitHub/Slack/Anthropic/OpenAI/Google shapes by hand
+      # and found nothing; this keeps that true without anybody remembering to.
+      - name: Secret scan (full history)
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        continue-on-error: true
+
 # Deliberately no deploy job. Cloudflare Workers Builds is connected to this
 # repository and deploys apps/web on every push to main, the way Railway does
 # for the API, engine, worker and beat. A second deployer here would ship the
 # same commit twice.
+#
+# NOTE FOR WHOEVER READS A GREEN BADGE: GitHub Actions on this account is
+# currently billing-locked, so none of the above has executed. Every job here
+# has been run locally instead, and the results are recorded in
+# docs/audit/PHASE-REPORT.md. A green badge means nothing until the account is
+# unlocked and this workflow has actually run.
