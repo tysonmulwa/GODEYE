@@ -92,3 +92,14 @@ export const csrfBlocked = meter.createCounter("godeye.http.csrf_blocked", {
 export const breachedPasswordChecks = meter.createCounter("godeye.auth.breach_checks", {
   description: "Password screening results: ok, breached, or unavailable",
 });
+
+/**
+ * MFA recovery-code activity (ASVS V2.8.4).
+ *
+ * `redeemed` is the one worth watching. A recovery code is the weaker path into
+ * an account, and a rate of them that does not match the rate of people losing
+ * phones is somebody working through a leaked set.
+ */
+export const mfaBackupCodeUse = meter.createCounter("godeye.auth.mfa_backup_codes", {
+  description: "Recovery code lifecycle: issued, redeemed, rejected, raced",
+});

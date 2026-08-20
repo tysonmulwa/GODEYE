@@ -26,11 +26,34 @@ model User {
 
   memberships      Membership[]
   refreshTokens    RefreshToken[]
+  mfaBackupCodes   MfaBackupCode[]
   auditLogs        AuditLog[]
   contentItems     ContentItem[]
-  sentInvitations  Invitation[]  @relation("SentInvitations")
-  submittedContent ContentItem[] @relation("SubmittedContent")
-  reviewedContent  ContentItem[] @relation("ReviewedContent")
+  sentInvitations  Invitation[]    @relation("SentInvitations")
+  submittedContent ContentItem[]   @relation("SubmittedContent")
+  reviewedContent  ContentItem[]   @relation("ReviewedContent")
+}
+
+/// Single-use recovery codes, so losing the phone that holds the TOTP app is
+/// not the end of the account (ASVS 5.0 V2.8.4, NIST SP 800-63B 5.1.4.3).
+///
+/// Stored as argon2id hashes and never in the clear. A recovery code alone
+/// completes a sign-in, which makes it a second password, so it is stored the
+/// way the first one is -- anything reversible here would make one database
+/// read an MFA bypass for every account at once.
+model MfaBackupCode {
+  id        String    @id @default(cuid())
+  userId    String
+  codeHash  String
+  /// Set on redemption rather than deleting the row, so "somebody used a
+  /// recovery code at 02:14" is still answerable a month later.
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  /// Sign-in verifies against every unused code for one user.
+  @@index([userId, usedAt])
 }
 
 // A workspace is either a company/team or a solo content creator's studio.
@@ -50,25 +73,25 @@ model Organization {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
-  memberships        Membership[]
-  invitations        Invitation[]
-  businessProfile    BusinessProfile?
-  connections        SocialConnection[]
-  contentItems       ContentItem[]
-  mediaAssets        MediaAsset[]
-  campaigns          Campaign[]
-  postingPlans       PostingPlan[]
-  scheduledPosts     ScheduledPost[]
-  agentRuns          AgentRun[]
-  analyticsSnapshots AnalyticsSnapshot[]
-  auditLogs          AuditLog[]
-  apiKeys            ApiKey[]
-  subscription       Subscription?
-  usageRecords       UsageRecord[]
-  brandKit           BrandKit?
-  seoAudits          SeoAudit[]
-  seoFixes           SeoFix[]
-  productCatalogue   Product[]
+  memberships         Membership[]
+  invitations         Invitation[]
+  businessProfile     BusinessProfile?
+  connections         SocialConnection[]
+  contentItems        ContentItem[]
+  mediaAssets         MediaAsset[]
+  campaigns           Campaign[]
+  postingPlans        PostingPlan[]
+  scheduledPosts      ScheduledPost[]
+  agentRuns           AgentRun[]
+  analyticsSnapshots  AnalyticsSnapshot[]
+  auditLogs           AuditLog[]
+  apiKeys             ApiKey[]
+  subscription        Subscription?
+  usageRecords        UsageRecord[]
+  brandKit            BrandKit?
+  seoAudits           SeoAudit[]
+  seoFixes            SeoFix[]
+  productCatalogue    Product[]
   paymentApplications PaymentApplication[]
 }
 
@@ -80,10 +103,10 @@ enum Role {
 }
 
 model Membership {
-  id        String   @id @default(cuid())
-  userId    String
-  orgId     String
-  role      Role     @default(OWNER)
+  id             String   @id @default(cuid())
+  userId         String
+  orgId          String
+  role           Role     @default(OWNER)
   /// Bumped whenever this person's access to this workspace changes: a role
   /// change, a password change, an MFA change, or "sign out everywhere".
   ///
@@ -91,8 +114,8 @@ model Membership {
   /// consulted this row, so a demoted ADMIN kept ADMIN for the life of their
   /// access token, and a removed member kept full access long enough to delete
   /// every connection and export the catalogue.
-  sessionVersion Int   @default(0)
-  createdAt DateTime @default(now())
+  sessionVersion Int      @default(0)
+  createdAt      DateTime @default(now())
 
   user User         @relation(fields: [userId], references: [id], onDelete: Cascade)
   org  Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
@@ -238,7 +261,7 @@ model SocialConnection {
   createdAt            DateTime         @default(now())
   updatedAt            DateTime         @updatedAt
 
-  org            Organization    @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  org            Organization        @relation(fields: [orgId], references: [id], onDelete: Cascade)
   scheduledPosts ScheduledPost[]
   snapshots      AnalyticsSnapshot[]
 
@@ -250,20 +273,20 @@ model SocialConnection {
 // ============================================================
 
 model BusinessProfile {
-  id             String   @id @default(cuid())
-  orgId          String   @unique
-  businessName   String
-  industry       String
-  description    String   @db.Text
-  targetAudience String   @db.Text
-  location       String?
-  website        String?
-  products       String[] @default([])
-  services       String[] @default([])
-  goals          String[] @default([])
-  brandVoice     String?
-  competitors    String[] @default([])
-  seasonalNotes  String?
+  id                     String     @id @default(cuid())
+  orgId                  String     @unique
+  businessName           String
+  industry               String
+  description            String     @db.Text
+  targetAudience         String     @db.Text
+  location               String?
+  website                String?
+  products               String[]   @default([])
+  services               String[]   @default([])
+  goals                  String[]   @default([])
+  brandVoice             String?
+  competitors            String[]   @default([])
+  seasonalNotes          String?
   // Reading a catalogue off a website is something the owner opts into, not a
   // default. Recorded as who and when rather than a flag, so it can be shown
   // back and answered for.
@@ -280,8 +303,8 @@ model BusinessProfile {
   /// Where those posts go. Empty means nowhere, which is why auto-post cannot
   /// be switched on without choosing.
   productPostPlatforms   Platform[] @default([])
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  createdAt              DateTime   @default(now())
+  updatedAt              DateTime   @updatedAt
 
   org Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
 }
@@ -289,38 +312,38 @@ model BusinessProfile {
 /// One product as its own shop describes it. Imported, never invented: the
 /// price and description here go onto a customer's feed.
 model Product {
-  id           String    @id @default(cuid())
-  orgId        String
+  id             String    @id @default(cuid())
+  orgId          String
   /// The product's own page. Natural key with orgId, a shop does not sell the
   /// same thing at two URLs, and re-importing must update rather than duplicate.
-  sourceUrl    String
-  title        String
-  description  String?   @db.Text
-  price        Decimal?  @db.Decimal(14, 2)
+  sourceUrl      String
+  title          String
+  description    String?   @db.Text
+  price          Decimal?  @db.Decimal(14, 2)
   /// The shop's own recorded former price. Whether it may be stated in a post
   /// depends on where the shop sells, so it is kept as evidence rather than
   /// as something to publish.
-  compareAtPrice Decimal? @db.Decimal(14, 2)
-  currency     String?
-  imageUrl     String?
-  availability String?
-  sku          String?
+  compareAtPrice Decimal?  @db.Decimal(14, 2)
+  currency       String?
+  imageUrl       String?
+  availability   String?
+  sku            String?
   /// Which route read it: shopify | jsonld | microdata | opengraph | storefront_api
-  source       String
+  source         String
   /// Sizes, colours and category as the shop records them: { "sizes": [...],
   /// "colours": [...], "category": "..." }. What lets a post answer "will it
   /// fit me" without the reader opening the link.
-  variants     Json?
+  variants       Json?
   /// Fingerprint of the fields that matter, so a re-import can tell a genuine
   /// change from a shop that simply republished the same page.
-  contentHash  String
-  firstSeenAt  DateTime  @default(now())
-  lastSeenAt   DateTime  @default(now())
+  contentHash    String
+  firstSeenAt    DateTime  @default(now())
+  lastSeenAt     DateTime  @default(now())
   /// Kept so the same product is not posted twice in a row while others wait.
-  lastPostedAt DateTime?
-  postCount    Int       @default(0)
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  lastPostedAt   DateTime?
+  postCount      Int       @default(0)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 
   org Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
 
@@ -357,38 +380,38 @@ enum ContentStatus {
 }
 
 model ContentItem {
-  id          String        @id @default(cuid())
-  orgId       String
-  campaignId  String?
-  createdById String?
-  type        ContentType   @default(SOCIAL_POST)
-  status      ContentStatus @default(DRAFT)
-  title       String?
-  body        String        @db.Text
-  hashtags    String[]      @default([])
+  id               String        @id @default(cuid())
+  orgId            String
+  campaignId       String?
+  createdById      String?
+  type             ContentType   @default(SOCIAL_POST)
+  status           ContentStatus @default(DRAFT)
+  title            String?
+  body             String        @db.Text
+  hashtags         String[]      @default([])
   // Per-platform variants: { "TELEGRAM": { "body": "...", "hashtags": [...] }, ... }
-  variants    Json?
+  variants         Json?
   // A/B test variants: { "A": { "body": "...", "hashtags": [...] }, "B": { ... } }
-  abVariants  Json?
-  evergreen   Boolean       @default(false)
-  lastRecycledAt DateTime?
+  abVariants       Json?
+  evergreen        Boolean       @default(false)
+  lastRecycledAt   DateTime?
   // How long this post runs once photos are rendered to video, and whether
   // they are. Per post rather than per workspace: length is a creative choice
   // that changes with the content, not a setting you fix once.
-  slideshowSeconds Int      @default(30)
+  slideshowSeconds Int           @default(30)
   // TikTok ignores this, its API takes no still post that can carry audio.
   // Everywhere else a still carousel is a legitimate format worth keeping.
-  renderAsVideo    Boolean  @default(true)
-  aiGenerated Boolean       @default(false)
-  agentRunId  String?
+  renderAsVideo    Boolean       @default(true)
+  aiGenerated      Boolean       @default(false)
+  agentRunId       String?
   // Approval workflow (Phase 6)
-  submittedAt   DateTime?
-  submittedById String?
-  reviewedAt    DateTime?
-  reviewedById  String?
-  reviewNote    String?
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
+  submittedAt      DateTime?
+  submittedById    String?
+  reviewedAt       DateTime?
+  reviewedById     String?
+  reviewNote       String?
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
 
   org            Organization    @relation(fields: [orgId], references: [id], onDelete: Cascade)
   campaign       Campaign?       @relation(fields: [campaignId], references: [id], onDelete: SetNull)
@@ -428,7 +451,7 @@ model MediaAsset {
   width         Int?
   height        Int?
   durationSec   Float?
-  prompt        String?  @db.Text // generation prompt for AI assets
+  prompt        String?     @db.Text // generation prompt for AI assets
   preset        String? // platform size preset used (e.g. INSTAGRAM_FEED)
   agentRunId    String?
   metadata      Json?
@@ -500,27 +523,27 @@ enum CadenceType {
 }
 
 model PostingPlan {
-  id             String      @id @default(cuid())
-  orgId          String
-  name           String
-  cadence        CadenceType @default(DAILY_1)
-  customCron     String?
-  timezone       String      @default("UTC")
-  platforms      Platform[]  @default([])
-  preferredTimes String[]    @default([]) // "09:00", "17:30"; empty = best-time detection
-  active         Boolean     @default(true)
+  id               String      @id @default(cuid())
+  orgId            String
+  name             String
+  cadence          CadenceType @default(DAILY_1)
+  customCron       String?
+  timezone         String      @default("UTC")
+  platforms        Platform[]  @default([])
+  preferredTimes   String[]    @default([]) // "09:00", "17:30"; empty = best-time detection
+  active           Boolean     @default(true)
   // Autopilot: the planner auto-generates and schedules content for this plan
-  autoGenerate     Boolean   @default(false)
-  topics           String[]  @default([]) // content angles the planner rotates through
-  abTesting        Boolean   @default(false)
-  recycleEvergreen Boolean   @default(false)
-  generateImages   Boolean   @default(false) // autopilot also generates an image per post
+  autoGenerate     Boolean     @default(false)
+  topics           String[]    @default([]) // content angles the planner rotates through
+  abTesting        Boolean     @default(false)
+  recycleEvergreen Boolean     @default(false)
+  generateImages   Boolean     @default(false) // autopilot also generates an image per post
   // Inherited by every post this plan generates.
-  slideshowSeconds Int       @default(30)
-  renderAsVideo    Boolean   @default(true)
+  slideshowSeconds Int         @default(30)
+  renderAsVideo    Boolean     @default(true)
   lastPlannedAt    DateTime? // planner high-water mark (avoid double planning)
-  createdAt      DateTime    @default(now())
-  updatedAt      DateTime    @updatedAt
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
 
   org Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
 
@@ -624,13 +647,13 @@ model AgentRun {
 // ============================================================
 
 model SeoAudit {
-  id           String   @id @default(cuid())
-  orgId        String
-  agentRunId   String?
-  url          String
-  status       RunStatus @default(QUEUED)
-  score        Int? // 0-100
-  pagesCrawled Int      @default(0)
+  id              String    @id @default(cuid())
+  orgId           String
+  agentRunId      String?
+  url             String
+  status          RunStatus @default(QUEUED)
+  score           Int? // 0-100
+  pagesCrawled    Int       @default(0)
   // [{severity, code, page, message, recommendation}]
   findings        Json?
   // {clusters: [{topic, intent, keywords: []}]}
@@ -639,13 +662,13 @@ model SeoAudit {
   metaSuggestions Json?
   // JSON-LD for the business (Organization/LocalBusiness)
   schemaMarkup    Json?
-  sitemapXml      String? @db.Text
-  robotsTxt       String? @db.Text
+  sitemapXml      String?   @db.Text
+  robotsTxt       String?   @db.Text
   // Detected site stack, "wordpress" | "shopify" | "wix" | "nextjs" | "html"…
   // Drives which set of apply-instructions each fix carries.
   platform        String?
-  error           String? @db.Text
-  createdAt       DateTime @default(now())
+  error           String?   @db.Text
+  createdAt       DateTime  @default(now())
   completedAt     DateTime?
 
   org   Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
@@ -728,19 +751,19 @@ model SeoFix {
 // ============================================================
 
 model AnalyticsSnapshot {
-  id           String   @id @default(cuid())
-  orgId        String
-  connectionId String?
-  metric       String // followers | engagement | reach | impressions | clicks | ...
-  value        Float
+  id              String   @id @default(cuid())
+  orgId           String
+  connectionId    String?
+  metric          String // followers | engagement | reach | impressions | clicks | ...
+  value           Float
   /// D-4. This lived inside `dimensions` as JSON, so the A/B report could not
   /// filter on it: it loaded the org's ENTIRE engagement history into memory
   /// and threw nearly all of it away in a JS loop. A workspace with ten
   /// channels running six months holds ~43,000 rows, and the API pod OOMs
   /// before it finishes deciding which two posts won.
   scheduledPostId String?
-  dimensions   Json?
-  capturedAt   DateTime @default(now())
+  dimensions      Json?
+  capturedAt      DateTime @default(now())
 
   org        Organization      @relation(fields: [orgId], references: [id], onDelete: Cascade)
   connection SocialConnection? @relation(fields: [connectionId], references: [id], onDelete: SetNull)

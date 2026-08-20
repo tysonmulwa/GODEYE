@@ -101,6 +101,8 @@ module.exports = {
     "./src/common/env.ts": { lines: 85, branches: 85 },
     "./src/connections/oauth-state.service.ts": { lines: 78, branches: 65 },
     "./src/auth/auth.service.ts": { lines: 72, branches: 60 },
+    "./src/auth/breached-password.service.ts": { lines: 95, branches: 85 },
+    "./src/auth/backup-codes.service.ts": { lines: 95, branches: 85 },
     "./src/auth/login-backoff.service.ts": { lines: 95, branches: 85 },
   },
 };

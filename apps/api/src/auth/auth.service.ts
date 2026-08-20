@@ -29,6 +29,7 @@ import { refreshTokenReuse } from "../common/metrics";
 import { signToken } from "../common/tokens";
 import { LoginBackoffService } from "./login-backoff.service";
 import { BreachedPasswordService } from "./breached-password.service";
+import { BackupCodesService } from "./backup-codes.service";
 import { MembershipService } from "../common/membership.service";
 
 const ACCESS_TOKEN_TTL = "15m";
@@ -77,6 +78,7 @@ export class AuthService {
     private readonly backoff: LoginBackoffService,
     private readonly memberships: MembershipService,
     private readonly breached: BreachedPasswordService,
+    private readonly backupCodes: BackupCodesService,
   ) {}
 
   // ---------- Registration & login ----------
@@ -154,7 +156,16 @@ export class AuthService {
         throw new UnauthorizedException({ code: "MFA_REQUIRED", message: "MFA code required" });
       }
       try {
-        this.assertValidMfaCode(user.mfaSecret, input.mfaCode, user.id);
+        // A recovery code is offered in the same field. Tried second, so a
+        // valid TOTP code never consumes one -- redeeming is destructive, and
+        // the common case must not spend something the user cannot get back.
+        if (!(await this.backupCodes.redeem(user.id, input.mfaCode))) {
+          this.assertValidMfaCode(user.mfaSecret, input.mfaCode, user.id);
+        } else {
+          // Someone signing in this way has lost their authenticator. It is
+          // the one MFA event worth a durable record.
+          this.audit.log({ userId: user.id, action: "auth.mfa_backup_code_used" });
+        }
       } catch (e) {
         // A wrong second factor is a failed sign-in. Not counting it would
         // leave the MFA code guessable at the full route-throttle rate.
@@ -537,14 +548,41 @@ export class AuthService {
     };
   }
 
-  async enableMfa(userId: string, code: string): Promise<void> {
+  /**
+   * Turn MFA on, and hand back the recovery codes.
+   *
+   * The codes are returned here and nowhere else. Enrolling without them is how
+   * an account becomes unrecoverable the moment a phone is replaced, so they
+   * are part of enabling rather than a separate step somebody skips.
+   */
+  async enableMfa(userId: string, code: string): Promise<{ backupCodes: string[] }> {
     const user = await this.prisma.user.findUniqueOrThrow({ where: { id: userId } });
     this.assertValidMfaCode(user.mfaSecret, code, userId);
     await this.prisma.user.update({ where: { id: userId }, data: { mfaEnabled: true } });
+    const backupCodes = await this.backupCodes.regenerate(userId);
     // Turning MFA on changes what a session is worth; sessions that predate it
     // were established without it.
     await this.memberships.bumpAllSessions(userId, "MFA enabled");
     this.audit.log({ userId, action: "auth.mfa_enabled" });
+    return { backupCodes };
+  }
+
+  /**
+   * Issue a replacement set, invalidating the old one.
+   *
+   * Requires the password: this hands out credentials that each complete a
+   * sign-in on their own, so a borrowed unlocked laptop must not be enough to
+   * mint a fresh set and walk away with it.
+   */
+  async regenerateBackupCodes(userId: string, password: string): Promise<{ backupCodes: string[] }> {
+    const user = await this.prisma.user.findUniqueOrThrow({ where: { id: userId } });
+    if (!user.mfaEnabled) throw new BadRequestException("MFA is not enabled");
+    if (!(await argon2.verify(user.passwordHash, password))) {
+      throw new UnauthorizedException("Incorrect password");
+    }
+    const backupCodes = await this.backupCodes.regenerate(userId);
+    this.audit.log({ userId, action: "auth.mfa_backup_codes_regenerated" });
+    return { backupCodes };
   }
 
   /**
@@ -570,6 +608,9 @@ export class AuthService {
       where: { id: userId },
       data: { mfaEnabled: false, mfaSecret: null },
     });
+    // The codes go with it. A code that outlives the MFA it was issued for is a
+    // password-equivalent credential nobody remembers exists.
+    await this.backupCodes.revokeAll(userId);
     await this.memberships.bumpAllSessions(userId, "MFA disabled");
     this.audit.log({ userId, action: "auth.mfa_disabled" });
   }

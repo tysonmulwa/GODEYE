@@ -40,8 +40,18 @@ const mfaCodeSchema = z.object({ code: z.string().min(6).max(8) });
 // alone should not be enough to remove the protection guarding the account.
 const mfaDisableSchema = z.object({
   password: z.string().min(1),
-  code: z.string().min(6).max(8),
+  // 6 for TOTP, up to 11 for a recovery code written XXXXX-XXXXX.
+  code: z.string().min(6).max(11),
 });
+
+/**
+ * Reissuing recovery codes needs the password, not just a session.
+ *
+ * Each code completes a sign-in on its own, so this endpoint hands out
+ * credentials. A borrowed unlocked laptop must not be enough to mint a fresh
+ * set and walk off with it.
+ */
+const backupCodesSchema = z.object({ password: z.string().min(1) });
 
 /**
  * SameSite is decided by whether WEB_URL and API_URL share a registrable
@@ -222,12 +232,30 @@ export class AuthController {
   @Post("mfa/enable")
   @MinRole("VIEWER")
   @ApiBearerAuth()
+  @ApiOperation({
+    summary: "Turn MFA on. Returns the recovery codes, which are shown once and never again",
+  })
   async enableMfa(
     @CurrentAuth() auth: AccessTokenPayload,
     @Body(new ZodPipe(mfaCodeSchema)) body: z.infer<typeof mfaCodeSchema>,
   ) {
-    await this.auth.enableMfa(auth.sub, body.code);
-    return { ok: true };
+    // The codes come back in this response and in no other. They are stored as
+    // argon2id hashes, so there is no endpoint that can show them again -- the
+    // client has to put them in front of the user now.
+    const { backupCodes } = await this.auth.enableMfa(auth.sub, body.code);
+    return { ok: true, backupCodes };
+  }
+
+  @Post("mfa/backup-codes")
+  @MinRole("VIEWER")
+  @ApiBearerAuth()
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  @ApiOperation({ summary: "Issue a new set of recovery codes, invalidating the old set" })
+  async regenerateBackupCodes(
+    @CurrentAuth() auth: AccessTokenPayload,
+    @Body(new ZodPipe(backupCodesSchema)) body: z.infer<typeof backupCodesSchema>,
+  ) {
+    return this.auth.regenerateBackupCodes(auth.sub, body.password);
   }
 
   @Post("mfa/disable")

@@ -8,6 +8,7 @@ import { CryptoService } from "../common/crypto.service";
 import { AuthService } from "./auth.service";
 import { LoginBackoffService } from "./login-backoff.service";
 import { BreachedPasswordService } from "./breached-password.service";
+import { BackupCodesService } from "./backup-codes.service";
 import { MembershipService } from "../common/membership.service";
 
 // A real 32-byte key. This was "a".repeat(64) — every byte 0xaa — which the
@@ -51,7 +52,10 @@ function makePrisma(): MockPrisma {
 
 describe("AuthService", () => {
   let prisma: MockPrisma;
+  let crypto: CryptoService;
+  let audit: { log: jest.Mock };
   let breached: { assertNotBreached: jest.Mock };
+  let backupCodes: Record<string, jest.Mock>;
   let service: AuthService;
   let backoff: Record<string, jest.Mock>;
   let memberships: Record<string, jest.Mock>;
@@ -69,7 +73,7 @@ describe("AuthService", () => {
 
   beforeEach(() => {
     prisma = makePrisma();
-    const crypto = new CryptoService();
+    crypto = new CryptoService();
     access = {
       startTrial: jest.fn().mockResolvedValue(new Date("2026-01-02T00:00:00.000Z")),
       state: jest.fn().mockResolvedValue({
@@ -90,12 +94,19 @@ describe("AuthService", () => {
       recordFailure: jest.fn().mockResolvedValue(undefined),
       recordSuccess: jest.fn().mockResolvedValue(undefined),
     };
+    audit = { log: jest.fn() };
     breached = { assertNotBreached: jest.fn().mockResolvedValue(undefined) };
+    backupCodes = {
+      redeem: jest.fn().mockResolvedValue(false),
+      regenerate: jest.fn().mockResolvedValue(["AAAAA-BBBBB"]),
+      revokeAll: jest.fn().mockResolvedValue(undefined),
+      remaining: jest.fn().mockResolvedValue(10),
+    };
     service = new AuthService(
       prisma as never,
       new JwtService({}),
       crypto,
-      { log: jest.fn() } as unknown as AuditService,
+      audit as unknown as AuditService,
       access as unknown as WorkspaceAccessService,
       // Graduated sign-in backoff (NIST SP 800-63B). A no-op here: its own
       // behaviour is covered in login-backoff.service.spec.ts, and stubbing it
@@ -109,6 +120,10 @@ describe("AuthService", () => {
       // service's own behaviour -- k-anonymity, fail-open, the padding entries
       // -- is covered in breached-password.service.spec.ts.
       breached as unknown as BreachedPasswordService,
+      // Recovery codes. redeem() returns false here, so the TOTP path is the
+      // one every existing MFA test exercises -- unchanged. The codes' own
+      // behaviour is covered in backup-codes.service.spec.ts.
+      backupCodes as unknown as BackupCodesService,
     );
   });
 
@@ -532,4 +547,126 @@ describe("AuthService", () => {
       expect(prisma.user.create).not.toHaveBeenCalled();
     });
   });
+
+  /**
+   * Recovery codes, from the AuthService side. The codes' own behaviour lives
+   * in backup-codes.service.spec.ts; what matters here is that they are wired
+   * into the three moments that decide whether an account is recoverable.
+   */
+  describe("MFA recovery codes", () => {
+    it("hands the codes back when MFA is turned on", async () => {
+      const secret = authenticator.generateSecret();
+      prisma.user.findUniqueOrThrow.mockResolvedValue({
+        ...baseUser,
+        mfaSecret: crypto.encrypt(secret, `user:${baseUser.id}`),
+      });
+      const result = await service.enableMfa(baseUser.id, authenticator.generate(secret));
+      // Enrolling without them is how an account becomes unrecoverable the
+      // moment a phone is replaced, so they are part of enabling rather than a
+      // separate step somebody skips.
+      expect(backupCodes.regenerate).toHaveBeenCalledWith(baseUser.id);
+      expect(result.backupCodes).toEqual(["AAAAA-BBBBB"]);
+    });
+
+    it("revokes them when MFA is turned off", async () => {
+      const secret = authenticator.generateSecret();
+      prisma.user.findUniqueOrThrow.mockResolvedValue({
+        ...baseUser,
+        mfaEnabled: true,
+        mfaSecret: crypto.encrypt(secret, `user:${baseUser.id}`),
+        passwordHash: await argon2.hash("Str0ngPassw0rd!", { type: argon2.argon2id }),
+      });
+      await service.disableMfa(baseUser.id, "Str0ngPassw0rd!", authenticator.generate(secret));
+      // A code that outlives the MFA it was issued for is a password-equivalent
+      // credential nobody remembers exists.
+      expect(backupCodes.revokeAll).toHaveBeenCalledWith(baseUser.id);
+    });
+
+    describe("reissuing", () => {
+      beforeEach(async () => {
+        prisma.user.findUniqueOrThrow.mockResolvedValue({
+          ...baseUser,
+          mfaEnabled: true,
+          passwordHash: await argon2.hash("Str0ngPassw0rd!", { type: argon2.argon2id }),
+        });
+      });
+
+      it("issues a fresh set", async () => {
+        const result = await service.regenerateBackupCodes(baseUser.id, "Str0ngPassw0rd!");
+        expect(result.backupCodes).toEqual(["AAAAA-BBBBB"]);
+      });
+
+      /**
+       * This endpoint hands out credentials that each complete a sign-in on
+       * their own. A borrowed unlocked laptop has the session but not the
+       * password, and must not be enough to mint a fresh set and walk off.
+       */
+      it("requires the password, not just a session", async () => {
+        await expect(
+          service.regenerateBackupCodes(baseUser.id, "not-the-password"),
+        ).rejects.toThrow();
+        expect(backupCodes.regenerate).not.toHaveBeenCalled();
+      });
+
+      it("refuses when MFA is not enabled", async () => {
+        prisma.user.findUniqueOrThrow.mockResolvedValue({
+          ...baseUser,
+          mfaEnabled: false,
+          passwordHash: await argon2.hash("Str0ngPassw0rd!", { type: argon2.argon2id }),
+        });
+        await expect(
+          service.regenerateBackupCodes(baseUser.id, "Str0ngPassw0rd!"),
+        ).rejects.toThrow();
+      });
+    });
+
+    describe("signing in with one", () => {
+      beforeEach(async () => {
+        prisma.user.findUnique.mockResolvedValue({
+          ...baseUser,
+          mfaEnabled: true,
+          mfaSecret: crypto.encrypt(authenticator.generateSecret(), `user:${baseUser.id}`),
+          passwordHash: await argon2.hash("Str0ngPassw0rd!", { type: argon2.argon2id }),
+          memberships: [{ orgId: org.id, role: "OWNER", org }],
+        });
+      });
+
+      it("accepts a recovery code in place of a TOTP code", async () => {
+        backupCodes.redeem.mockResolvedValue(true);
+        const session = await service.login(
+          { email: "jane@acme.com", password: "Str0ngPassw0rd!", mfaCode: "AAAAA-BBBBB" },
+          {},
+        );
+        expect(session.accessToken).toBeTruthy();
+      });
+
+      it("records it, because it means somebody lost their authenticator", async () => {
+        backupCodes.redeem.mockResolvedValue(true);
+        await service.login(
+          { email: "jane@acme.com", password: "Str0ngPassw0rd!", mfaCode: "AAAAA-BBBBB" },
+          {},
+        );
+        expect(audit.log).toHaveBeenCalledWith(
+          expect.objectContaining({ action: "auth.mfa_backup_code_used" }),
+        );
+      });
+
+      /**
+       * Redeeming is destructive and a code cannot be recovered, so the common
+       * case -- a working authenticator -- must never spend one.
+       */
+      it("still refuses a wrong code when no recovery code matches", async () => {
+        backupCodes.redeem.mockResolvedValue(false);
+        await expect(
+          service.login(
+            { email: "jane@acme.com", password: "Str0ngPassw0rd!", mfaCode: "000000" },
+            {},
+          ),
+        ).rejects.toThrow();
+        // And a failed second factor is still a failed sign-in.
+        expect(backoff.recordFailure).toHaveBeenCalled();
+      });
+    });
+  });
+
 });
