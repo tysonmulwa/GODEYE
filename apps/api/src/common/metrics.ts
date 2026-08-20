@@ -81,3 +81,14 @@ export const egressBlocked = meter.createCounter("godeye.egress.blocked", {
 export const csrfBlocked = meter.createCounter("godeye.http.csrf_blocked", {
   description: "State-changing requests refused for missing or foreign Origin",
 });
+
+/**
+ * Breached-password screening outcomes (NIST SP 800-63B §5.1.1.2).
+ *
+ * `unavailable` is the one to alert on. The check fails open by design, so an
+ * HIBP outage is silent from the outside — registrations keep succeeding, and
+ * the only evidence that the control stopped applying is this counter.
+ */
+export const breachedPasswordChecks = meter.createCounter("godeye.auth.breach_checks", {
+  description: "Password screening results: ok, breached, or unavailable",
+});

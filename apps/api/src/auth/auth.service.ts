@@ -28,6 +28,7 @@ import { PrismaService } from "../common/prisma.service";
 import { refreshTokenReuse } from "../common/metrics";
 import { signToken } from "../common/tokens";
 import { LoginBackoffService } from "./login-backoff.service";
+import { BreachedPasswordService } from "./breached-password.service";
 import { MembershipService } from "../common/membership.service";
 
 const ACCESS_TOKEN_TTL = "15m";
@@ -75,6 +76,7 @@ export class AuthService {
     private readonly access: WorkspaceAccessService,
     private readonly backoff: LoginBackoffService,
     private readonly memberships: MembershipService,
+    private readonly breached: BreachedPasswordService,
   ) {}
 
   // ---------- Registration & login ----------
@@ -90,6 +92,10 @@ export class AuthService {
       throw new BadRequestException("Business / organization name is required");
     }
 
+    // NIST SP 800-63B 5.1.1.2. Before the hash, so a breached password is
+    // never written -- not even briefly, and not into a row that a failed
+    // transaction might leave behind.
+    await this.breached.assertNotBreached(input.password);
     const passwordHash = await argon2.hash(input.password, { type: argon2.argon2id });
     const slug = await this.uniqueSlug(orgName);
 
@@ -319,6 +325,7 @@ export class AuthService {
       throw new UnauthorizedException("That is not your current password");
     }
 
+    await this.breached.assertNotBreached(input.newPassword);
     const passwordHash = await argon2.hash(input.newPassword, { type: argon2.argon2id });
     // Retires every access token already issued, in every workspace. Revoking
     // the refresh tokens alone left the current ones working for up to fifteen
@@ -431,6 +438,7 @@ export class AuthService {
       if (!parsed.success) {
         throw new BadRequestException(parsed.error.issues[0]?.message ?? "Password too weak");
       }
+      await this.breached.assertNotBreached(input.password);
       const passwordHash = await argon2.hash(input.password, { type: argon2.argon2id });
       user = await this.prisma.user.create({
         data: { email: invitation.email, passwordHash, name: input.name },

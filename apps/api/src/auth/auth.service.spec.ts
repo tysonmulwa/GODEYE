@@ -7,6 +7,7 @@ import { AuditService } from "../common/audit.service";
 import { CryptoService } from "../common/crypto.service";
 import { AuthService } from "./auth.service";
 import { LoginBackoffService } from "./login-backoff.service";
+import { BreachedPasswordService } from "./breached-password.service";
 import { MembershipService } from "../common/membership.service";
 
 // A real 32-byte key. This was "a".repeat(64) — every byte 0xaa — which the
@@ -50,6 +51,7 @@ function makePrisma(): MockPrisma {
 
 describe("AuthService", () => {
   let prisma: MockPrisma;
+  let breached: { assertNotBreached: jest.Mock };
   let service: AuthService;
   let backoff: Record<string, jest.Mock>;
   let memberships: Record<string, jest.Mock>;
@@ -88,6 +90,7 @@ describe("AuthService", () => {
       recordFailure: jest.fn().mockResolvedValue(undefined),
       recordSuccess: jest.fn().mockResolvedValue(undefined),
     };
+    breached = { assertNotBreached: jest.fn().mockResolvedValue(undefined) };
     service = new AuthService(
       prisma as never,
       new JwtService({}),
@@ -100,6 +103,12 @@ describe("AuthService", () => {
       backoff as unknown as LoginBackoffService,
       // S-10: the live membership, which is what authorization now follows.
       memberships as unknown as MembershipService,
+      // Breach screening (NIST SP 800-63B 5.1.1.2). A permissive stub, so
+      // these tests keep failing for the reason they were written for rather
+      // than because a fixture password happens to be in a corpus. The
+      // service's own behaviour -- k-anonymity, fail-open, the padding entries
+      // -- is covered in breached-password.service.spec.ts.
+      breached as unknown as BreachedPasswordService,
     );
   });
 
@@ -466,6 +475,61 @@ describe("AuthService", () => {
       prisma.user.update.mockResolvedValue(baseUser);
       await service.updateProfile(auth, { name: "Jane", avatarUrl: "" });
       expect(prisma.user.update.mock.calls[0][0].data.avatarUrl).toBeNull();
+    });
+  });
+
+
+  /**
+   * The screening is wired in, on every path that sets a password.
+   *
+   * A service that exists and is never called is the exact shape of S-1: five
+   * controllers where @MinRole compiled, read correctly in review, and enforced
+   * nothing because the guard reading it was not in the chain. A breach check
+   * nobody invokes is the same defect with a different name, and its own unit
+   * tests would still be green.
+   */
+  describe("breached-password screening is actually called", () => {
+    it("screens on registration", async () => {
+      prisma.user.findUnique.mockResolvedValue(null);
+      prisma.user.create.mockResolvedValue({
+        ...baseUser,
+        memberships: [{ orgId: org.id, role: "OWNER", org }],
+      });
+      await service.register(
+        {
+          name: "Jane",
+          email: "jane@acme.com",
+          password: "Str0ngPassw0rd!",
+          accountType: "BUSINESS",
+          organizationName: "Acme",
+        },
+        {},
+      );
+      expect(breached.assertNotBreached).toHaveBeenCalledWith("Str0ngPassw0rd!");
+    });
+
+    /**
+     * And the rejection has to reach the caller. Screening that logs and
+     * continues is screening that does nothing.
+     */
+    it("refuses to register when the password is breached", async () => {
+      prisma.user.findUnique.mockResolvedValue(null);
+      breached.assertNotBreached.mockRejectedValueOnce(new Error("PASSWORD_BREACHED"));
+      await expect(
+        service.register(
+          {
+            name: "Jane",
+            email: "jane@acme.com",
+            password: "Password12",
+            accountType: "BUSINESS",
+            organizationName: "Acme",
+          },
+          {},
+        ),
+      ).rejects.toThrow();
+      // And nothing was written. The check runs before the hash for exactly this
+      // reason: a rejected password must not leave a row behind.
+      expect(prisma.user.create).not.toHaveBeenCalled();
     });
   });
 });
