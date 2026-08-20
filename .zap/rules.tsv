@@ -1,0 +1,14 @@
+# ZAP baseline triage. TAB separated: rule id, action (WARN|IGNORE|FAIL), reason.
+#
+# Everything not listed here defaults to WARN and appears in the artifact. A
+# rule is moved to FAIL only once somebody has read a real report and decided
+# the finding is real for this API -- a gate that fails on its first run is a
+# gate somebody deletes, and then nothing is scanned at all.
+#
+# Every IGNORE below has a reason, and the reason is checkable.
+10015	IGNORE	Incidental caching headers. This is a JSON API behind bearer auth; no page is cached by a shared cache, and the CSP/HSTS work that matters lives on the web app (docs/security/CSP.md).
+10021	IGNORE	X-Content-Type-Options is set by helmet on the API and by middleware on the web app. ZAP reports it against error responses emitted before helmet runs.
+10027	IGNORE	Information disclosure via suspicious comments. Hits on the RFC 9457 problem-detail bodies, which name the failing route on purpose.
+10037	IGNORE	Server header. Express is fingerprintable regardless; hiding it is theatre and the version is not published.
+10063	IGNORE	Permissions-Policy is a document header. The API serves JSON, not documents.
+10098	IGNORE	Cross-domain misconfiguration. The CORS allow-list is explicit and asserted in s14-csrf.exploit.spec.ts; ZAP reads a wildcard preflight it did not send credentials on.

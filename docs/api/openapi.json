@@ -1,0 +1,2257 @@
+{
+  "openapi": "3.1.0",
+  "paths": {
+    "/health/live": {
+      "get": {
+        "operationId": "HealthController_live",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Process liveness. No dependencies, always fast.",
+        "tags": [
+          "health"
+        ]
+      }
+    },
+    "/health/ready": {
+      "get": {
+        "operationId": "HealthController_ready",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Dependency readiness, with a hard 3s budget.",
+        "tags": [
+          "health"
+        ]
+      }
+    },
+    "/health": {
+      "get": {
+        "operationId": "HealthController_health",
+        "parameters": [
+          {
+            "name": "render",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Deployed build of the API and the engine",
+        "tags": [
+          "health"
+        ]
+      }
+    },
+    "/auth/register": {
+      "post": {
+        "operationId": "AuthController_register",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Create an account and organization",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/auth/login": {
+      "post": {
+        "operationId": "AuthController_login",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Log in (include mfaCode if MFA is enabled)",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/auth/refresh": {
+      "post": {
+        "operationId": "AuthController_refresh",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Rotate the refresh token and get a new access token",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/auth/logout": {
+      "post": {
+        "operationId": "AuthController_logout",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/auth/me": {
+      "get": {
+        "operationId": "AuthController_me",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "auth"
+        ]
+      },
+      "patch": {
+        "operationId": "AuthController_updateProfile",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Change your own name or avatar",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/auth/change-password": {
+      "post": {
+        "operationId": "AuthController_changePassword",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Change your password and end your other sessions",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/auth/change-email": {
+      "post": {
+        "operationId": "AuthController_changeEmail",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Change the address your account signs in with",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/auth/invitations/{token}": {
+      "get": {
+        "operationId": "AuthController_previewInvitation",
+        "parameters": [
+          {
+            "name": "token",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Preview an invite link (public)",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/auth/accept-invitation": {
+      "post": {
+        "operationId": "AuthController_acceptInvitation",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Accept an invite, creates the account if the email is new",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/auth/orgs": {
+      "get": {
+        "operationId": "AuthController_listOrgs",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "List every organization the caller belongs to",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/auth/switch-org": {
+      "post": {
+        "operationId": "AuthController_switchOrg",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Get a session scoped to another org you belong to",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/auth/mfa/setup": {
+      "post": {
+        "operationId": "AuthController_setupMfa",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Begin TOTP MFA setup, returns otpauth:// URL for authenticator apps",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/auth/mfa/enable": {
+      "post": {
+        "operationId": "AuthController_enableMfa",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Turn MFA on. Returns the recovery codes, which are shown once and never again",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/auth/mfa/backup-codes": {
+      "post": {
+        "operationId": "AuthController_regenerateBackupCodes",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Issue a new set of recovery codes, invalidating the old set",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/auth/mfa/disable": {
+      "post": {
+        "operationId": "AuthController_disableMfa",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Turn MFA off, needs the account password and a current code",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/billing": {
+      "get": {
+        "operationId": "BillingController_overview",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Current plan, trial state, limits, and this month's usage",
+        "tags": [
+          "billing"
+        ]
+      }
+    },
+    "/billing/checkout": {
+      "post": {
+        "operationId": "BillingController_checkout",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Start a Paystack checkout. A card subscribes and renews monthly in USD, Apple Pay buys one month in USD, M-Pesa buys one month in KES.",
+        "tags": [
+          "billing"
+        ]
+      }
+    },
+    "/billing/verify": {
+      "post": {
+        "operationId": "BillingController_verify",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Confirm a payment straight with Paystack and activate the plan, so a plan is live the moment the customer is back rather than whenever the webhook arrives.",
+        "tags": [
+          "billing"
+        ]
+      }
+    },
+    "/webhooks/paystack": {
+      "post": {
+        "operationId": "PaystackWebhookController_paystack",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Paystack events (signature-verified)",
+        "tags": [
+          "webhooks"
+        ]
+      }
+    },
+    "/business-profile": {
+      "get": {
+        "operationId": "BusinessProfileController_get",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "business-profile"
+        ]
+      },
+      "put": {
+        "operationId": "BusinessProfileController_upsert",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "business-profile"
+        ]
+      }
+    },
+    "/connections": {
+      "get": {
+        "operationId": "ConnectionsController_list",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "connections"
+        ]
+      }
+    },
+    "/connections/{id}": {
+      "delete": {
+        "operationId": "ConnectionsController_remove",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "connections"
+        ]
+      }
+    },
+    "/connections/telegram": {
+      "post": {
+        "operationId": "ConnectionsController_connectTelegram",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Connect a Telegram bot + channel",
+        "tags": [
+          "connections"
+        ]
+      }
+    },
+    "/connections/discord": {
+      "post": {
+        "operationId": "ConnectionsController_connectDiscord",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Connect a Discord bot + channel",
+        "tags": [
+          "connections"
+        ]
+      }
+    },
+    "/connections/reddit/authorize": {
+      "get": {
+        "operationId": "ConnectionsController_redditAuthorize",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Get the Reddit OAuth dialog URL (click-to-connect)",
+        "tags": [
+          "connections"
+        ]
+      }
+    },
+    "/connections/reddit/callback": {
+      "get": {
+        "operationId": "ConnectionsController_redditCallback",
+        "parameters": [
+          {
+            "name": "code",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "state",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "OAuth redirect target for Reddit, do not call directly",
+        "tags": [
+          "connections"
+        ]
+      }
+    },
+    "/connections/x/authorize": {
+      "get": {
+        "operationId": "ConnectionsController_xAuthorize",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Get the X OAuth dialog URL (click-to-connect)",
+        "tags": [
+          "connections"
+        ]
+      }
+    },
+    "/connections/x/callback": {
+      "get": {
+        "operationId": "ConnectionsController_xCallback",
+        "parameters": [
+          {
+            "name": "oauth_token",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "oauth_verifier",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "OAuth redirect target for X, do not call directly",
+        "tags": [
+          "connections"
+        ]
+      }
+    },
+    "/connections/x": {
+      "post": {
+        "operationId": "ConnectionsController_connectX",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Connect X with an access token pair generated by hand, the redirect flow at x/authorize is the normal path",
+        "tags": [
+          "connections"
+        ]
+      }
+    },
+    "/connections/linkedin/authorize": {
+      "get": {
+        "operationId": "ConnectionsController_linkedinAuthorize",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Get the LinkedIn OAuth dialog URL",
+        "tags": [
+          "connections"
+        ]
+      }
+    },
+    "/connections/linkedin/callback": {
+      "get": {
+        "operationId": "ConnectionsController_linkedinCallback",
+        "parameters": [
+          {
+            "name": "code",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "state",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "OAuth redirect target for LinkedIn, do not call directly",
+        "tags": [
+          "connections"
+        ]
+      }
+    },
+    "/connections/tiktok/authorize": {
+      "get": {
+        "operationId": "ConnectionsController_tiktokAuthorize",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Get the TikTok OAuth dialog URL",
+        "tags": [
+          "connections"
+        ]
+      }
+    },
+    "/connections/tiktok/callback": {
+      "get": {
+        "operationId": "ConnectionsController_tiktokCallback",
+        "parameters": [
+          {
+            "name": "code",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "state",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "OAuth redirect target for TikTok, do not call directly",
+        "tags": [
+          "connections"
+        ]
+      }
+    },
+    "/connections/instagram/authorize": {
+      "get": {
+        "operationId": "ConnectionsController_instagramAuthorize",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Get the Instagram OAuth dialog URL (no Facebook Page required)",
+        "tags": [
+          "connections"
+        ]
+      }
+    },
+    "/connections/instagram/callback": {
+      "get": {
+        "operationId": "ConnectionsController_instagramCallback",
+        "parameters": [
+          {
+            "name": "code",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "state",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "OAuth redirect target for Instagram, do not call directly",
+        "tags": [
+          "connections"
+        ]
+      }
+    },
+    "/connections/meta/authorize": {
+      "get": {
+        "operationId": "ConnectionsController_metaAuthorize",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Get the Facebook OAuth dialog URL (Facebook Pages + Instagram)",
+        "tags": [
+          "connections"
+        ]
+      }
+    },
+    "/connections/meta/callback": {
+      "get": {
+        "operationId": "ConnectionsController_metaCallback",
+        "parameters": [
+          {
+            "name": "code",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "state",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "OAuth redirect target for Meta, do not call directly",
+        "tags": [
+          "connections"
+        ]
+      }
+    },
+    "/content/generate": {
+      "post": {
+        "operationId": "ContentController_generate",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Queue AI content generation (Content Agent in the Python engine)",
+        "tags": [
+          "content"
+        ]
+      }
+    },
+    "/content/agent-runs/{id}": {
+      "get": {
+        "operationId": "ContentController_getAgentRun",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Poll an agent run (fallback to the WebSocket stream)",
+        "tags": [
+          "content"
+        ]
+      }
+    },
+    "/content": {
+      "get": {
+        "operationId": "ContentController_list",
+        "parameters": [
+          {
+            "name": "status",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "content"
+        ]
+      },
+      "post": {
+        "operationId": "ContentController_create",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "content"
+        ]
+      }
+    },
+    "/content/{id}": {
+      "get": {
+        "operationId": "ContentController_get",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "content"
+        ]
+      },
+      "patch": {
+        "operationId": "ContentController_update",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "content"
+        ]
+      }
+    },
+    "/content/{id}/submit": {
+      "post": {
+        "operationId": "ContentController_submit",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Submit a draft for review (DRAFT → PENDING_APPROVAL)",
+        "tags": [
+          "content"
+        ]
+      }
+    },
+    "/content/{id}/approve": {
+      "post": {
+        "operationId": "ContentController_approve",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Approve content (PENDING_APPROVAL → APPROVED)",
+        "tags": [
+          "content"
+        ]
+      }
+    },
+    "/content/{id}/reject": {
+      "post": {
+        "operationId": "ContentController_reject",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Reject content back to draft, with an optional note",
+        "tags": [
+          "content"
+        ]
+      }
+    },
+    "/media/generate-image": {
+      "post": {
+        "operationId": "MediaController_generate",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Queue AI image generation (Image Agent in the Python engine)",
+        "tags": [
+          "media"
+        ]
+      }
+    },
+    "/media/generate-video": {
+      "post": {
+        "operationId": "MediaController_generateVideo",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Queue AI short-video generation (Video Agent in the Python engine)",
+        "tags": [
+          "media"
+        ]
+      }
+    },
+    "/media/upload": {
+      "post": {
+        "operationId": "MediaController_upload",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Upload your own photo and attach it to a content item",
+        "tags": [
+          "media"
+        ]
+      }
+    },
+    "/media": {
+      "get": {
+        "operationId": "MediaController_list",
+        "parameters": [
+          {
+            "name": "contentItemId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "media"
+        ]
+      }
+    },
+    "/media/{id}/attach": {
+      "post": {
+        "operationId": "MediaController_attach",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "media"
+        ]
+      }
+    },
+    "/media/{id}": {
+      "delete": {
+        "operationId": "MediaController_remove",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "media"
+        ]
+      }
+    },
+    "/media/brand-kit": {
+      "get": {
+        "operationId": "MediaController_getBrandKit",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "media"
+        ]
+      },
+      "put": {
+        "operationId": "MediaController_upsertBrandKit",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "media"
+        ]
+      }
+    },
+    "/media/brand-kit/logo": {
+      "post": {
+        "operationId": "MediaController_uploadLogo",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Upload a brand logo (base64 PNG/JPEG, max ~5 MB)",
+        "tags": [
+          "media"
+        ]
+      }
+    },
+    "/media/brand-kit/music": {
+      "post": {
+        "operationId": "MediaController_uploadBrandMusic",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Upload the background track mixed under generated video (base64 audio)",
+        "tags": [
+          "media"
+        ]
+      },
+      "delete": {
+        "operationId": "MediaController_removeBrandMusic",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Remove the background track",
+        "tags": [
+          "media"
+        ]
+      }
+    },
+    "/members": {
+      "get": {
+        "operationId": "MembersController_list",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "List members and pending invitations",
+        "tags": [
+          "members"
+        ]
+      }
+    },
+    "/members/invitations": {
+      "post": {
+        "operationId": "MembersController_invite",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Invite a teammate, returns a one-time invite link",
+        "tags": [
+          "members"
+        ]
+      }
+    },
+    "/members/invitations/{id}": {
+      "delete": {
+        "operationId": "MembersController_revokeInvitation",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Revoke a pending invitation",
+        "tags": [
+          "members"
+        ]
+      }
+    },
+    "/members/{userId}": {
+      "patch": {
+        "operationId": "MembersController_changeRole",
+        "parameters": [
+          {
+            "name": "userId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Change a member's role",
+        "tags": [
+          "members"
+        ]
+      },
+      "delete": {
+        "operationId": "MembersController_remove",
+        "parameters": [
+          {
+            "name": "userId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Remove a member (admins) or leave the org (yourself)",
+        "tags": [
+          "members"
+        ]
+      }
+    },
+    "/members/org/settings": {
+      "patch": {
+        "operationId": "MembersController_updateSettings",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Update org settings (require content approval)",
+        "tags": [
+          "members"
+        ]
+      }
+    },
+    "/schedule": {
+      "post": {
+        "operationId": "SchedulingController_schedule",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Schedule a content item to one or more connections",
+        "tags": [
+          "scheduling"
+        ]
+      },
+      "get": {
+        "operationId": "SchedulingController_list",
+        "parameters": [
+          {
+            "name": "from",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "to",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "includeCancelled",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "scheduling"
+        ]
+      }
+    },
+    "/schedule/{id}/cancel": {
+      "post": {
+        "operationId": "SchedulingController_cancel",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "scheduling"
+        ]
+      }
+    },
+    "/schedule/{id}": {
+      "patch": {
+        "operationId": "SchedulingController_edit",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Edit a pending or failed post's text and/or time, and re-queue it",
+        "tags": [
+          "scheduling"
+        ]
+      }
+    },
+    "/schedule/{id}/retry": {
+      "post": {
+        "operationId": "SchedulingController_retry",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "scheduling"
+        ]
+      }
+    },
+    "/posting-plans": {
+      "post": {
+        "operationId": "SchedulingController_createPlan",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "scheduling"
+        ]
+      },
+      "get": {
+        "operationId": "SchedulingController_listPlans",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "scheduling"
+        ]
+      }
+    },
+    "/posting-plans/{id}": {
+      "patch": {
+        "operationId": "SchedulingController_updatePlan",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Update a posting plan (toggle active, autopilot, cadence...)",
+        "tags": [
+          "scheduling"
+        ]
+      }
+    },
+    "/best-times": {
+      "get": {
+        "operationId": "SchedulingController_bestTimes",
+        "parameters": [
+          {
+            "name": "platform",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Engagement-driven best posting times for a platform",
+        "tags": [
+          "scheduling"
+        ]
+      }
+    },
+    "/content/{id}/ab-report": {
+      "get": {
+        "operationId": "SchedulingController_abReport",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "A/B test engagement report for a content item",
+        "tags": [
+          "scheduling"
+        ]
+      }
+    },
+    "/products/settings": {
+      "get": {
+        "operationId": "ProductsController_getSettings",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Whether this workspace allows its website to be read",
+        "tags": [
+          "products"
+        ]
+      },
+      "put": {
+        "operationId": "ProductsController_saveSettings",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Allow or withdraw product import, and how it runs",
+        "tags": [
+          "products"
+        ]
+      }
+    },
+    "/products/import": {
+      "post": {
+        "operationId": "ProductsController_importNow",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Read the workspace's shop now",
+        "tags": [
+          "products"
+        ]
+      }
+    },
+    "/products": {
+      "get": {
+        "operationId": "ProductsController_list",
+        "parameters": [
+          {
+            "name": "limit",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "The imported catalogue",
+        "tags": [
+          "products"
+        ]
+      },
+      "delete": {
+        "operationId": "ProductsController_clear",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Remove the whole imported catalogue",
+        "tags": [
+          "products"
+        ]
+      }
+    },
+    "/products/{id}": {
+      "delete": {
+        "operationId": "ProductsController_removeOne",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Remove one imported product",
+        "tags": [
+          "products"
+        ]
+      }
+    },
+    "/seo/audit": {
+      "post": {
+        "operationId": "SeoController_runAudit",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Run a site SEO audit (crawl + rules + AI recommendations)",
+        "tags": [
+          "seo"
+        ]
+      }
+    },
+    "/seo/audits": {
+      "get": {
+        "operationId": "SeoController_list",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "seo"
+        ]
+      },
+      "delete": {
+        "operationId": "SeoController_clear",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Delete all SEO audits for the workspace",
+        "tags": [
+          "seo"
+        ]
+      }
+    },
+    "/seo/audits/{id}": {
+      "get": {
+        "operationId": "SeoController_get",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "seo"
+        ]
+      }
+    },
+    "/seo/audits/{id}/sitemap.xml": {
+      "get": {
+        "operationId": "SeoController_sitemap",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "seo"
+        ]
+      }
+    },
+    "/seo/audits/{id}/robots.txt": {
+      "get": {
+        "operationId": "SeoController_robots",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "seo"
+        ]
+      }
+    },
+    "/seo/audits/{id}/fixes": {
+      "get": {
+        "operationId": "SeoController_listFixes",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Actionable fixes derived from an audit's findings",
+        "tags": [
+          "seo"
+        ]
+      }
+    },
+    "/seo/audits/{id}/fix-pack.md": {
+      "get": {
+        "operationId": "SeoController_fixPack",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Every fix as one Markdown document, ready to hand to a developer",
+        "tags": [
+          "seo"
+        ]
+      }
+    },
+    "/seo/fixes/{id}": {
+      "patch": {
+        "operationId": "SeoController_updateFix",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Mark a fix applied, dismissed, or back to proposed",
+        "tags": [
+          "seo"
+        ]
+      }
+    },
+    "/seo/fixes/bulk": {
+      "post": {
+        "operationId": "SeoController_bulkUpdateFixes",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Apply the same status change to several fixes",
+        "tags": [
+          "seo"
+        ]
+      }
+    },
+    "/seo/audits/{id}/verify": {
+      "post": {
+        "operationId": "SeoController_verify",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Re-crawl to confirm applied fixes actually took effect",
+        "tags": [
+          "seo"
+        ]
+      }
+    },
+    "/seo/audits/{id}/indexnow": {
+      "get": {
+        "operationId": "SeoController_indexNowStatus",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "IndexNow key and whether the site publishes it yet",
+        "tags": [
+          "seo"
+        ]
+      },
+      "post": {
+        "operationId": "SeoController_submitIndexNow",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Submit changed URLs to Bing, Yandex, Seznam and Naver",
+        "tags": [
+          "seo"
+        ]
+      }
+    }
+  },
+  "info": {
+    "title": "GODEYE API",
+    "description": "AI Marketing Operating System API",
+    "version": "0.1.0",
+    "contact": {}
+  },
+  "tags": [],
+  "servers": [],
+  "components": {
+    "securitySchemes": {
+      "bearer": {
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "type": "http"
+      }
+    },
+    "schemas": {}
+  }
+}

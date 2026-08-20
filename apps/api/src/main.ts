@@ -8,23 +8,14 @@ import "./common/env"; // loads the repo-root .env
 import { Logger } from "@nestjs/common";
 import { NestFactory } from "@nestjs/core";
 import type { NestExpressApplication } from "@nestjs/platform-express";
-import { DocumentBuilder, SwaggerModule } from "@nestjs/swagger";
+import { SwaggerModule } from "@nestjs/swagger";
 import cookieParser from "cookie-parser";
 import helmet from "helmet";
 import { AppModule } from "./app.module";
+import { buildOpenApi } from "./openapi";
 import { allowedOrigins, env, toOrigin, validateConfig } from "./common/env";
 import { ErrorsFilter } from "./common/errors.filter";
 import { StructuredLogger } from "./common/logger";
-
-/** The OpenAPI 3.1 document. Exported so CI can emit it without booting a server. */
-export function buildOpenApi() {
-  return new DocumentBuilder()
-    .setTitle("GODEYE API")
-    .setDescription("AI Marketing Operating System API")
-    .setVersion("0.1.0")
-    .addBearerAuth()
-    .build();
-}
 
 async function bootstrap() {
   // Before Nest builds anything. A secret that is missing, published in this
@@ -124,10 +115,11 @@ async function bootstrap() {
   // @ApiOperation text describing what each one does. It made S-1 — five
   // controllers with no RolesGuard — discoverable in a single request.
   //
-  // The *contract* is still valuable, so it is still generated: `pnpm openapi`
-  // writes the same document to a file for CI to diff. Only the public UI is
-  // withdrawn. Set ENABLE_API_DOCS=true to mount it somewhere non-production
-  // deliberately (a staging box behind auth), never as a default.
+  // The *contract* is still valuable, so it is still checked: the exploit
+  // suite builds this same document and diffs it against docs/api/openapi.json,
+  // so a shape change is a review comment. Only the public UI is withdrawn.
+  // Set ENABLE_API_DOCS=true to mount it somewhere non-production deliberately
+  // (a staging box behind auth), never as a default.
   const docsEnabled = env.nodeEnv !== "production" || process.env.ENABLE_API_DOCS === "true";
   if (docsEnabled) {
     SwaggerModule.setup("api/docs", app, SwaggerModule.createDocument(app, buildOpenApi()));

@@ -170,6 +170,117 @@ jobs:
         run: python -m pytest -q
 
   # ---------------------------------------------------------------------------
+  # SAST. The audit's Security row names "no SAST/DAST in CI" as one of the
+  # three things keeping it off 10, and CodeQL is the half that needs no running
+  # target: it reads the source and finds the taint paths a reviewer misses.
+  #
+  # It does not replace the exploit suite and is not meant to. Those tests
+  # encode findings somebody understood; CodeQL finds the ones nobody has
+  # looked for yet.
+  # ---------------------------------------------------------------------------
+  sast:
+    name: CodeQL
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [javascript-typescript, python]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: github/codeql-action/init@v3
+        with:
+          languages: ${{ matrix.language }}
+          # security-extended over the default pack: the default set is tuned
+          # to keep noise low on any repository, and this one has already paid
+          # for four SSRF sinks and an authorization gap.
+          queries: security-extended
+      - uses: github/codeql-action/autobuild@v3
+      - uses: github/codeql-action/analyze@v3
+        with:
+          category: /language:${{ matrix.language }}
+
+  # ---------------------------------------------------------------------------
+  # DAST. The other half: an actual HTTP scan against a running API.
+  #
+  # It boots the real thing against real Postgres and Redis, so what it probes
+  # is the deployed stack rather than a mock -- header handling, error shapes,
+  # method handling, the paths CodeQL cannot see because they only exist at
+  # runtime.
+  #
+  # Not gating a merge on a first run, deliberately: a ZAP baseline against an
+  # API that has never been scanned reports things that are correct for an API
+  # and wrong for a website, and a gate that fails on its first day is a gate
+  # somebody deletes. The report is an artifact on every build, and the rules
+  # file below is where a finding gets triaged into a real failure.
+  # ---------------------------------------------------------------------------
+  dast:
+    name: ZAP baseline
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: godeye_test
+          POSTGRES_PASSWORD: godeye_test
+          POSTGRES_DB: godeye_test
+        ports: ["55432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U godeye_test"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+      redis:
+        image: redis:7-alpine
+        ports: ["56379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+    env:
+      DATABASE_URL: postgresql://godeye_test:godeye_test@127.0.0.1:55432/godeye_test?schema=public
+      REDIS_URL: redis://127.0.0.1:56379/0
+      API_PORT: 4000
+      WEB_URL: http://localhost:3000
+      API_URL: http://localhost:4000
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @godeye/db generate
+      - run: pnpm --filter @godeye/db migrate:deploy
+      - run: pnpm --filter @godeye/api build
+      - name: Start the API
+        run: |
+          node apps/api/dist/main.js &
+          for i in $(seq 1 60); do
+            curl -sf http://localhost:4000/health/live && break
+            sleep 2
+          done
+      - name: ZAP baseline
+        uses: zaproxy/action-baseline@v0.12.0
+        with:
+          target: http://localhost:4000
+          rules_file_name: .zap/rules.tsv
+          # Findings are read from the artifact, not from a red X on a first
+          # run. Promote one to a failure by moving its rule to FAIL.
+          allow_issue_writing: false
+          cmd_options: "-a -j"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: zap-baseline-report
+          path: report_html.html
+          if-no-files-found: warn
+
+  # ---------------------------------------------------------------------------
   # Supply chain. Advisory in the sense that it does not gate a merge on a
   # transitive advisory nobody can act on today, but it never goes quiet: the
   # SBOM is an artifact on every build, so "what was in that release" is a
