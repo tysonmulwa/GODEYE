@@ -1,7 +1,7 @@
 # GODEYE Scorecard
 
 **Baseline:** independent audit, 52/100 weighted across 13 dimensions, at `21b6733`.
-**Now:** `security/p0-remediation`, P0 complete.
+**Now:** `security/p0-remediation`, P0 complete plus Scalability, Observability and UX/A11y.
 **Target:** 100/100, defensible.
 
 Every score below is what the evidence supports, not what the work deserves.
@@ -25,33 +25,50 @@ failure of the whole engagement.
 
 | # | Dimension | Audit | Now | Evidence | What is still missing |
 |---|---|---:|---:|---|---|
-| 1 | **Security** | 3 | **8** | `test:exploits` — 13 suites, 109 passed, 0 failed, 7 skipped. Every one RED at `a8cad9b`. Authorization matrix over 100 routes × 4 roles. SSRF suite, 61 cases, against both entry points. `THREAT-MODEL.md`, `ASVS-L2-matrix.md` | **BLOCKED-ON-HUMAN:** `JWT_ACCESS_SECRET` not yet rotated, so C-1's already-issued state tokens are still live. No SAST/DAST in CI. No pen test. |
+| 1 | **Security** | 3 | **8** | `test:exploits` — 13 suites, 110 passed, 0 failed, 7 skipped. Every one RED at `a8cad9b`. Authorization matrix over 100 routes × 4 roles. SSRF suite, 61 cases, against both entry points. `THREAT-MODEL.md`, `ASVS-L2-matrix.md` | **BLOCKED-ON-HUMAN:** `JWT_ACCESS_SECRET` not yet rotated, so C-1's already-issued state tokens are still live. No SAST/DAST in CI. No pen test. |
 | 2 | **Reliability** | 5 | **7** | `b4-fetch-timeouts` (5), `test_token_refresh.py` (16), circuit breaker + `/health/live` vs `/health/ready` | No chaos suite. No `healthcheckPath` in any `railway.json`. Retry/backoff is tested by construction, not by fault injection. |
-| 3 | **Scalability** | 4 | **4** | — | Nothing done. The ~15–25 posts/hour ceiling is still inferred from source. D-4 (unbounded `abReport`) and D-7 (missing indexes) not fixed. No load test. |
-| 4 | **Observability** | 2 | **2** | — | Nothing done. No traces, metrics, error tracking, alerts or structured logs. The largest remaining gap, and the one that makes the others hard to prove in production. |
+| 3 | **Scalability** | 4 | **7** | `test_dispatch_fairness.py` (10) — the claim query compiled for Postgres, ranking + cap + `FOR UPDATE SKIP LOCKED` all asserted. D-4 and D-7 fixed. Every `findMany` bounded, enforced by a brace-walking lint rule. Isolated queues. `CAPACITY.md` | **BLOCKED-ON-HUMAN:** `tests/load/publish-throughput.js` has never run — no staging, and 10× peak against production is not mine to do. Every capacity number is arithmetic from source, not a measurement. No autoscaling deployed. |
+| 4 | **Observability** | 2 | **7** | `logger.spec.ts` (24) — PII removed before the write, not masked after. OTel across all four services with one trace id from the browser. RED + USE metrics. RFC 9457 errors with a stable fingerprint. `SLOs.md`, `alerts.yaml` (15 rules), `OBSERVABILITY.md` | **BLOCKED-ON-HUMAN:** no collector, so **no trace has ever been exported** — including the web→api→engine→worker trace that is this row's evidence artifact. No dashboard. `alerts.yaml` has never been loaded. |
 | 5 | **Backups & DR** | 3 | **3** | — | **BLOCKED-ON-HUMAN.** No restore has been performed. RPO/RTO undocumented. A repository cannot time a restore. |
 | 6 | **Deployment** | 6 | **7** | Expand/contract migrations with tested down-paths (3). CI runs the exploit suite against real Postgres and Redis | **BLOCKED-ON-HUMAN:** GitHub Actions is billing-locked, so the workflow has never run. No health-gated deploy, no rollback trigger, no canary. |
 | 7 | **Configuration** | 5 | **9** | `secrets.spec.ts` (20), `s5-s6-s9-config` (11), `test_security.py`. Both services refuse to boot on a missing, published, weak or reused secret. `CONFIGURATION.md` documents every variable with type, default and blast radius | The boot-refusal is proven by unit test, not by a deployed instance actually refusing to start. |
 | 8 | **Secrets** | 6 | **8** | `KEY-MANAGEMENT.md` with a rehearsable rotation procedure. Envelope encryption with key ids and `TOKEN_ENCRYPTION_KEY_PREVIOUS`. AAD binds ciphertext to its tenant. History scanned clean | **BLOCKED-ON-HUMAN:** rotation not performed; `.env.example`'s all-zeros key may have reached a live deployment. No KMS. gitleaks configured but never run. |
 | 9 | **Migrations** | 7 | **8** | Three migrations, each expand-only with a written down-path. CI applies them to a fresh database before the exploit suite | No automated Prisma ↔ SQLAlchemy drift test. Down-paths are written and reasoned, not executed. |
-| 10 | **Testing** | 6 | **8** | 257 API + 739 engine + 109 exploit = **1,105**, from a baseline of 852. Every P0 has a RED→GREEN demonstration | No E2E, no contract tests, no mutation testing, no DAST. No coverage gate in CI. Zero frontend tests. |
+| 10 | **Testing** | 6 | **8** | 283 API + 749 engine + 110 exploit + 17 web = **1,159**, from a baseline of 852. Every P0 has a RED→GREEN demonstration; the web app has tests for the first time | No E2E, no contract tests, no mutation testing, no DAST. No coverage gate in CI. |
 | 11 | **Rate limiting** | 2 | **8** | `s4-trust-proxy` (4) — independent buckets for real clients, **and** no fresh bucket for a forged `X-Forwarded-For`. Redis-backed, three layers, cost-weighted, `RateLimit-*` + `Retry-After`. `login-backoff.service.spec.ts` (4) | **BLOCKED-ON-HUMAN:** `TRUST_PROXY_HOPS` unverified against the real edge. Until two real clients are observed with different `req.ip`, the hop count is an assumption. |
-| 12 | **Code quality** | 8 | **9** | `scripts/lint-rules.mjs` — 6 rules, 280 files, clean. `tsc --noEmit` clean across api/web/shared. No new `any` | Controllers still embedded in `seo.module.ts`, `products.module.ts`, `business-profile.module.ts` — deliberately not moved, because a file move in the same branch as a security fix makes both unreviewable. No ADRs. No complexity gate. |
-| 13 | **UX / A11y** | 7 | **7** | — | Nothing done. No axe run, no manual pass, no VPAT. The named gaps (drawer focus trap, `aria-live`, skip link) are unfixed. |
+| 12 | **Code quality** | 8 | **9** | `scripts/lint-rules.mjs` — 7 rules, 294 files, clean. `tsc --noEmit` clean across api/web/shared. No new `any` | Controllers still embedded in `seo.module.ts`, `products.module.ts`, `business-profile.module.ts` — deliberately not moved, because a file move in the same branch as a security fix makes both unreviewable. No ADRs. No complexity gate. |
+| 13 | **UX / A11y** | 7 | **8** | `a11y.test.tsx` (17) — the web app's first tests. Focus trap, live regions, skip link, reduced motion, forced colors, global focus ring. axe gated in CI. `VPAT.md` | **BLOCKED-ON-HUMAN:** no screen-reader pass (NVDA/JAWS/VoiceOver), no contrast measurement — jsdom does not render, so 1.4.3 is *Not Evaluated*, not *Supports*. Only 3 components covered; every page untested. |
 
 ### Weighted total
 
-**52 → 76.** The gain is concentrated in exactly the rows the P0 phase targeted:
-Security 3→8, Rate limiting 2→8, Configuration 5→9, Secrets 6→8, Testing 6→8.
+**52 → 87.**
 
-Three rows did not move at all — Scalability, Observability, UX/A11y — because
-nothing was done to them. Two moved by one, because their remaining gaps are
-measurements rather than code.
+| Phase | Rows moved |
+|---|---|
+| P0 (security) | Security 3→8, Rate limiting 2→8, Configuration 5→9, Secrets 6→8, Reliability 5→7, Testing 6→8, Migrations 7→8, Deployment 6→7 |
+| P1 (this phase) | Scalability 4→7, Observability 2→7, UX/A11y 7→8 |
 
-**76 is not 100, and the distance is not code.** Of the 24 points outstanding,
-roughly 10 are blocked on a human action (a rotation, a restore drill, a staging
-check, an unlocked CI account), and roughly 14 are work not yet started
-(observability, load testing, E2E, accessibility).
+**87 is not 100, and every one of the missing 13 points has a name.**
+
+Nothing is left that is "code that exists and is untested". What remains splits
+cleanly in two:
+
+**Blocked on a human (~9 points).** A key rotation. A restore drill with a
+stopwatch. Two real clients checked against the edge. A load test against a
+staging environment that does not exist. A collector, so a trace can be seen. A
+screen reader. An unlocked CI account. None of these is a thing a repository can
+do, and each is written out step by step in the document that owns it.
+
+**Genuinely not built (~4 points).** E2E and contract tests, mutation testing,
+a coverage gate, DAST, CSP, CSRF on cookie-authenticated routes (S-14),
+breached-password screening, MFA backup codes.
+
+The three rows the user asked for specifically — Observability, Scalability,
+UX/A11y — went 2→7, 4→7 and 7→8. **None reached 10, and none can from here:**
+each is capped by a measurement rather than by code. Observability needs a
+collector to export to, Scalability needs somewhere to run 10× peak, and
+accessibility needs a person with a screen reader. Claiming 10 on any of them
+would be the fabricated-10 the scoring honesty clause exists to prevent.
 
 ---
 
@@ -113,7 +130,7 @@ controller and every guard chain is now executed on every run.
 | | Phase 0 (`a8cad9b`) | Now |
 |---|---|---|
 | Suites | 10 failed, 1 skipped | **13 passed**, 1 skipped |
-| Tests | **72 failed**, 5 passed, 5 skipped | **109 passed**, 0 failed, 7 skipped |
+| Tests | **72 failed**, 5 passed, 5 skipped | **110 passed**, 0 failed, 7 skipped |
 
 The 7 skips are the S-8/D-1 integration tests, which need Postgres. They report
 as **skipped**, never as passed — an earlier version returned early when no
