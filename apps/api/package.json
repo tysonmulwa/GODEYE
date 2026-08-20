@@ -10,6 +10,7 @@
     "typecheck": "tsc --noEmit",
     "test": "jest",
     "test:exploits": "jest --config jest-exploits.config.js",
+    "test:coverage": "jest --config jest-coverage.config.js",
     "test:exploits:db": "jest --config jest-exploits.config.js --testPathPattern=s8-d1",
     "openapi": "ts-node -r tsconfig-paths/register scripts/emit-openapi.ts ../../docs/api/openapi.json"
   },

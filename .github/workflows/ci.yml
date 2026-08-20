@@ -123,6 +123,20 @@ jobs:
       # any role can reach a route the matrix says it cannot.
       - name: Authorization matrix
         run: pnpm --filter @godeye/api test:exploits -- --testPathPattern=authorization-matrix
+      # The coverage gate runs BOTH suites in one pass, which is why it lives
+      # here rather than in the `node` job: measuring the unit suite alone reads
+      # oauth-state.service.ts at 21% when the exploit suite covers most of it,
+      # and a gate that wrong pushes people to write duplicate tests to move a
+      # number. Thresholds are a ratchet -- see jest-coverage.config.js for why
+      # they are set where they are and why lowering one is never the fix.
+      - name: Coverage gate
+        run: pnpm --filter @godeye/api test:coverage
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage-lcov
+          path: apps/api/coverage/lcov.info
+          if-no-files-found: warn
 
   engine:
     name: Engine
