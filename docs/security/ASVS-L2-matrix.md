@@ -75,7 +75,7 @@ verification, which is precisely how C-1 and S-1 survived 852 green tests.
 | **Reuse detection** | **PASS** | Family revocation + audit event (S-15, RFC 9700 §4.14.2) |
 | Idle / absolute timeout | **PARTIAL** | Access 15 min, refresh 30 days absolute. No idle timeout |
 | Logout invalidates server-side | **PASS\*** | Refresh token revoked |
-| **CSRF on cookie-authenticated routes** | **FAIL** | S-14. `/auth/refresh` and `/auth/logout` are CSRF-able when `SameSite=None`. Not fixed |
+| **CSRF on cookie-authenticated routes** | **PASS** | S-14 closed. Global `CsrfGuard`: unsafe method + no bearer + not exempt ⇒ allowed `Origin`/`Referer` required, failing closed. 16 tests over real HTTP, 9 RED on the parent commit. [CSRF.md](CSRF.md) |
 | WebSocket session lifetime | **PASS** | Re-validated every 60s, capped at the access-token lifetime (S-17) |
 
 ## V8 — Authorization
@@ -184,7 +184,9 @@ verification, which is precisely how C-1 and S-1 survived 852 green tests.
    event stream, retention. Nothing was done here; it is the same gap that keeps
    Observability at 2/10 on the scorecard.
 2. **Four specific controls** — CSP (V3), CSRF on cookie-authenticated routes
-   (V7 / S-14), breached-password screening (V6), MFA backup codes (V6).
+   All three are now closed: CSRF (V7 / S-14), breached-password screening
+   (V6.2.5, NIST SP 800-63B §5.1.1.2), and MFA recovery codes (V2.8.4,
+   NIST SP 800-63B §5.1.4.3).
 
 The 21 PASS\* entries are the honest ones: correct on reading, with nothing that
 would fail if somebody removed them. Converting those to PASS is a smaller job

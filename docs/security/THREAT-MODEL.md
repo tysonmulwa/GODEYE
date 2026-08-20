@@ -192,7 +192,7 @@ A threat still marked OPEN is open; nothing here is aspirational.
 | **S**poofing: credential stuffing spread across addresses | OPEN | **MITIGATED** | Per-account **and** per-address exponential backoff | `login-backoff.service.spec` |
 | **I**nformation disclosure: `/api/docs` maps every route (S-9) | OPEN | **MITIGATED** | Gated on `NODE_ENV`; the contract still emitted for CI | `s5-s6-s9-config` |
 | **I**nformation disclosure: `accountExists` enumerates users (S-16) | OPEN | **MITIGATED** | Removed; the client handles both cases blind | — (no test; PASS\*) |
-| **T**ampering: CSRF on cookie-authenticated `/auth/refresh` (S-14) | OPEN | **OPEN** | — | — |
+| **T**ampering: CSRF on cookie-authenticated `/auth/refresh` (S-14) | OPEN | **CLOSED** | `CsrfGuard`, global, fail-closed | `s14-csrf.exploit.spec.ts` (16) |
 
 ## Boundary 2 — API → engine
 
@@ -241,7 +241,7 @@ A threat still marked OPEN is open; nothing here is aspirational.
 
 ## Still open after this phase
 
-1. **S-14** — CSRF on cookie-authenticated `/auth/refresh` and `/auth/logout`.
+1. ~~**S-14** — CSRF on cookie-authenticated `/auth/refresh` and `/auth/logout`.~~ **Closed.**
 2. **Supabase RLS** — assumed off; never verified.
 3. **Redis and Postgres network exposure** — assumed private; never verified.
 4. **Infrastructure-layer egress** — the SSRF guard is application-layer only.
@@ -256,5 +256,5 @@ A threat still marked OPEN is open; nothing here is aspirational.
 1. The **rotation of `JWT_ACCESS_SECRET`**, which is the other half of C-1 and
    has not happened.
 2. **No detection**, per above.
-3. **S-14**, the one open finding with a straightforward fix.
+3. ~~**S-14**, the one open finding with a straightforward fix.~~ **Closed.**
 4. The three **unverified assumptions** — RLS, network exposure, proxy hop count.

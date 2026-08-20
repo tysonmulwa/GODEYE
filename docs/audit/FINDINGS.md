@@ -12,15 +12,16 @@ decision, and things that are genuinely still to build.
 
 These are the reason Security is not scored 10/10.
 
-### 1. Rotate `JWT_ACCESS_SECRET`
+### 1. ~~Rotate `JWT_ACCESS_SECRET`~~ — **DONE 2026-08-20**
 
-Every OAuth `state` GODEYE ever issued was signed with it, and those values are
-in Meta's, TikTok's, LinkedIn's and Reddit's logs, in browser history, and in
-`Referer` headers. The code stops new ones working as sessions; only rotation
-un-issues the old ones.
+Rotated on the Railway API service. Every OAuth `state` GODEYE had ever issued
+was signed with this key, and those values sit in Meta's, TikTok's, LinkedIn's
+and Reddit's logs, in browser history and in `Referer` headers — so each was a
+live session credential. The code fix stopped new ones working as sessions;
+only the rotation un-issued the old ones.
 
-**Runbook:** [KEY-MANAGEMENT.md § Required now](../security/KEY-MANAGEMENT.md).
-**Blast radius:** everyone re-authenticates within 15 minutes. No data touched.
+C-1 is now fully closed. **Runbook, for the next time:**
+[KEY-MANAGEMENT.md](../security/KEY-MANAGEMENT.md).
 
 ### 2. Confirm production is not running on a published default
 
@@ -121,41 +122,51 @@ Escapes need a `lint-rules:allow` comment with a reason.
 
 ## 🟡 Not built — scored honestly rather than claimed
 
-### Observability (rubric row 4, still 2/10)
+Rewritten 2026-08-21. The previous version of this section described
+Observability, Scalability and Accessibility as untouched, which stopped being
+true and stayed on the page — a stale findings list is worse than none, because
+it is read as current.
 
-No OpenTelemetry traces, no RED/USE metrics, no error tracking, no alert rules,
-no structured JSON logging. **Nothing in this area was attempted.** It is the
-largest remaining gap and it makes every other row harder to prove: there is no
-way to observe the rate-limit fail-closed path, the circuit breaker opening, or
-the token-refresh failure ratio in production — only in tests.
+### Genuinely not built
 
-### Load testing and capacity (row 3, still 4/10)
+| | Row | Why it matters |
+|---|---|---|
+| **E2E tests** | Testing | No Playwright. Nothing exercises sign-in → compose → schedule → publish as one flow, so an integration break between two green units is invisible until a customer hits it |
+| **Mutation testing** | Testing | 1,513 tests and nothing measures whether they would notice a changed operator |
+| **ADRs** | Code quality | Every decision in this branch is argued in a commit message or a code comment. Neither is where somebody looks in a year |
+| **Complexity gate** | Code quality | No ceiling on function length or cyclomatic complexity |
+| **CSP enforcement** | Security | The full policy is report-only. Enforcing it today blanks every page: measured — `pricing.html` has 14 unnonced inline scripts. Needs the app shell to render dynamically first ([CSP.md](../security/CSP.md)) |
+| **E501** | Code quality | 37 prose comments exceed 100 characters. Not reflowed, because doing it beside a security fix makes both unreviewable |
 
-The publish ceiling (~15–25 posts/hour, from `scheduler.py` and
-`--concurrency=2`) is still an inference from reading the code, not a
-measurement. No k6 run, no per-tenant fairness in the dispatcher, no isolated
-Celery queues.
+### Built but never executed
 
-The unbounded queries D-4 (`abReport` loading an org's entire analytics history)
-and D-7 (missing indexes on `ScheduledPost.contentItemId`) are **not fixed**.
+The distinction matters more than it looks: configured is not executed, and a
+green badge for a job that has never run is worse than no badge.
 
-### Backups and DR (row 5, still 3/10)
+- **CodeQL and ZAP** — both wired into CI, neither has ever run. Actions is
+  billing-locked.
+- **`tests/load/publish-throughput.js`** — k6 exists, has never run. No staging,
+  and 10× peak against production is not mine to do.
+- **`alerts.yaml`** — 15 rules, never loaded into a Prometheus.
+- **The OTel pipeline** — instrumented end to end, and **no trace has ever been
+  exported**, because there is no collector to export to.
+- **Migration down-paths** — written and reasoned for all four, executed for
+  none.
 
-Supabase-managed. No documented RPO/RTO, no verified PITR, and **no restore has
-ever been performed**. That is a measurement somebody has to take, once, with a
-stopwatch.
+### Covered by a mechanism, not yet by a measurement
 
-### E2E, contract, mutation and DAST testing (row 10)
-
-No Playwright, no ZAP baseline, no mutation testing. The coverage gate the
-directive asks for — 85% lines, 100% branch on auth/authorization/billing/crypto
-— is not enforced in CI.
-
-### Accessibility (row 13, still 7/10)
-
-No axe run, no manual keyboard or screen-reader pass, no VPAT. The specific gaps
-the audit named — no focus trap on the mobile drawer, no `aria-live` on polled
-status, no skip link — are **not fixed**. There are still zero frontend tests.
+- **Backups & DR** — the restore path now runs on every CI build against real
+  Postgres and fails on one missing row. What has never happened is a restore
+  of the **production** database, so RPO ≤ 5 min and RTO ≤ 2 h remain claims
+  about a vendor's documentation. [DR.md](../operations/DR.md) has the hour-long
+  procedure that closes it.
+- **Accessibility** — the three gaps the audit named are fixed and pinned by 17
+  tests. jsdom does not render, so contrast (1.4.3) is **Not Evaluated**, not
+  Supports, and no screen reader has ever read the app aloud.
+- **Two stores are backed up by nothing.** S3 media, and
+  `TOKEN_ENCRYPTION_KEY` itself — which is not recoverable *from* a database
+  backup, because it is what makes the backup readable. Losing it turns a
+  restore into every customer reconnecting every social account at once.
 
 ### Infrastructure-layer egress filtering
 
@@ -164,8 +175,8 @@ network at the platform layer is defence in depth that a repository cannot add.
 
 ### `robots.txt` as a crawl permission
 
-The crawler reads it for sitemap discovery but does not honour it as permission.
-That is a legal point as much as a technical one.
+The crawler reads it for sitemap discovery but does not honour it as
+permission. That is a legal point as much as a technical one.
 
 ---
 

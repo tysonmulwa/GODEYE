@@ -31,10 +31,14 @@ Generate every one separately:
 openssl rand -hex 32
 ```
 
-## 🔴 Required now: rotate `JWT_ACCESS_SECRET`
+## ✅ Done 2026-08-20: `JWT_ACCESS_SECRET` rotated
 
-**This is an outstanding action for a human. It is not done by any commit in
-this branch, and until it is done, finding C-1 is only half closed.**
+**Rotated on 2026-08-20**, on the Railway API service. C-1 is now fully closed:
+the code fix stopped new `state` tokens working as sessions, and the rotation
+un-issued every old one.
+
+The procedure below is kept as written, because it is the rehearsed one and the
+next rotation should follow it. What follows describes why it mattered.
 
 ### Why
 
@@ -91,8 +95,8 @@ curl -s https://api.godeyeautomation.com/health | jq '.api.build'
 
 - [ ] Confirm nobody is holding a support ticket about being signed out — a
       short spike is expected and is the rotation working.
-- [ ] Record the date here, and in the next entry of
-      [`docs/audit/SCORECARD.md`](../audit/SCORECARD.md).
+- [x] Recorded here and in [`docs/audit/SCORECARD.md`](../audit/SCORECARD.md):
+      **2026-08-20**.
 - [ ] Rotate `OAUTH_STATE_SECRET` at the same time if it was ever set to the
       same value as `JWT_ACCESS_SECRET`. Boot now refuses that, so it cannot be
       true of a running instance, but it could be true of a `.env` on a laptop.
