@@ -8,7 +8,8 @@ import {
   ComposerPreview,
   SeoPreview,
 } from "@/components/product-preview";
-import { SITE_DESCRIPTION } from "@/lib/site";
+import { SITE_DESCRIPTION, SITE_NAME } from "@/lib/site";
+import { websiteJsonLd } from "@/lib/structured-data";
 import { RedirectIfSignedIn } from "./redirect-if-signed-in";
 
 /**
@@ -27,6 +28,13 @@ export const metadata: Metadata = {
   // The layout sets these site-wide, so without an override a shared link is
   // headlined "GODEYE" rather than what the page actually says.
   openGraph: {
+    // siteName is repeated here on purpose. Next REPLACES a page's openGraph
+    // object wholesale rather than merging it into the layout's, so overriding
+    // the title to get a decent share card silently dropped og:site_name from
+    // the four public pages -- the only ones a search engine indexes. Verified
+    // in the build output: every app page had the tag and none of the marketing
+    // pages did.
+    siteName: SITE_NAME,
     title: "Marketing that runs without you in the room",
     description: SITE_DESCRIPTION,
     url: "/",
@@ -111,6 +119,13 @@ export default function Home() {
   return (
     <>
       <RedirectIfSignedIn />
+      {/* The homepage, and only the homepage: this is where Google reads the
+          site's name from, and a second WebSite entity elsewhere makes the
+          signal ambiguous rather than stronger. */}
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(websiteJsonLd) }}
+      />
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(faqJsonLd) }}

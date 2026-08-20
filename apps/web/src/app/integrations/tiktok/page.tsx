@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { GodeyeCrest } from "@/components/logo";
+import { SITE_NAME } from "@/lib/site";
 
 /**
  * What GODEYE does with a customer's TikTok account, in public.
@@ -17,6 +18,9 @@ export const metadata: Metadata = {
     "How GODEYE connects to TikTok: the permissions it asks for, what each one is used for, how videos are published, and how to disconnect.",
   alternates: { canonical: "/integrations/tiktok" },
   openGraph: {
+    // Next replaces a page openGraph object wholesale; without this the tag
+    // is absent on exactly the pages that get indexed.
+    siteName: SITE_NAME,
     title: "GODEYE and TikTok",
     description:
       "The permissions GODEYE requests from TikTok, what each is used for, and how to disconnect.",

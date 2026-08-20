@@ -154,6 +154,50 @@ const RULES = [
 for (const file of files) for (const rule of RULES) check(file, rule);
 
 /**
+ * og:site_name must survive a page-level metadata override.
+ *
+ * Next REPLACES a page's `openGraph` object rather than merging it into the
+ * layout's, so the moment a page overrides the title to get a decent share
+ * card, it silently drops `siteName` too. That went unnoticed because it broke
+ * in exactly the wrong place: every signed-in app page kept the tag, and the
+ * four public marketing pages -- the only ones a search engine ever sees --
+ * lost it. Google then had no site name to print and fell back to the hostname.
+ *
+ * Brace-walked rather than line-matched, for the same reason the findMany rule
+ * below is: the shape of the formatting must not decide whether a rule applies.
+ */
+for (const file of files) {
+  const rel = relative(ROOT, file).split(sep).join("/");
+  if (!rel.startsWith("apps/web/src/app/") || !rel.endsWith("page.tsx")) continue;
+  const src = readFileSync(file, "utf8");
+
+  for (const match of src.matchAll(/openGraph:\s*\{/g)) {
+    const open = src.indexOf("{", match.index);
+    let depth = 0;
+    let end = open;
+    while (end < src.length) {
+      if (src[end] === "{") depth++;
+      else if (src[end] === "}" && --depth === 0) break;
+      end++;
+    }
+    const block = src.slice(open, end + 1);
+    if (/\bsiteName\s*:/.test(block)) continue;
+
+    const line = src.slice(0, match.index).split("\n").length;
+    const preceding = src
+      .split("\n")
+      .slice(Math.max(0, line - 4), line)
+      .join("\n");
+    if (preceding.includes("lint-rules:allow")) continue;
+
+    violations.push(
+      `${rel}:${line}  a page-level openGraph override needs siteName — Next replaces the ` +
+        `layout's object rather than merging it, and the tag disappears`,
+    );
+  }
+}
+
+/**
  * D-4, the multi-line form.
  *
  * The line rule above only sees `findMany({ … })` written on one line, and
@@ -200,4 +244,4 @@ if (violations.length) {
   process.exit(1);
 }
 
-process.stdout.write(`lint-rules: ${RULES.length} rules, ${files.length} files, clean\n`);
+process.stdout.write(`lint-rules: ${RULES.length} line rules + 2 structural, ${files.length} files, clean\n`);

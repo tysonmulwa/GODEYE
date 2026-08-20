@@ -11,7 +11,7 @@
  */
 import { describe, expect, it } from "vitest";
 import { SITE_URL } from "../lib/site";
-import { organizationJsonLd, softwareJsonLd } from "../lib/structured-data";
+import { organizationJsonLd, softwareJsonLd, websiteJsonLd } from "../lib/structured-data";
 
 /** An https URL that is not merely a bare origin. */
 const isDeepUrl = (value: string) => {
@@ -22,6 +22,7 @@ const isDeepUrl = (value: string) => {
 describe("every block", () => {
   it.each([
     ["organization", organizationJsonLd],
+    ["website", websiteJsonLd],
     ["software", softwareJsonLd],
   ])("declares a context and a type for %s", (_label, block) => {
     expect(block["@context"]).toBe("https://schema.org");
@@ -30,6 +31,7 @@ describe("every block", () => {
 
   it.each([
     ["organization", organizationJsonLd],
+    ["website", websiteJsonLd],
     ["software", softwareJsonLd],
   ])("serialises %s without breaking out of the script tag", (_label, block) => {
     // The blocks go into dangerouslySetInnerHTML. They are ours rather than
@@ -41,6 +43,7 @@ describe("every block", () => {
 
   it.each([
     ["organization", organizationJsonLd],
+    ["website", websiteJsonLd],
     ["software", softwareJsonLd],
   ])("points %s at the canonical site URL", (_label, block) => {
     expect(block.url).toBe(SITE_URL);
@@ -132,5 +135,53 @@ describe("SoftwareApplication", () => {
   it("names every plan exactly once", () => {
     const names = softwareJsonLd.offers.map((offer) => offer.name);
     expect(new Set(names).size).toBe(names.length);
+  });
+});
+
+/**
+ * The block that decides the line above every search result.
+ *
+ * Without it Google has no name for the domain and prints the hostname:
+ *
+ *     godeyeautomation.com
+ *     https://godeyeautomation.com
+ *
+ * which is what the site did -- the name and the link were the same string.
+ */
+describe("WebSite", () => {
+  it("names the site", () => {
+    expect(websiteJsonLd["@type"]).toBe("WebSite");
+    expect(websiteJsonLd.name).toBe("GODEYE");
+  });
+
+  /**
+   * The name must not be the hostname. That is the exact failure being fixed,
+   * and a well-meaning "make it match the domain" edit would restore it.
+   */
+  it("does not name the site after its own domain", () => {
+    const host = new URL(SITE_URL).hostname;
+    expect(websiteJsonLd.name).not.toBe(host);
+    expect(websiteJsonLd.name).not.toBe(host.replace(/^www./, ""));
+    expect(websiteJsonLd.name).not.toContain(".");
+  });
+
+  /** Google reads this from the domain root, so the URL has to BE the root. */
+  it("points at the root of the domain", () => {
+    expect(websiteJsonLd.url).toBe(SITE_URL);
+    expect(new URL(websiteJsonLd.url).pathname).toBe("/");
+  });
+
+  it("offers the spelling people actually type", () => {
+    expect(websiteJsonLd.alternateName).toBeTruthy();
+    expect(websiteJsonLd.alternateName).not.toBe(websiteJsonLd.name);
+  });
+
+  /**
+   * A sitelinks search box needs a real site-search endpoint that returns
+   * results. There is none, and claiming one puts a search box on the result
+   * that leads nowhere.
+   */
+  it("claims no search action it cannot honour", () => {
+    expect(websiteJsonLd).not.toHaveProperty("potentialAction");
   });
 });

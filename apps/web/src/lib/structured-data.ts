@@ -51,6 +51,38 @@ export const organizationJsonLd = {
 };
 
 /**
+ * The site's own name, which is a different thing from the company's.
+ *
+ * Without this, Google has no name to attach to the domain and falls back to
+ * printing the hostname above every result:
+ *
+ *     godeyeautomation.com
+ *     https://godeyeautomation.com
+ *     Marketing that runs without you in the room
+ *
+ * `WebSite` is the mechanism Google documents for that line, and it is read
+ * **only from the homepage** — the root of the domain — which is why this block
+ * is rendered by `app/page.tsx` and not by the layout. One per site: a second
+ * WebSite entity on another page makes the signal ambiguous and Google ignores
+ * both.
+ *
+ * `alternateName` is not a marketing alias. It is there because the domain
+ * itself reads "godeye automation", so that is what people type, and without it
+ * the two spellings compete instead of resolving to the same site.
+ *
+ * No `potentialAction`/SearchAction: the sitelinks search box requires a real
+ * site-search URL that returns results, and there is no such endpoint. Claiming
+ * one produces a search box that leads nowhere.
+ */
+export const websiteJsonLd = {
+  "@context": "https://schema.org",
+  "@type": "WebSite",
+  name: SITE_NAME,
+  alternateName: "GODEYE Automation",
+  url: SITE_URL,
+};
+
+/**
  * What the product is and what it costs, in the form a search engine reads.
  *
  * The Organization block alone says a company exists; it says nothing about

@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { GodeyeCrest } from "@/components/logo";
+import { SITE_NAME } from "@/lib/site";
 
 /**
  * What GODEYE does with a Facebook Page and an Instagram Business account.
@@ -18,6 +19,9 @@ export const metadata: Metadata = {
     "How GODEYE publishes to a Facebook Page and an Instagram Business account: every permission it asks for, the feature that needs it, and how to disconnect.",
   alternates: { canonical: "/integrations/meta" },
   openGraph: {
+    // Next replaces a page openGraph object wholesale; without this the tag
+    // is absent on exactly the pages that get indexed.
+    siteName: SITE_NAME,
     title: "GODEYE, Facebook and Instagram",
     description:
       "Every Meta permission GODEYE requests, the feature that needs it, and what it means for you.",

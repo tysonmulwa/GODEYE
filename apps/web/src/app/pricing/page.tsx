@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { PLANS, PLAN_FEATURES, TRIAL_HOURS } from "@godeye/shared";
 import { GodeyeCrest } from "@/components/logo";
+import { SITE_NAME } from "@/lib/site";
 
 /**
  * The public pricing page, rendered on the server.
@@ -17,6 +18,9 @@ export const metadata: Metadata = {
     "no card needed. Pro $19 a month, Premium $49, VIP $199.",
   alternates: { canonical: "/pricing" },
   openGraph: {
+    // Next replaces a page openGraph object wholesale; without this the tag
+    // is absent on exactly the pages that get indexed.
+    siteName: SITE_NAME,
     title: "GODEYE pricing",
     description: `${TRIAL_HOURS} hours free, no card. Then Pro $19 a month, Premium $49, VIP $199.`,
     url: "/pricing",
