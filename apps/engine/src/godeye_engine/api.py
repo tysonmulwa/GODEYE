@@ -6,8 +6,7 @@ import hmac
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
-from fastapi import Depends, FastAPI, Header, HTTPException
-from fastapi import Response
+from fastapi import Depends, FastAPI, Header, HTTPException, Response
 from fastapi.responses import FileResponse
 from prometheus_client import CONTENT_TYPE_LATEST
 from pydantic import BaseModel, Field
@@ -15,9 +14,10 @@ from sqlalchemy import text
 
 from .celery_app import worker_builds
 from .config import get_settings, validate_config
+from .db import get_engine
 from .metrics_registry import render, sample_queue_depths, sample_saturation
 from .telemetry import configure_logging, start_telemetry
-from .db import get_engine
+
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI) -> AsyncIterator[None]:

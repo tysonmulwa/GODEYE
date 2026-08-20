@@ -35,7 +35,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 
 # ---------------------------------------------------------------- violations
 
@@ -144,6 +144,10 @@ def price_comparison_allowed(location: str | None, prior_price=None, price=None)
     try:
         return Decimal(str(prior_price)) > Decimal(str(price))
     except (InvalidOperation, TypeError, ValueError):
+        # A price that will not parse is not evidence of a reduction, so the
+        # comparison is declined rather than guessed at. InvalidOperation was
+        # named here and never imported, so this clause raised NameError
+        # instead -- turning "decline the claim" into a crashed task.
         return False
 
 

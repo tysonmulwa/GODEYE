@@ -25,7 +25,6 @@ from urllib.parse import urljoin
 import httpx
 
 from ..security import EgressBlocked, SafeClient
-
 from .extract import Product, parse_price
 
 logger = logging.getLogger(__name__)

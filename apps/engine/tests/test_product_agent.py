@@ -9,8 +9,6 @@ from __future__ import annotations
 import json
 from decimal import Decimal
 
-import pytest
-
 from godeye_engine.ai import product_agent
 from godeye_engine.ai.product_agent import ANGLES, generate
 

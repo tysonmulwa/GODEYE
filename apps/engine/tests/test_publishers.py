@@ -3,20 +3,18 @@
 from unittest.mock import MagicMock
 
 import httpx
-
 import pytest
 
+from godeye_engine.config import get_settings
+from godeye_engine.publishers import base as base_mod
 from godeye_engine.publishers import get_publisher
+from godeye_engine.publishers import meta as meta_mod
 from godeye_engine.publishers.base import PostPayload, PublishError
 from godeye_engine.publishers.linkedin import LinkedInPublisher
-from godeye_engine.publishers import meta as meta_mod
 from godeye_engine.publishers.meta import FacebookPublisher, InstagramPublisher
 from godeye_engine.publishers.telegram import TelegramPublisher
-from godeye_engine.publishers.x import XPublisher
-from godeye_engine.publishers import base as base_mod
-from godeye_engine.publishers import tiktok as tiktok_mod
 from godeye_engine.publishers.tiktok import TikTokPublisher
-from godeye_engine.config import get_settings
+from godeye_engine.publishers.x import XPublisher
 
 
 def http_response(status_code: int, body: dict) -> MagicMock:

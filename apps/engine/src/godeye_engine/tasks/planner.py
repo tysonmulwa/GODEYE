@@ -10,7 +10,8 @@ ScheduledPost rows the regular scheduler then publishes.
 from __future__ import annotations
 
 import logging
-from datetime import datetime, time as dt_time, timedelta
+from datetime import datetime, timedelta
+from datetime import time as dt_time
 from zoneinfo import ZoneInfo
 
 from croniter import croniter
@@ -19,15 +20,12 @@ from sqlalchemy import func, select, update
 from .. import intel
 from ..ai import content_agent
 from ..celery_app import app
-from ..media import presets
 from ..db import (
     AgentRun,
     BusinessProfile,
     ContentItem,
-    MediaAsset,
     Organization,
     PostingPlan,
-    Product,
     ScheduledPost,
     SocialConnection,
     get_session,
@@ -36,6 +34,7 @@ from ..db import (
     utcnow,
 )
 from ..events import publish_event
+from ..media import presets
 from .products import attach_imported_photo
 
 logger = logging.getLogger(__name__)

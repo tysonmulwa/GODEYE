@@ -18,7 +18,7 @@ from __future__ import annotations
 import logging
 from datetime import timedelta
 
-from sqlalchemy import and_, or_, select, update
+from sqlalchemy import or_, select, update
 
 from ..ai import product_agent
 from ..celery_app import app

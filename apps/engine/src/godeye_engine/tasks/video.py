@@ -183,7 +183,15 @@ def generate_video(
             if include_captions:
                 _progress(agent_run_id, org_id, "captions", "Burning subtitles")
                 srt = subtitles.build_srt(
-                    [(s.narration, d) for s, (_, _, d) in zip(script.scenes, scene_files)]
+                    [
+                        (s.narration, d)
+                        # strict: one rendered file per scene is an invariant of
+                        # the step above. Without it a mismatch silently
+                        # truncates, and the video ships with the last scenes
+                        # uncaptioned -- a defect nobody sees until a customer
+                        # watches to the end.
+                        for s, (_, _, d) in zip(script.scenes, scene_files, strict=True)
+                    ]
                 )
                 srt_path = tmpdir / "captions.srt"
                 srt_path.write_text(srt, encoding="utf-8")

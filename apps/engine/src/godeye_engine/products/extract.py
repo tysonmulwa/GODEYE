@@ -229,8 +229,13 @@ def from_microdata(html: str, base_url: str) -> list[Product]:
     found: list[Product] = []
     scopes = soup.find_all(attrs={"itemtype": re.compile(r"schema\.org/Product", re.I)})
     for scope in scopes:
-        def prop(name: str, _scope=None) -> str | None:
-            node = (_scope or scope).find(attrs={"itemprop": name})
+        # _scope defaults to THIS iteration's scope, bound at definition time.
+        # Reading the loop variable from the closure instead worked only because
+        # every call happens inside the same iteration -- a fact no reader can
+        # check locally, and one that a later refactor moving prop out of the
+        # loop would silently break (ruff B023).
+        def prop(name: str, _scope=scope) -> str | None:
+            node = _scope.find(attrs={"itemprop": name})
             if node is None:
                 return None
             # Machine-readable value first: content= is unlocalised.

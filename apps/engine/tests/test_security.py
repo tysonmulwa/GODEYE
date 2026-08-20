@@ -6,10 +6,11 @@ import json
 import os
 
 import pytest
+from cryptography.exceptions import InvalidTag
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
 from godeye_engine import security
-from godeye_engine.config import get_settings
+from godeye_engine.config import InsecureConfigError, get_settings
 
 # A real-looking key. This was "ab" * 32 — every byte 0xab — which the weak-key
 # check added for finding S-6 now rejects, correctly: a key with one distinct
@@ -62,7 +63,12 @@ def test_rejects_tampered_payload():
     raw = bytearray(base64.b64decode(data))
     raw[0] ^= 0xFF
     tampered = ".".join([iv, tag, base64.b64encode(bytes(raw)).decode()])
-    with pytest.raises(Exception):
+    # ValueError specifically, not Exception. A blind `raises(Exception)` is
+    # satisfied by a NameError or an AttributeError too, so it passes whether
+    # the tamper was detected or the code simply broke -- which is the same
+    # weak assertion that let a missing `InvalidOperation` import sit unnoticed
+    # in products/compliance.py.
+    with pytest.raises(ValueError):
         security.decrypt_credentials(tampered)
 
 
@@ -83,7 +89,12 @@ def test_decrypts_v1_with_matching_org():
 def test_v1_refuses_a_ciphertext_moved_to_another_tenant():
     """The whole point of the AAD: a row copied between workspaces must not open."""
     blob = encrypt_v1(KEY_HEX, {"botToken": "123:abc"}, "org_1")
-    with pytest.raises(Exception):
+    # InvalidTag, named exactly. It is the GCM authentication tag refusing --
+    # the AAD binding doing its job -- and it is a different failure from a
+    # malformed payload or a missing key, which both raise ValueError. A blind
+    # `raises(Exception)` could not tell the three apart, and would pass just
+    # as happily if the call raised because the code was broken.
+    with pytest.raises(InvalidTag):
         security.decrypt_credentials(blob, "org_2")
 
 
@@ -118,5 +129,8 @@ def test_refuses_a_format_valid_key_with_no_entropy(monkeypatch, weak_hex):
 def test_refuses_a_missing_key(monkeypatch):
     monkeypatch.setenv("TOKEN_ENCRYPTION_KEY", "")
     get_settings.cache_clear()
-    with pytest.raises(Exception):
+    # InsecureConfigError, not ValueError: an unset key is a configuration
+    # refusal, and the boot gate raises its own type so it can be told apart
+    # from a decryption failure at runtime.
+    with pytest.raises(InsecureConfigError):
         security.decrypt_credentials(encrypt_like_node(KEY_HEX, {"a": 1}))

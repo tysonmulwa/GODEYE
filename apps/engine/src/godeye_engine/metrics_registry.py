@@ -103,7 +103,7 @@ def sample_saturation() -> None:
     """
     from datetime import UTC, datetime
 
-    from sqlalchemy import and_, func, or_, select
+    from sqlalchemy import and_, func, select
 
     from .db import ScheduledPost, get_session
 

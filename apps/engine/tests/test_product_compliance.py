@@ -106,6 +106,32 @@ class TestWhoMaySayWhatAThingUsedToCost:
         assert not price_comparison_allowed("Nairobi, Kenya", Decimal("1999"), Decimal("1999"))
         assert not price_comparison_allowed("Nairobi, Kenya", Decimal("500"), Decimal("1999"))
 
+    @pytest.mark.parametrize(
+        "prior,current",
+        [
+            ("not-a-price", "1999"),
+            ("KSh 2,300", "1999"),
+            ("", "1999"),
+            ("2300", "on request"),
+            ("--", "--"),
+        ],
+    )
+    def test_a_price_that_will_not_parse_declines_rather_than_crashes(self, prior, current):
+        """Prices arrive from a customer's own catalogue, so some are prose.
+
+        This raised NameError rather than returning False: the except clause
+        named ``InvalidOperation`` and the module only ever imported
+        ``Decimal``, so the handler for an unparseable price was itself a
+        crash. Found by a linter, not by a test, because every test here passed
+        a Decimal that parses.
+
+        The consequence was not cosmetic. A NameError inside the compliance
+        check propagates out of the product-import task, so one shop with
+        "KSh 2,300" in a price field failed the whole import instead of having
+        that one comparison declined.
+        """
+        assert price_comparison_allowed("Nairobi, Kenya", prior, current) is False
+
     def test_an_unstated_location_is_treated_as_strict(self):
         """A shop that has not said where it is could be in Berlin."""
         assert not price_comparison_allowed(None, Decimal("2300"), Decimal("1999"))

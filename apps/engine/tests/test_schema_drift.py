@@ -72,7 +72,7 @@ def _parse_models(text: str) -> dict[str, dict[str, dict[str, object]]]:
 
         for raw in body.splitlines():
             line = _strip_comments(raw).strip()
-            if not line or line.startswith("@@") or line.startswith("///"):
+            if not line or line.startswith(("@@", "///")):
                 continue
             parts = line.split()
             if len(parts) < 2:

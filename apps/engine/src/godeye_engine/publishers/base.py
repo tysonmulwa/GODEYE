@@ -8,14 +8,14 @@ from dataclasses import dataclass
 from typing import Any
 
 import httpx
-
-from ..security import EgressBlocked, safe_fetch
 from tenacity import (
     retry,
     retry_if_exception_type,
     stop_after_attempt,
     wait_exponential,
 )
+
+from ..security import EgressBlocked, safe_fetch
 
 logger = logging.getLogger(__name__)
 

@@ -9,9 +9,9 @@ from dataclasses import dataclass, field
 from urllib.parse import urldefrag, urljoin, urlparse
 
 import httpx
+from bs4 import BeautifulSoup
 
 from ..security import EgressBlocked, SafeClient
-from bs4 import BeautifulSoup
 
 logger = logging.getLogger(__name__)
 

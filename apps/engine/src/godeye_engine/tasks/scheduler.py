@@ -22,9 +22,9 @@ from ..db import (
     utcnow,
 )
 from ..events import publish_event
+from ..metrics_registry import PUBLISH_RESULTS
 from ..publishers import PublishError, get_publisher
 from ..publishers.base import PostPayload
-from ..metrics_registry import PUBLISH_RESULTS
 from ..security import decrypt_credentials
 from .products import attach_imported_photo
 

@@ -38,6 +38,28 @@ where = ["src"]
 line-length = 100
 target-version = "py312"
 
+[tool.ruff.lint]
+# Declared, not inherited.
+#
+# The config used to set only line-length and target-version, so the rule set
+# was whatever ruff's default happened to be that month -- and it moved. Running
+# the current release against this code reports 131 findings from rules nobody
+# opted into, which means the engine CI job would fail on a lint change nobody
+# in this repository made. A linter that changes what it checks under you turns
+# an unrelated release into a red build, and a red build nobody caused is a
+# build somebody switches off.
+#
+# So the set is written down. E4/E7/E9 and F are the correctness core; B is
+# flake8-bugbear, which is the one that earned its place here -- it found a
+# loop-variable closure, an unchained raise, and a zip() that silently truncated
+# captions off the end of a video. I is import sorting, deterministic and
+# fixable.
+#
+# E501 (line length) is deliberately NOT selected. 37 existing lines exceed 100
+# characters, they are prose comments rather than code, and reflowing them in
+# the same branch as a security fix makes both unreviewable.
+select = ["E4", "E7", "E9", "F", "B", "I"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src"]

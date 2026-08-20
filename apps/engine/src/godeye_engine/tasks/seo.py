@@ -27,7 +27,8 @@ from ..db import (
 )
 from ..events import publish_event
 from ..seo import audit as audit_rules
-from ..seo import crawler, fixes as fix_builder, generators, indexnow
+from ..seo import crawler, generators, indexnow
+from ..seo import fixes as fix_builder
 
 logger = logging.getLogger(__name__)
 
@@ -154,7 +155,8 @@ def run_site_audit(
                 _progress(agent_run_id, org_id, "meta", f"Rewriting {len(weak_pages[:10])} meta tag(s)")
                 meta_suggestions, llm2 = seo_agent.meta_suggestions(weak_pages, profile_for_ai)
                 llm_cost += llm2.cost_usd
-        except Exception as e:  # noqa: BLE001. AI extras are best-effort
+        # AI extras are best-effort: a failure here must not lose the audit.
+        except Exception as e:  # noqa: BLE001
             logger.info("AI SEO recommendations skipped: %s", e)
 
         # 5. Fixes, the actionable half. Findings say what is wrong; these say

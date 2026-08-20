@@ -137,10 +137,14 @@ def parse_response(text: str) -> dict[str, Any]:
         cleaned = re.sub(r"\n?```$", "", cleaned.strip())
     try:
         return json.loads(cleaned)
-    except json.JSONDecodeError:
+    except json.JSONDecodeError as error:
         match = re.search(r"\{.*\}", cleaned, re.DOTALL)
         if not match:
-            raise ValueError(f"Model did not return JSON: {text[:200]}")
+            # `from error` keeps the decoder's position and reason on the
+            # traceback. Without it the chain reads as "an error occurred while
+            # handling another error", which is what an unchained raise inside
+            # an except clause looks like to whoever reads the log (B904).
+            raise ValueError(f"Model did not return JSON: {text[:200]}") from error
         return json.loads(match.group(0))
 
 
