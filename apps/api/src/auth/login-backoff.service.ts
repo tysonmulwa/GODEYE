@@ -1,6 +1,7 @@
 import { HttpException, HttpStatus, Injectable, Logger } from "@nestjs/common";
 import Redis from "ioredis";
 import { env } from "../common/env";
+import { loginBackoffRefusals } from "../common/metrics";
 
 /**
  * Graduated backoff on failed sign-in, per account and per client address.
@@ -97,6 +98,7 @@ export class LoginBackoffService {
     const wait = delay - elapsed;
     if (wait <= 0) return;
 
+    loginBackoffRefusals.add(1);
     throw new HttpException(
       {
         statusCode: HttpStatus.TOO_MANY_REQUESTS,

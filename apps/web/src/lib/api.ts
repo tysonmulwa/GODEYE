@@ -1,6 +1,7 @@
 "use client";
 
 import { useAuthStore } from "./auth-store";
+import { traceparent } from "./trace";
 
 export const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
@@ -40,6 +41,9 @@ export async function api<T = unknown>(path: string, options: RequestOptions = {
     headers: {
       ...(options.body !== undefined ? { "Content-Type": "application/json" } : {}),
       ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+      // The first link in the chain. Without it a trace starts at the API and
+      // cannot answer "which click caused this" (rubric row 4).
+      traceparent: traceparent(),
     },
     body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
   });

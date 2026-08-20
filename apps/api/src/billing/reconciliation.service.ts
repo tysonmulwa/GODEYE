@@ -2,6 +2,7 @@ import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from "@nestjs/commo
 import { env } from "../common/env";
 import { httpRequest, TIMEOUTS } from "../common/http-client";
 import { LeaderLock } from "../common/leader-lock";
+import { reconciliationMissing } from "../common/metrics";
 import { PrismaService } from "../common/prisma.service";
 
 /**
@@ -42,6 +43,8 @@ interface PaystackTransaction {
 export class BillingReconciliationService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(BillingReconciliationService.name);
   private timer: NodeJS.Timeout | null = null;
+  /** So the gauge moves by the delta rather than accumulating. */
+  private lastMissing = 0;
 
   constructor(private readonly prisma: PrismaService) {}
 
@@ -67,6 +70,10 @@ export class BillingReconciliationService implements OnModuleInit, OnModuleDestr
     await LeaderLock.runExclusively("billing-reconciliation", 10 * 60_000, async () => {
       try {
         const report = await this.reconcile();
+        // A gauge, not a counter: the same missing payment is still missing
+        // tomorrow, and a counter would make one problem look like thirty.
+        reconciliationMissing.add(report.missing.length - this.lastMissing);
+        this.lastMissing = report.missing.length;
         if (report.missing.length) {
           // ERROR, not WARN: somebody paid and did not get what they paid for.
           this.logger.error(

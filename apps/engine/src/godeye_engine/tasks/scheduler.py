@@ -24,6 +24,7 @@ from ..db import (
 from ..events import publish_event
 from ..publishers import PublishError, get_publisher
 from ..publishers.base import PostPayload
+from ..metrics_registry import PUBLISH_RESULTS
 from ..security import decrypt_credentials
 from .products import attach_imported_photo
 
@@ -353,6 +354,12 @@ def publish_post(scheduled_post_id: str, claimed_at: str | None = None) -> dict:
             scheduled_post_id, attempts, permanent, detail,
         )
         _record_failure(scheduled_post_id, post["orgId"], connection["id"], detail, attempts, permanent)
+        # Permanent and transient are different problems: one is a customer who
+        # must reconnect, the other is a platform having a bad minute. An alert
+        # that cannot tell them apart pages for the wrong thing.
+        PUBLISH_RESULTS.labels(
+            platform=platform, outcome="failed" if permanent else "retrying"
+        ).inc()
         return {"status": "FAILED" if permanent else "RETRYING"}
 
     _finish(
@@ -364,6 +371,7 @@ def publish_post(scheduled_post_id: str, claimed_at: str | None = None) -> dict:
         connection_id=connection["id"],
     )
     logger.info("Published %s to %s (%s)", scheduled_post_id, platform, result.external_post_id)
+    PUBLISH_RESULTS.labels(platform=platform, outcome="published").inc()
     return {"status": "PUBLISHED", "externalPostId": result.external_post_id}
 
 

@@ -6,10 +6,12 @@ import { BillingModule } from "./billing/billing.module";
 import { TrialLockInterceptor } from "./billing/trial-lock.interceptor";
 import { BusinessProfileModule } from "./business-profile/business-profile.module";
 import { CommonModule } from "./common/common.module";
+import { MetricsInterceptor } from "./common/metrics.interceptor";
 import { RolesGuard } from "./common/roles.guard";
 import { GodeyeThrottlerGuard } from "./common/throttler.guard";
 import { RedisThrottlerStorage } from "./common/throttler-storage";
 import { RouteAuditService } from "./common/route-audit.service";
+import { StructuredLogger } from "./common/logger";
 import { ConnectionsModule } from "./connections/connections.module";
 import { ContentModule } from "./content/content.module";
 import { EngineModule } from "./engine/engine.module";
@@ -69,9 +71,13 @@ import { WebhooksModule } from "./webhooks/webhooks.module";
     { provide: APP_GUARD, useClass: GodeyeThrottlerGuard },
     // Refuses to boot if any route declares neither @Public() nor @MinRole().
     RouteAuditService,
+    StructuredLogger,
     // Counters in Redis, so limits are shared across replicas rather than
     // multiplied by them.
     { provide: ThrottlerStorage, useClass: RedisThrottlerStorage },
+    // RED metrics on every endpoint. First in the interceptor chain so its
+    // timer spans everything after it, including the trial-lock check.
+    { provide: APP_INTERCEPTOR, useClass: MetricsInterceptor },
     // Read-only once a workspace's trial ends unpaid. Global so a new
     // controller is covered the day it is written rather than the day somebody
     // remembers to decorate it.

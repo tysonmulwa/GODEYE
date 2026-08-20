@@ -7,12 +7,16 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
 from fastapi import Depends, FastAPI, Header, HTTPException
+from fastapi import Response
 from fastapi.responses import FileResponse
+from prometheus_client import CONTENT_TYPE_LATEST
 from pydantic import BaseModel, Field
 from sqlalchemy import text
 
 from .celery_app import worker_builds
 from .config import get_settings, validate_config
+from .metrics_registry import render, sample_queue_depths, sample_saturation
+from .telemetry import configure_logging, start_telemetry
 from .db import get_engine
 
 @asynccontextmanager
@@ -23,6 +27,10 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     rather than pass a health check and reject one endpoint hours later.
     """
     validate_config()
+    # Traces and metrics. Started here rather than at import so a test that
+    # imports the app does not open exporters (row 4).
+    configure_logging()
+    start_telemetry(_app)
     yield
 
 
@@ -458,3 +466,21 @@ def get_best_times(orgId: str, platform: str, timezone: str = "UTC") -> dict:
     except Exception:  # noqa: BLE001, fall back silently if the DB is unreachable
         pass
     return {"platform": platform, "timezone": timezone, "times": times, "dataDriven": data_driven}
+
+
+@app.get("/metrics")
+def metrics() -> Response:
+    """USE metrics for the worker fleet, in Prometheus exposition format.
+
+    Deliberately unauthenticated, like /health, and for the same reason: it
+    reports counts and durations, never a credential and never a customer's
+    data. A scraper that needs a shared secret is a scraper somebody eventually
+    turns off.
+
+    Saturation is sampled ON SCRAPE rather than pushed on a timer, so a scraper
+    that stops scraping produces a gap instead of a flat line. A flat line reads
+    as healthy and is the worst possible answer to "is anything wrong".
+    """
+    sample_saturation()
+    sample_queue_depths()
+    return Response(content=render(), media_type=CONTENT_TYPE_LATEST)

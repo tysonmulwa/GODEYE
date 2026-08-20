@@ -1,4 +1,9 @@
-import "./common/env"; // must be first, loads the repo-root .env
+// Telemetry FIRST, before anything requires http, express or ioredis.
+// Auto-instrumentation patches those modules as they are required; anything
+// loaded ahead of the SDK is never instrumented, silently, and the traces just
+// have holes in them.
+import "./common/telemetry";
+import "./common/env"; // loads the repo-root .env
 
 import { Logger } from "@nestjs/common";
 import { NestFactory } from "@nestjs/core";
@@ -8,6 +13,8 @@ import cookieParser from "cookie-parser";
 import helmet from "helmet";
 import { AppModule } from "./app.module";
 import { env, validateConfig } from "./common/env";
+import { ErrorsFilter } from "./common/errors.filter";
+import { StructuredLogger } from "./common/logger";
 
 /** The OpenAPI 3.1 document. Exported so CI can emit it without booting a server. */
 export function buildOpenApi() {
@@ -27,7 +34,15 @@ async function bootstrap() {
 
   const app = await NestFactory.create<NestExpressApplication>(AppModule, {
     rawBody: true, // needed for webhook HMAC validation
+    // JSON lines with the trace id on every one, and PII redacted before it is
+    // written rather than masked after (row 4).
+    bufferLogs: true,
   });
+  app.useLogger(app.get(StructuredLogger));
+
+  // One error shape for the whole API (RFC 9457), and the place unhandled
+  // exceptions are recorded onto their span.
+  app.useGlobalFilters(new ErrorsFilter());
 
   // Before any guard runs, and before CORS: with this off — which it was —
   // req.ips is empty and req.ip is Railway's edge proxy, so every rate-limit
@@ -76,6 +91,20 @@ async function bootstrap() {
       return callback(new Error(`Origin not allowed by CORS: ${origin}`), false);
     },
     credentials: true,
+    // Stated rather than reflected. The `cors` package defaults to echoing back
+    // whatever Access-Control-Request-Headers asks for, which works and hides
+    // what the API actually accepts. `traceparent` is on the list because the
+    // browser sends one on every call (rubric row 4) and it is NOT a
+    // CORS-safelisted header, so without it every cross-origin request fails
+    // preflight — and the browser reports that as a generic CORS error.
+    allowedHeaders: ["Content-Type", "Authorization", "traceparent", "tracestate"],
+    // So a client can read its rate-limit budget and its trace id back.
+    exposedHeaders: [
+      "RateLimit-Limit",
+      "RateLimit-Remaining",
+      "RateLimit-Reset",
+      "Retry-After",
+    ],
   });
 
   // Photo uploads are posted as base64 JSON, which the default ~100kb body limit

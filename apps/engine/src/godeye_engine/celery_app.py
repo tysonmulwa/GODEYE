@@ -200,3 +200,67 @@ def worker_builds(timeout: float = 2.0) -> list[dict]:
                 "ffmpeg": payload.get("ffmpeg", "unknown") if ok else "unknown",
             })
     return sorted(nodes, key=lambda n: n["node"])
+
+
+# ---------------------------------------------------------------------------
+# Telemetry for the worker and beat processes.
+#
+# `worker_process_init` rather than module import: Celery forks, and a tracer
+# provider created in the parent has exporter threads that do not survive the
+# fork. Instrumenting per worker process is the only shape that actually emits.
+# ---------------------------------------------------------------------------
+from celery.signals import (  # noqa: E402
+    task_failure,
+    task_postrun,
+    task_prerun,
+    worker_process_init,
+)
+
+
+@worker_process_init.connect
+def _init_worker_telemetry(**_kwargs) -> None:
+    from .telemetry import configure_logging, start_telemetry
+
+    configure_logging()
+    start_telemetry()
+
+
+_task_started: dict[str, float] = {}
+
+
+@task_prerun.connect
+def _task_started_at(task_id=None, task=None, **_kwargs) -> None:
+    import time
+
+    from .metrics_registry import TASKS_IN_FLIGHT
+
+    _task_started[task_id] = time.monotonic()
+    TASKS_IN_FLIGHT.labels(task=getattr(task, "name", "unknown")).inc()
+
+
+@task_postrun.connect
+def _task_finished(task_id=None, task=None, state=None, **_kwargs) -> None:
+    import time
+
+    from .metrics_registry import TASK_DURATION, TASKS_IN_FLIGHT
+
+    name = getattr(task, "name", "unknown")
+    TASKS_IN_FLIGHT.labels(task=name).dec()
+    started = _task_started.pop(task_id, None)
+    if started is not None:
+        TASK_DURATION.labels(
+            task=name, outcome="ok" if state == "SUCCESS" else "error"
+        ).observe(time.monotonic() - started)
+
+
+@task_failure.connect
+def _task_failed(task_id=None, sender=None, exception=None, **_kwargs) -> None:
+    import logging
+
+    # Structured, with the trace id attached by the JSON formatter, so a failed
+    # task is findable from the request that scheduled it.
+    logging.getLogger("godeye_engine.tasks").error(
+        "Task failed: %s", getattr(sender, "name", "unknown"),
+        exc_info=exception,
+        extra={"fields": {"taskId": task_id}},
+    )

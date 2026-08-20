@@ -1,3 +1,19 @@
+/**
+ * DNS is mocked here on purpose.
+ *
+ * The egress guard resolves hostnames, which makes any spec that mentions one
+ * depend on a working resolver — and on WHOSE resolver, since many ISPs hijack
+ * NXDOMAIN to a parking address inside RFC1918. A unit test about the SEO
+ * service should not fail on a train.
+ *
+ * Literal addresses and blocked hostname suffixes never reach DNS, so the
+ * refusal cases below still exercise the real logic. The guard's own behaviour
+ * is covered against real resolution in apps/engine/tests/test_egress.py.
+ */
+jest.mock("dns/promises", () => ({
+  lookup: jest.fn(async () => [{ address: "93.184.215.14", family: 4 }]),
+}));
+
 import { BadRequestException } from "@nestjs/common";
 import { Test } from "@nestjs/testing";
 import { productSettingsSchema } from "@godeye/shared";

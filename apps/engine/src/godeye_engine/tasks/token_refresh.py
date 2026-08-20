@@ -37,6 +37,7 @@ from ..celery_app import app
 from ..config import get_settings
 from ..db import SocialConnection, get_engine
 from ..events import publish_event
+from ..metrics_registry import CONNECTION_REFRESH
 from ..publishers.base import TransientPublishError
 from ..security import decrypt_credentials, encrypt_credentials
 
@@ -275,6 +276,9 @@ def refresh_expiring_connections() -> dict:
                 lastCheckedAt=now,
             )
             _notify(connection["orgId"], connection, status, str(e))
+            CONNECTION_REFRESH.labels(
+                platform=platform, outcome="expired" if lapsed else "unsupported"
+            ).inc()
             expired += 1 if lapsed else 0
             continue
         except RefreshRevoked as e:
@@ -286,6 +290,7 @@ def refresh_expiring_connections() -> dict:
                 lastCheckedAt=now,
             )
             _notify(connection["orgId"], connection, "REVOKED", str(e))
+            CONNECTION_REFRESH.labels(platform=platform, outcome="revoked").inc()
             revoked += 1
             continue
         except Exception as e:  # noqa: BLE001 - one bad connection must not stop the sweep
@@ -299,6 +304,7 @@ def refresh_expiring_connections() -> dict:
                 lastErrorAt=now,
                 lastCheckedAt=now,
             )
+            CONNECTION_REFRESH.labels(platform=platform, outcome="failed").inc()
             if lapsed:
                 expired += 1
                 _notify(connection["orgId"], connection, status, str(e))
@@ -317,6 +323,7 @@ def refresh_expiring_connections() -> dict:
             lastErrorAt=None,
             lastCheckedAt=now,
         )
+        CONNECTION_REFRESH.labels(platform=platform, outcome="refreshed").inc()
         refreshed += 1
 
     result = {

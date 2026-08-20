@@ -107,6 +107,27 @@ MAX_REDIRECTS = 3
 USER_AGENT = "GodeyeBot/1.0 (+https://godeyeautomation.com/bot)"
 
 
+def _count_block(reason: str) -> None:
+    """A blocked fetch is a signal, not just a log line.
+
+    The reason is bucketed rather than used raw: it contains the host and the
+    address, and a metric label with a customer-supplied value in it is
+    unbounded cardinality — the same mistake as putting an id in a route label.
+    """
+    for bucket in ("private", "internal service", "scheme", "port", "credentials", "byte cap", "redirect"):
+        if bucket in reason:
+            label = bucket.replace(" ", "_")
+            break
+    else:
+        label = "other"
+    try:
+        from ..metrics_registry import EGRESS_BLOCKED
+
+        EGRESS_BLOCKED.labels(reason=label).inc()
+    except Exception:  # noqa: BLE001 - a counter must never break the guard
+        pass
+
+
 class EgressBlocked(ValueError):
     """A URL was refused before any connection was made."""
 
@@ -259,6 +280,7 @@ def safe_fetch(
                 hop,
                 blocked.reason,
             )
+            _count_block(blocked.reason)
             raise
 
         request_headers = {"User-Agent": USER_AGENT, **(headers or {}), "Host": host}

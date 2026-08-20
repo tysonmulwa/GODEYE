@@ -3,6 +3,7 @@ import type { ThrottlerStorage } from "@nestjs/throttler";
 import type { ThrottlerStorageRecord } from "@nestjs/throttler/dist/throttler-storage-record.interface";
 import Redis from "ioredis";
 import { env } from "./env";
+import { rateLimitStoreFailures } from "./metrics";
 
 /**
  * Rate-limit counters, shared across replicas.
@@ -154,6 +155,9 @@ export class RedisThrottlerStorage implements CountingStorage, OnModuleDestroy {
     const reason = error instanceof Error ? error.message : String(error);
     if (env.nodeEnv === "production") {
       this.logger.error(`Rate-limit store unreachable, refusing the request: ${reason}`);
+      // The alert this drives pages, because refusing is correct AND is an
+      // outage. See docs/ops/alerts.yaml RateLimitStoreDown.
+      rateLimitStoreFailures.add(1);
       throw new ServiceUnavailableException(
         "Service temporarily unavailable. Please retry in a moment.",
       );

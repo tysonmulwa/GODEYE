@@ -1,6 +1,15 @@
 import { BadRequestException } from "@nestjs/common";
 import { isIP } from "net";
 import { lookup } from "dns/promises";
+import { egressBlocked } from "./metrics";
+
+/** A small, fixed set of reasons, so the metric stays bounded. */
+function bucket(reason: string): string {
+  for (const label of ["private", "internal service", "http or https", "port", "credentials", "resolve"]) {
+    if (reason.includes(label)) return label.replace(/ /g, "_");
+  }
+  return "other";
+}
 
 /**
  * The API's half of the SSRF fix (S-2, S-3).
@@ -112,6 +121,10 @@ function blockedAddress(address: string): boolean {
 
 export class BlockedUrlError extends BadRequestException {
   constructor(url: string, reason: string) {
+    // Bucketed, never the raw reason: it contains the host and the address, and
+    // a metric label carrying customer input is unbounded cardinality — the
+    // same mistake as putting an id in a route label.
+    egressBlocked.add(1, { reason: bucket(reason) });
     super({
       code: "URL_NOT_ALLOWED",
       message: `That URL cannot be fetched: ${reason}`,

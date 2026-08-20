@@ -1,4 +1,5 @@
 import { Logger, ServiceUnavailableException } from "@nestjs/common";
+import { circuitOpen } from "./metrics";
 
 /**
  * The only place this API is allowed to call `fetch`. Finding B-4.
@@ -94,6 +95,7 @@ export async function httpRequest(
     }
     // Half-open: let exactly this request through and judge by its result.
     state.openedAt = null;
+    circuitOpen.add(-1, { upstream });
   }
 
   let lastError: unknown;
@@ -138,6 +140,9 @@ function recordFailure(state: BreakerState, upstream: string): void {
   state.failures += 1;
   if (state.failures >= FAILURE_THRESHOLD && state.openedAt === null) {
     state.openedAt = Date.now();
+    // 1 while open. An alert on this says "a dependency is down and we are
+    // failing fast", which is worth knowing even though it is correct.
+    circuitOpen.add(1, { upstream });
     logger.error(
       `Circuit opened for ${upstream} after ${state.failures} consecutive failures; ` +
         `failing fast for ${OPEN_MS / 1000}s`,

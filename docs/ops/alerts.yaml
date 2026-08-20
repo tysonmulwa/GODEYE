@@ -1,0 +1,239 @@
+# Prometheus alerting rules for GODEYE.
+#
+# Objectives and reasoning: docs/ops/SLOs.md
+#
+#   promtool check rules docs/ops/alerts.yaml
+#
+# STATUS: valid syntax, never loaded. Nothing exports metrics yet
+# (OTEL_EXPORTER_OTLP_ENDPOINT is unset), so no rule here has ever evaluated.
+#
+# The rule these follow: page for a burning error budget or a symptom a customer
+# would describe. Never for a threshold crossing. A CPU alert and a "5xx > 10"
+# alert share the same failure — they fire when a number moves, not when
+# somebody is affected — and what follows is three months of ignored pages and
+# then a real one that gets ignored too.
+
+groups:
+  # ---------------------------------------------------------------------------
+  # SLO 1 — availability, 99.9% over 30 days (43 minutes of budget)
+  #
+  # Multi-window, multi-burn-rate per the Google SRE workbook. Two windows so a
+  # 30-second spike does not page and a slow bleed is not missed: the long
+  # window says "this has been true long enough to matter", the short one says
+  # "it is still true now", and an alert needs both.
+  # ---------------------------------------------------------------------------
+  - name: godeye-availability
+    rules:
+      - alert: AvailabilityBudgetBurningFast
+        expr: |
+          (
+            sum(rate(http_server_request_duration_seconds_count{outcome="error"}[1h]))
+              / sum(rate(http_server_request_duration_seconds_count[1h])) > 14.4 * 0.001
+          )
+          and
+          (
+            sum(rate(http_server_request_duration_seconds_count{outcome="error"}[5m]))
+              / sum(rate(http_server_request_duration_seconds_count[5m])) > 14.4 * 0.001
+          )
+        for: 2m
+        labels: { severity: page, slo: availability }
+        annotations:
+          summary: "2% of the 30-day availability budget in one hour"
+          description: >-
+            5xx rate is 14.4x the error budget. At this rate the whole month's
+            budget is gone in ~2 days. Check /health/ready on every replica and
+            the circuit-breaker state for the engine and Paystack.
+          runbook: docs/ops/SLOs.md
+
+      - alert: AvailabilityBudgetBurning
+        expr: |
+          (
+            sum(rate(http_server_request_duration_seconds_count{outcome="error"}[6h]))
+              / sum(rate(http_server_request_duration_seconds_count[6h])) > 6 * 0.001
+          )
+          and
+          (
+            sum(rate(http_server_request_duration_seconds_count{outcome="error"}[30m]))
+              / sum(rate(http_server_request_duration_seconds_count[30m])) > 6 * 0.001
+          )
+        for: 15m
+        labels: { severity: page, slo: availability }
+        annotations:
+          summary: "5% of the 30-day availability budget in six hours"
+
+      - alert: AvailabilityBudgetLeaking
+        expr: |
+          (
+            sum(rate(http_server_request_duration_seconds_count{outcome="error"}[1d]))
+              / sum(rate(http_server_request_duration_seconds_count[1d])) > 3 * 0.001
+          )
+          and
+          (
+            sum(rate(http_server_request_duration_seconds_count{outcome="error"}[2h]))
+              / sum(rate(http_server_request_duration_seconds_count[2h])) > 3 * 0.001
+          )
+        for: 1h
+        labels: { severity: ticket, slo: availability }
+        annotations:
+          summary: "10% of the availability budget in a day — look at it tomorrow"
+
+  # ---------------------------------------------------------------------------
+  # SLO 4 — publish timeliness. THE product SLO.
+  #
+  # GODEYE's promise is unattended publishing. A post an hour late is a failure
+  # even though every request succeeded, and this is the objective the audit's
+  # B-7 was violating continuously and invisibly because nothing measured it.
+  # ---------------------------------------------------------------------------
+  - name: godeye-publishing
+    rules:
+      - alert: DispatcherStopped
+        expr: |
+          rate(godeye_publish_total[15m]) == 0
+          and godeye_due_posts_backlog > 0
+        for: 10m
+        labels: { severity: page, slo: publish_timeliness }
+        annotations:
+          summary: "Posts are due and nothing is publishing"
+          description: >-
+            The single most valuable alert here. Every other failure mode
+            produces errors somewhere; a stopped dispatcher produces NOTHING,
+            and without this the first signal is a customer asking why a week of
+            posts never went out. Check: is the beat process alive, is the
+            publish queue being consumed, is Redis reachable.
+          runbook: docs/ops/CAPACITY.md
+
+      - alert: PublishBacklogGrowing
+        expr: godeye_publish_lateness_seconds > 900
+        for: 10m
+        labels: { severity: page, slo: publish_timeliness }
+        annotations:
+          summary: "The oldest due post is more than 15 minutes late"
+          description: >-
+            The customer-visible symptom of SLO 4. Usually the worker is
+            saturated — check godeye_tasks_in_flight and the media queue depth.
+            docs/ops/CAPACITY.md has the autoscaling policy; the fastest manual
+            fix is a second worker on -Q publish.
+
+      - alert: PublishFailureRateHigh
+        expr: |
+          sum(rate(godeye_publish_total{outcome="failed"}[1h]))
+            / sum(rate(godeye_publish_total[1h])) > 0.05
+        for: 30m
+        labels: { severity: ticket, slo: publish_timeliness }
+        annotations:
+          summary: "More than 5% of publishes are failing permanently"
+          description: >-
+            Permanent, not transient — these will not retry. Group by platform
+            first: one platform failing is their outage, all platforms failing
+            is ours.
+
+  # ---------------------------------------------------------------------------
+  # SLO 5 — connections stay alive. Exists because of B-7.
+  # ---------------------------------------------------------------------------
+  - name: godeye-connections
+    rules:
+      - alert: TokenRefreshFailing
+        expr: |
+          sum(rate(godeye_connection_refresh_total{outcome="failed"}[1h]))
+            / sum(rate(godeye_connection_refresh_total[1h])) > 0.25
+        for: 30m
+        labels: { severity: page, slo: connection_health }
+        annotations:
+          summary: "A quarter of token refreshes are failing"
+          description: >-
+            At this rate it is an app credential that rotated or an app that was
+            suspended — one problem affecting every customer on that platform,
+            not many individually unlucky ones. Check the platform's developer
+            dashboard before looking at any single connection.
+
+      - alert: ConnectionsExpiringUnnoticed
+        expr: increase(godeye_connection_refresh_total{outcome="expired"}[6h]) > 5
+        for: 0m
+        labels: { severity: ticket, slo: connection_health }
+        annotations:
+          summary: "Connections are lapsing rather than renewing"
+          description: >-
+            Expected for LinkedIn, whose refresh grant is partner-only, and for
+            anything a customer revoked. A spike across TIKTOK or INSTAGRAM
+            means the refresh path itself is broken.
+
+  # ---------------------------------------------------------------------------
+  # Security and money. Not budgets — conditions that are already wrong.
+  # ---------------------------------------------------------------------------
+  - name: godeye-security
+    rules:
+      - alert: PaymentReconciliationDiverged
+        expr: godeye_payment_reconciliation_missing > 0
+        for: 0m
+        labels: { severity: page, slo: payment_application }
+        annotations:
+          summary: "Paystack recorded a payment we have no record of"
+          description: >-
+            Somebody paid and did not get what they paid for. The daily
+            reconciliation reports rather than repairs on purpose — granting a
+            plan from a transaction this system never processed needs a human.
+          runbook: docs/compliance/PCI-SCOPE.md
+
+      - alert: RateLimitStoreDown
+        expr: increase(godeye_ratelimit_store_failures_total[5m]) > 0
+        for: 2m
+        labels: { severity: page }
+        annotations:
+          summary: "The rate-limit store is unreachable and requests are being refused"
+          description: >-
+            Production fails closed here, deliberately: a limiter that opens
+            under load is missing exactly when it is needed. Correct behaviour
+            AND a full outage, so it pages.
+          runbook: docs/security/RATE-LIMITING.md
+
+      - alert: EgressBlockedSpike
+        expr: sum(rate(godeye_egress_blocked_total[15m])) > 1
+        for: 5m
+        labels: { severity: ticket }
+        annotations:
+          summary: "The SSRF guard is refusing a lot of URLs"
+          description: >-
+            Either somebody is probing, or the guard is wrong about a legitimate
+            customer URL. Both need a look. Group by `reason`: `private` and
+            `internal_service` lean towards the first, `port` and `scheme`
+            towards the second.
+          runbook: docs/security/SSRF.md
+
+      - alert: RefreshTokenReuseDetected
+        expr: increase(godeye_auth_refresh_reuse_total[1h]) > 0
+        for: 0m
+        labels: { severity: page }
+        annotations:
+          summary: "A rotated refresh token was presented again"
+          description: >-
+            Either a client replayed an old value or somebody else holds a copy.
+            They are indistinguishable from here and one of them is theft, so
+            the whole token family has already been revoked. Find the user,
+            confirm with them, and check what that session did.
+
+  # ---------------------------------------------------------------------------
+  # Latency. Ticket rather than page: slow is not down, and paging for latency
+  # trains people to ignore pages.
+  # ---------------------------------------------------------------------------
+  - name: godeye-latency
+    rules:
+      - alert: ReadLatencyBudgetBurning
+        expr: |
+          histogram_quantile(
+            0.99,
+            sum by (le) (rate(http_server_request_duration_seconds_bucket{method="GET"}[30m]))
+          ) > 0.4
+        for: 30m
+        labels: { severity: ticket, slo: read_latency }
+        annotations:
+          summary: "p99 read latency is over the 400ms objective"
+
+      - alert: CircuitOpen
+        expr: godeye_circuit_open == 1
+        for: 5m
+        labels: { severity: ticket }
+        annotations:
+          summary: "An upstream circuit has been open for five minutes"
+          description: >-
+            We are failing fast rather than draining the connection pool, which
+            is correct. Worth knowing which upstream and for how long.

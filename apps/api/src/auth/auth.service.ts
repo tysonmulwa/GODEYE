@@ -25,6 +25,7 @@ import { CryptoService } from "../common/crypto.service";
 import { env } from "../common/env";
 import { AccessTokenPayload } from "../common/jwt-auth.guard";
 import { PrismaService } from "../common/prisma.service";
+import { refreshTokenReuse } from "../common/metrics";
 import { signToken } from "../common/tokens";
 import { LoginBackoffService } from "./login-backoff.service";
 import { MembershipService } from "../common/membership.service";
@@ -188,6 +189,9 @@ export class AuthService {
       // the whole family is revoked and everybody re-authenticates. Rejecting
       // just the token, which is what happened before, left the thief's rotated
       // copy live and told nobody (RFC 9700 4.14.2).
+      // Pages. Either a client replayed an old value or somebody else holds a
+      // copy; they are indistinguishable from here and one of them is theft.
+      refreshTokenReuse.add(1);
       if (stored.familyId) {
         const { count } = await this.prisma.refreshToken.updateMany({
           where: { familyId: stored.familyId, revokedAt: null },
