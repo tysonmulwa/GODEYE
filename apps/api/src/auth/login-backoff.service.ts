@@ -91,7 +91,15 @@ export class LoginBackoffService {
         this.keys(email, ip).map((k) => this.redis().pttl(k).catch(() => -1)),
       );
       const remaining = Math.max(...ttls);
-      elapsed = WINDOW_SECONDS - Math.ceil(Math.max(0, remaining) / 1000);
+      // `pttl` answers -1 for a key with no expiry and -2 for a key that is
+      // not there, and neither says anything about how long ago the last
+      // failure was. Treat that as NO time served, not as fully served: the
+      // latter reads "the whole window has passed" and silently switches the
+      // delay off for that key — which is what a partially-failed pipeline
+      // (incr applied, expire not) would produce. Being conservative costs
+      // nothing here, because the 15-minute cap already bounds how long anyone
+      // can be held out.
+      elapsed = remaining > 0 ? WINDOW_SECONDS - Math.ceil(remaining / 1000) : 0;
     } catch {
       elapsed = 0;
     }

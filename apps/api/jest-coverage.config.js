@@ -70,6 +70,12 @@ module.exports = {
    */
   coverageThreshold: {
     global: {
+      // NOTE, because this is not obvious and cost a confused ten minutes:
+      // jest REMOVES any file with its own threshold below from the `global`
+      // group. So `global` here describes everything *except* the
+      // security-critical list, and raising coverage on url-guard.ts or
+      // tokens.ts does not move these numbers by a single decimal. Two
+      // separate ratchets, not one.
       lines: 65,
       statements: 65,
       branches: 49,
@@ -90,11 +96,11 @@ module.exports = {
     "./src/common/csrf.guard.ts": { lines: 95, branches: 85 },
     "./src/common/jwt-auth.guard.ts": { lines: 90, branches: 70 },
     "./src/common/secrets.ts": { lines: 95, branches: 80 },
-    "./src/common/tokens.ts": { lines: 84, branches: 25 },
+    "./src/common/tokens.ts": { lines: 100, branches: 90 },
     "./src/common/url-guard.ts": { lines: 90, branches: 65 },
     "./src/common/env.ts": { lines: 85, branches: 85 },
     "./src/connections/oauth-state.service.ts": { lines: 78, branches: 65 },
     "./src/auth/auth.service.ts": { lines: 72, branches: 60 },
-    "./src/auth/login-backoff.service.ts": { lines: 52, branches: 50 },
+    "./src/auth/login-backoff.service.ts": { lines: 95, branches: 85 },
   },
 };
