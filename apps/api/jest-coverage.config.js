@@ -91,7 +91,7 @@ module.exports = {
     "./src/common/jwt-auth.guard.ts": { lines: 90, branches: 70 },
     "./src/common/secrets.ts": { lines: 95, branches: 80 },
     "./src/common/tokens.ts": { lines: 84, branches: 25 },
-    "./src/common/url-guard.ts": { lines: 78, branches: 50 },
+    "./src/common/url-guard.ts": { lines: 90, branches: 65 },
     "./src/common/env.ts": { lines: 85, branches: 85 },
     "./src/connections/oauth-state.service.ts": { lines: 78, branches: 65 },
     "./src/auth/auth.service.ts": { lines: 72, branches: 60 },

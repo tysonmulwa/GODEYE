@@ -98,17 +98,77 @@ function isBlockedV4(address: string): boolean {
   });
 }
 
+/**
+ * An IPv6 address as its eight 16-bit groups, or null if it will not parse.
+ *
+ * Written out rather than pattern-matched on the text because the text is not
+ * stable. `new URL()` normalises an address before anything here ever sees it,
+ * and it does so in the form that defeats a regex:
+ *
+ *     new URL("http://[::ffff:10.0.0.1]/").hostname  ===  "[::ffff:a00:1]"
+ *
+ * The previous version matched `/^::ffff:(\d+\.\d+\.\d+\.\d+)$/`, which the
+ * normalised hex form never satisfies — so `::ffff:169.254.169.254` reached the
+ * generic checks, matched no blocked prefix, and was allowed straight through
+ * to the cloud metadata endpoint. Found by url-guard.spec.ts, not by review.
+ */
+function parseV6(address: string): number[] | null {
+  let text = address.toLowerCase().replace(/^\[|\]$/g, "");
+  if (text.includes("%")) text = text.slice(0, text.indexOf("%")); // zone id
+
+  // A trailing dotted quad (::ffff:10.0.0.1) is two more groups.
+  const tail: number[] = [];
+  const dotted = text.match(/(\d{1,3}(?:\.\d{1,3}){3})$/);
+  if (dotted) {
+    const value = v4ToInt(dotted[1]);
+    if (value === null) return null;
+    tail.push(value >>> 16, value & 0xffff);
+    // Drop the quad and the single ':' that joined it, but leave a '::' intact.
+    text = text.slice(0, -dotted[1].length);
+    if (text.endsWith(":") && !text.endsWith("::")) text = text.slice(0, -1);
+  }
+
+  const halves = text.split("::");
+  if (halves.length > 2) return null;
+  const parse = (part: string) =>
+    part
+      .split(":")
+      .filter(Boolean)
+      .map((group) => (/^[0-9a-f]{1,4}$/.test(group) ? parseInt(group, 16) : NaN));
+
+  const head = parse(halves[0] ?? "");
+  const rest = halves.length === 2 ? parse(halves[1]) : [];
+  const groups =
+    halves.length === 2
+      ? [...head, ...Array(8 - head.length - rest.length - tail.length).fill(0), ...rest, ...tail]
+      : [...head, ...rest, ...tail];
+
+  if (groups.length !== 8 || groups.some((g) => !Number.isInteger(g) || g < 0 || g > 0xffff)) {
+    return null;
+  }
+  return groups;
+}
+
 function isBlockedV6(address: string): boolean {
-  const lower = address.toLowerCase().replace(/^\[|\]$/g, "");
-  // An IPv4-mapped literal (::ffff:127.0.0.1) is the bypass that gets missed:
-  // it matches no IPv6 range and connects to loopback.
-  const mapped = lower.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/);
-  if (mapped) return isBlockedV4(mapped[1]);
-  if (lower === "::1" || lower === "::") return true;
-  const head = lower.split(":")[0];
-  if (/^f[cd]/.test(head)) return true; // fc00::/7 unique-local
-  if (/^fe[89ab]/.test(head)) return true; // fe80::/10 link-local
-  if (/^ff/.test(head)) return true; // ff00::/8 multicast
+  const g = parseV6(address);
+  if (g === null) return true; // unparseable is not "fine"
+
+  const zeros = (count: number) => g.slice(0, count).every((group) => group === 0);
+  const asV4 = () => [g[6] >>> 8, g[6] & 0xff, g[7] >>> 8, g[7] & 0xff].join(".");
+
+  // ::ffff:0:0/96 — IPv4-mapped. Judge it as the v4 address it will connect to.
+  if (zeros(5) && g[5] === 0xffff) return isBlockedV4(asV4());
+  // ::/96 — the deprecated IPv4-compatible form, and ::1 and :: themselves.
+  if (zeros(7)) return true;
+  if (zeros(6)) return isBlockedV4(asV4());
+  // 64:ff9b::/96 — NAT64. A translator on the path turns this into a v4
+  // connection to the embedded address, so the embedded address is what counts.
+  if (g[0] === 0x64 && g[1] === 0xff9b && g.slice(2, 6).every((x) => x === 0)) {
+    return isBlockedV4(asV4());
+  }
+  if ((g[0] & 0xfe00) === 0xfc00) return true; // fc00::/7 unique-local
+  if ((g[0] & 0xffc0) === 0xfe80) return true; // fe80::/10 link-local
+  if ((g[0] & 0xff00) === 0xff00) return true; // ff00::/8 multicast
   return false;
 }
 
