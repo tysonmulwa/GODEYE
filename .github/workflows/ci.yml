@@ -131,6 +131,20 @@ jobs:
       # they are set where they are and why lowering one is never the fix.
       - name: Coverage gate
         run: pnpm --filter @godeye/api test:coverage
+      # Backups & DR. Before this, "what happens if we lose the database" was
+      # answered by "Supabase takes backups" -- a hosting arrangement, not a
+      # recovery plan, and nobody had ever asked one to give the data back.
+      # This dumps the migrated database, restores it into a scratch copy and
+      # compares them table by table and row by row, so the restore path is
+      # exercised on every build rather than during an incident.
+      #
+      # Against the CI Postgres, never production: it is a test of the
+      # mechanism. The production restore still needs a person with a
+      # stopwatch, and docs/operations/DR.md says so.
+      - name: Restore drill (self test)
+        run: node scripts/restore-drill.mjs --self-test
+      - name: Restore drill
+        run: node scripts/restore-drill.mjs --source "$TEST_DATABASE_URL"
       - uses: actions/upload-artifact@v4
         if: always()
         with:
