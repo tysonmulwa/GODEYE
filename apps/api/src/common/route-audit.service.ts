@@ -1,6 +1,7 @@
 import { Injectable, Logger, OnApplicationBootstrap } from "@nestjs/common";
 import { METHOD_METADATA, PATH_METADATA } from "@nestjs/common/constants";
 import { DiscoveryService, MetadataScanner } from "@nestjs/core";
+import { CSRF_EXEMPT_KEY } from "./csrf.guard";
 import { MIN_ROLE_KEY } from "./roles.guard";
 import { PUBLIC_KEY } from "./public.decorator";
 
@@ -13,6 +14,13 @@ export interface RouteRecord {
   method: string;
   path: string;
   access: "public" | "VIEWER" | "EDITOR" | "ADMIN" | "OWNER" | "UNANNOTATED";
+  /**
+   * The stated reason this route is excused from the CSRF origin check (S-14),
+   * or null. Carried here rather than checked separately so the exempt set is
+   * enumerable — a security exception nobody can list is a security exception
+   * nobody reviews.
+   */
+  csrfExempt: string | null;
 }
 
 /**
@@ -53,6 +61,14 @@ export class RouteAuditService implements OnApplicationBootstrap {
       `${routes.length} routes, all annotated ` +
         `(${routes.filter((r) => r.access === "public").length} public)`,
     );
+
+    // Named in the boot log, not merely counted. These are the routes a
+    // cross-site page can reach, and the deploy log is where somebody notices
+    // that the list grew.
+    const exempt = routes.filter((r) => r.csrfExempt);
+    for (const route of exempt) {
+      this.logger.log(`CSRF-exempt: ${route.method} /${route.path} — ${route.csrfExempt}`);
+    }
   }
 
   /** Every HTTP route Nest has registered, with the access level it declares. */
@@ -78,6 +94,12 @@ export class RouteAuditService implements OnApplicationBootstrap {
             method: METHOD_NAMES[methodIndex ?? 0] ?? "GET",
             path: [base, String(one)].filter(Boolean).join("/").replace(/\/+/g, "/"),
             access: this.accessOf(handler, wrapper.metatype),
+            csrfExempt:
+              (Reflect.getMetadata(CSRF_EXEMPT_KEY, handler as object) as string | undefined) ??
+              (Reflect.getMetadata(CSRF_EXEMPT_KEY, wrapper.metatype ?? {}) as
+                | string
+                | undefined) ??
+              null,
           });
         }
       }

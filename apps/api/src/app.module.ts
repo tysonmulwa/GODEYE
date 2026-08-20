@@ -7,6 +7,7 @@ import { TrialLockInterceptor } from "./billing/trial-lock.interceptor";
 import { BusinessProfileModule } from "./business-profile/business-profile.module";
 import { CommonModule } from "./common/common.module";
 import { MetricsInterceptor } from "./common/metrics.interceptor";
+import { CsrfGuard } from "./common/csrf.guard";
 import { RolesGuard } from "./common/roles.guard";
 import { GodeyeThrottlerGuard } from "./common/throttler.guard";
 import { RedisThrottlerStorage } from "./common/throttler-storage";
@@ -63,7 +64,13 @@ import { WebhooksModule } from "./webhooks/webhooks.module";
   providers: [
     // Order matters: guards run in registration order.
     //
-    // RolesGuard first, so the throttler can key on the authenticated user and
+    // CsrfGuard first (S-14). A forged cross-site request is refused before
+    // any database work happens — before the membership lookup RolesGuard
+    // does, and before the Redis round-trip the throttler does. It reads three
+    // request headers and nothing else, so it is the cheapest possible thing
+    // to put in front.
+    { provide: APP_GUARD, useClass: CsrfGuard },
+    // RolesGuard next, so the throttler can key on the authenticated user and
     // org rather than on an IP alone. It is registered globally rather than
     // per-controller because per-controller wiring is what produced S-1 — five
     // controllers where @MinRole would have compiled and enforced nothing.

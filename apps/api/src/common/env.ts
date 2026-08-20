@@ -247,6 +247,49 @@ export const env = {
 };
 
 /**
+ * Normalises one URL to a bare origin (`scheme://host[:port]`), or null.
+ *
+ * The `Origin` header is defined as exactly that shape, so comparing it to
+ * anything else is a string-equality bug waiting to happen: `WEB_URL` set to
+ * `https://app.example.com/dashboard` would never match a browser's
+ * `https://app.example.com`, and the failure looks like a CORS problem rather
+ * than a configuration one.
+ *
+ * `Origin: null` — sent by sandboxed iframes and by some cross-origin redirect
+ * chains — throws in the URL parser and lands here as null, which is the
+ * correct answer: it is an opaque origin and matches no allow-list entry.
+ */
+export function toOrigin(value: string | undefined | null): string | null {
+  if (!value) return null;
+  try {
+    const parsed = new URL(value);
+    if (!parsed.protocol.startsWith("http")) return null;
+    return `${parsed.protocol}//${parsed.host}`;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The origins allowed to make credentialed requests, derived once.
+ *
+ * Shared by CORS (main.ts) and the CSRF guard on purpose. Two copies of this
+ * list drift, and a drift here is not cosmetic: an origin CORS accepts but the
+ * CSRF guard rejects breaks the product, and the reverse silently reopens
+ * S-14. One function, one answer.
+ *
+ * WEB_URL accepts a comma-separated list so a preview deployment or a rename
+ * can be allowed without a code change.
+ */
+export function allowedOrigins(): string[] {
+  const origins = env.webUrl
+    .split(",")
+    .map((entry) => toOrigin(entry.trim()))
+    .filter((entry): entry is string => entry !== null);
+  return Array.from(new Set(origins));
+}
+
+/**
  * Boot-time configuration gate.
  *
  * Every secret above throws when it is missing, published, or entropy-free, but

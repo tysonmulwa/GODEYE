@@ -43,6 +43,7 @@ function isUniqueViolation(error: unknown): boolean {
 import { AccessTokenPayload, JwtAuthGuard } from "../common/jwt-auth.guard";
 import { PrismaService } from "../common/prisma.service";
 import { Public } from "../common/public.decorator";
+import { CsrfExempt } from "../common/csrf.guard";
 import { MinRole, RolesGuard } from "../common/roles.guard";
 import { ZodPipe } from "../common/zod.pipe";
 import { WorkspaceAccessService } from "./workspace-access.service";
@@ -762,6 +763,7 @@ export class PaystackWebhookController {
   @Post("paystack")
   // Authenticated by its HMAC signature over the raw body, not by a session.
   @Public()
+  @CsrfExempt("Paystack posts server-to-server and is authenticated by x-paystack-signature")
   @HttpCode(200)
   @ApiOperation({ summary: "Paystack events (signature-verified)" })
   async paystack(

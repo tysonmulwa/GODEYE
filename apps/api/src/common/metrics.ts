@@ -69,3 +69,15 @@ export const loginBackoffRefusals = meter.createCounter("godeye.auth.backoff_ref
 export const egressBlocked = meter.createCounter("godeye.egress.blocked", {
   description: "Customer-supplied URLs refused at the API boundary",
 });
+
+/**
+ * Requests refused by the CSRF guard (S-14).
+ *
+ * Labelled by `reason` and nothing else. `no-origin` climbing on its own is
+ * almost always a client that stopped sending the header, or a misconfigured
+ * `WEB_URL`; `foreign-origin` climbing is somebody trying it. Without the two
+ * apart, both look like the same 403 and neither gets investigated.
+ */
+export const csrfBlocked = meter.createCounter("godeye.http.csrf_blocked", {
+  description: "State-changing requests refused for missing or foreign Origin",
+});

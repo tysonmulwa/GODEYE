@@ -17,6 +17,7 @@ import type { Request } from "express";
 import { env } from "../common/env";
 import { PrismaService } from "../common/prisma.service";
 import { Public } from "../common/public.decorator";
+import { CsrfExempt } from "../common/csrf.guard";
 
 /**
  * Meta's webhook endpoint. Finding S-7.
@@ -81,6 +82,7 @@ export class WebhooksController {
   /** Meta event delivery. HMAC-validated with the app secret; unsigned is refused. */
   @Post("meta")
   @Public()
+  @CsrfExempt("Meta posts server-to-server and is authenticated by x-hub-signature-256")
   @HttpCode(200)
   async receiveMeta(
     @Req() req: RawBodyRequest<Request>,

@@ -12,7 +12,7 @@ import { DocumentBuilder, SwaggerModule } from "@nestjs/swagger";
 import cookieParser from "cookie-parser";
 import helmet from "helmet";
 import { AppModule } from "./app.module";
-import { env, validateConfig } from "./common/env";
+import { allowedOrigins, env, toOrigin, validateConfig } from "./common/env";
 import { ErrorsFilter } from "./common/errors.filter";
 import { StructuredLogger } from "./common/logger";
 
@@ -70,12 +70,15 @@ async function bootstrap() {
   // can be allowed without a code change. Kept to an explicit allow-list on
   // purpose: with credentials:true a wildcard would let any site on that domain
   // make authenticated requests with a user's cookies.
-  const allowedOrigins = env.webUrl
-    .split(",")
-    .map((o) => o.trim().replace(/\/$/, ""))
-    .filter(Boolean);
+  //
+  // The list itself now comes from env.allowedOrigins(), which the CSRF guard
+  // (S-14) also calls. It normalises each entry to a bare `scheme://host:port`
+  // — the exact shape of an Origin header — so a WEB_URL carrying a path no
+  // longer fails to match, and so the two checks cannot drift apart into
+  // "CORS allows it, CSRF rejects it".
+  const origins = allowedOrigins();
   const corsLogger = new Logger("Cors");
-  corsLogger.log(`Allowed origins: ${allowedOrigins.join(", ")}`);
+  corsLogger.log(`Allowed origins: ${origins.join(", ")}`);
   app.enableCors({
     origin: (
       origin: string | undefined,
@@ -83,7 +86,7 @@ async function bootstrap() {
     ) => {
       // Same-origin and server-to-server calls send no Origin header.
       if (!origin) return callback(null, true);
-      if (allowedOrigins.includes(origin.replace(/\/$/, ""))) {
+      if (origins.includes(toOrigin(origin) ?? "")) {
         return callback(null, true);
       }
       // Name the rejected origin, a CORS failure in the browser never says why.
