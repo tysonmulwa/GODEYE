@@ -340,3 +340,90 @@ body {
   color: var(--ink);
   font-weight: 650;
 }
+
+/* ==========================================================================
+   Accessibility. WCAG 2.2 AA — see docs/a11y/VPAT.md
+   ========================================================================== */
+
+/*
+ * 2.3.3 Animation from Interactions.
+ *
+ * For a vestibular disorder this is not a styling preference — a sliding page
+ * transition can cause nausea. The OS already knows; honour it.
+ *
+ * 0.01ms rather than 0: a duration of exactly zero means some browsers never
+ * fire `transitionend`, and any code waiting on that event hangs. This ends
+ * effectively instantly and still fires.
+ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/*
+ * Windows High Contrast Mode.
+ *
+ * Forced-colors replaces every colour with the user's palette, which breaks
+ * anything that conveys meaning through background colour alone — and in this
+ * design system that is most things: status badges, the focus ring, the glass
+ * panels, every border drawn with a custom property.
+ *
+ * The fix is to redraw those distinctions with the system's own keywords, which
+ * are the only colours guaranteed to survive.
+ */
+@media (forced-colors: active) {
+  /* 1.4.11 Non-text Contrast. The glass panels lose their background entirely
+     under forced colours, so a panel becomes indistinguishable from the page
+     unless it has a real border. */
+  .glass,
+  .glass-strong {
+    border: 1px solid CanvasText;
+    background: Canvas;
+    backdrop-filter: none;
+  }
+
+  /* 2.4.7 Focus Visible. A ring in --accent is replaced by the user's palette
+     and can vanish; Highlight is defined to be visible against Canvas. */
+  *:focus-visible {
+    outline: 2px solid Highlight;
+    outline-offset: 2px;
+  }
+
+  /* A status pill that means something only by its fill reads as plain text
+     here. The border restores the boundary; the text still carries the word. */
+  [data-status] {
+    border: 1px solid CanvasText;
+  }
+
+  /* Disabled controls stop looking disabled once opacity is overridden. */
+  button:disabled,
+  [aria-disabled="true"] {
+    color: GrayText;
+    border-color: GrayText;
+  }
+
+  /* Decorative gradients and shadows are dropped rather than approximated. */
+  * {
+    box-shadow: none !important;
+  }
+}
+
+/*
+ * 2.4.7 Focus Visible, everywhere else.
+ *
+ * `:focus-visible` rather than `:focus`, so a mouse click does not leave a ring
+ * behind but a Tab press always does. Set globally because a component that
+ * forgets it is invisible to a keyboard user, and that is not a thing to leave
+ * to each author remembering.
+ */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 4px;
+}

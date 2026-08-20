@@ -53,6 +53,13 @@ jobs:
         run: pnpm typecheck
       - name: API unit tests
         run: pnpm --filter @godeye/api test
+      # Accessibility gate (rubric row 13). The web app had zero tests of any
+      # kind, so the three gaps the audit named could not have been caught by
+      # anything. axe in jsdom rather than a real browser on purpose: a gate
+      # that needs a browser download is a gate somebody marks
+      # continue-on-error. What jsdom cannot see is in docs/a11y/VPAT.md.
+      - name: Web accessibility tests
+        run: pnpm --filter web test
       # `next build` passing does not mean the site can ship. The Cloudflare
       # adapter has its own rules, and breaking one of them fails here rather
       # than at deploy time: an `export const runtime = "edge"` on the

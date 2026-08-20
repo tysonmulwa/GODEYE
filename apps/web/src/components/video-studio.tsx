@@ -1,6 +1,7 @@
 "use client";
 
 import { useMutation, useQuery } from "@tanstack/react-query";
+import { LiveStatus } from "@/components/live-status";
 import { motion } from "framer-motion";
 import { Clapperboard, Film, Upload } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
@@ -240,6 +241,19 @@ export function VideoStudio({
         TikTok posts must be video. MP4 or MOV, up to {MAX_VIDEO_BYTES / 1_000_000} MB.
       </p>
       <ErrorNote message={error} />
+
+      <LiveStatus
+        message={
+          generating
+            ? percent > 0
+              ? `Rendering video, ${Math.round(percent)}% complete`
+              : "Rendering video"
+            : videoUrl
+              ? "Video ready"
+              : null
+        }
+      />
+      <LiveStatus message={error} urgent />
 
       {generating && (
         <div className="rounded-lg border border-dashed border-line p-4">

@@ -6,6 +6,7 @@ import { Sparkles, Upload, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { IMAGE_PRESETS, IMAGE_PRESET_IDS } from "@godeye/shared";
 import { api } from "@/lib/api";
+import { LiveStatus } from "@/components/live-status";
 import { useEasedProgress } from "@/lib/use-eased-progress";
 import { GodeyeSpinner } from "@/components/logo";
 import { Button, ErrorNote, Input, Label, cx } from "@/components/ui";
@@ -296,9 +297,29 @@ export function ImageStudio({
       </Button>
       <ErrorNote message={error} />
 
+      {/*
+        Always mounted, so the region exists before it has anything to say —
+        a live region created at the same moment as its content is frequently
+        never announced (WCAG 4.1.3).
+      */}
+      <LiveStatus
+        message={
+          generating
+            ? percent > 0
+              ? `Generating image, ${Math.round(percent)}% complete`
+              : "Generating image"
+            : images.length > 0
+              ? "Image ready"
+              : null
+        }
+      />
+      <LiveStatus message={error} urgent />
+
       {generating && (
         <div className="flex aspect-square w-full flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-line">
-          <GodeyeSpinner size={46} className="text-accent" />
+          {/* aria-hidden: the spinner is decoration. What it MEANS is announced
+              by the live region above; announcing both says it twice. */}
+          <GodeyeSpinner size={46} className="text-accent" aria-hidden="true" />
           <span className="text-xs text-ink-3">Painting your image…</span>
         </div>
       )}

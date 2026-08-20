@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { motion } from "framer-motion";
+import { motion, useReducedMotion } from "framer-motion";
 import {
   CalendarDays,
   Gauge,
@@ -18,7 +18,8 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useFocusTrap } from "@/lib/use-focus-trap";
+import { useCallback, useEffect, useState } from "react";
 import { CommandPalette } from "@/components/command-palette";
 import { CardsMark } from "@/components/payment-marks";
 import { GodeyeBootScreen, GodeyeLockup } from "@/components/logo";
@@ -104,6 +105,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const { status, user, organization, clear } = useAuthStore();
   const [navOpen, setNavOpen] = useState(false);
+  const reduceMotion = useReducedMotion();
   useRealtime();
 
   useEffect(() => {
@@ -126,6 +128,13 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   // the page slide around underneath it.
   useScrollLock(navOpen);
 
+  // Keyboard focus follows the drawer open and comes back when it closes, and
+  // Escape shuts it. Without this, opening the menu moved nothing: Tab walked
+  // through links behind the overlay, and for a screen-reader user the drawer
+  // had not opened at all (WCAG 2.1.2, 2.4.3).
+  const closeNav = useCallback(() => setNavOpen(false), []);
+  const drawerRef = useFocusTrap<HTMLElement>(navOpen, closeNav);
+
   if (status !== "authed") {
     return (
       <GodeyeBootScreen />
@@ -145,18 +154,45 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   // viewport with browser chrome showing, and it never changes.
   return (
     <div className="flex min-h-svh lg:h-dvh lg:overflow-hidden">
+      {/*
+        Skip link (WCAG 2.4.1 Bypass Blocks). Visually hidden until focused,
+        which is the point: a keyboard user's first Tab offers a way past the
+        navigation instead of making them walk through every link on every page.
+      */}
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[100] focus:rounded-lg focus:bg-surface-1 focus:px-4 focus:py-2 focus:text-ink focus:outline-none focus:ring-2 focus:ring-accent"
+      >
+        Skip to main content
+      </a>
+
       {/* Dim + dismiss layer behind the mobile drawer */}
       {navOpen && (
         <button
           type="button"
-          aria-label="Close menu"
-          onClick={() => setNavOpen(false)}
+          // Hidden from assistive tech on purpose: the drawer already has a
+          // labelled close button, and announcing two "Close menu" controls
+          // makes the dialog read as though it has two ways out that differ.
+          aria-hidden="true"
+          tabIndex={-1}
+          onClick={closeNav}
           className="fixed inset-0 z-40 bg-black/40 lg:hidden"
         />
       )}
 
       {/* Off-canvas below lg, static column from lg up */}
       <aside
+        ref={drawerRef}
+        // Only a dialog while it is off-canvas. From lg up it is a permanent
+        // column, and calling that a modal dialog would be a lie to a screen
+        // reader — the same markup means different things at different widths.
+        role={navOpen ? "dialog" : undefined}
+        aria-modal={navOpen ? true : undefined}
+        aria-label="Main navigation"
+        // `inert` is what actually keeps the closed drawer out of the tab order.
+        // translate-x alone leaves every link focusable and off-screen, so Tab
+        // appears to do nothing several times in a row.
+        {...(!navOpen ? { inert: "" as unknown as boolean } : {})}
         className={cx(
           "glass-strong fixed inset-y-0 left-0 z-50 flex w-[236px] shrink-0 flex-col rounded-none border-y-0 border-l-0 transition-transform duration-200 lg:static lg:translate-x-0",
           navOpen ? "translate-x-0" : "-translate-x-full",
@@ -236,7 +272,13 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
       {/* min-w-0 lets flex children shrink; without it wide content forces the
           whole page to scroll sideways on a phone. */}
-      <main className="flex min-w-0 flex-1 flex-col lg:overflow-y-auto">
+      <main
+        id="main-content"
+        // -1 so the skip link can move focus here without adding <main> to the
+        // tab order for everybody else.
+        tabIndex={-1}
+        className="flex min-w-0 flex-1 flex-col lg:overflow-y-auto"
+      >
         {/* Phone-only top bar, the only way to reach the nav below lg.
             This was deliberately opaque, because a backdrop-blur on a sticky
             bar is re-composited on every scroll frame and that stutters on a
@@ -269,11 +311,16 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             every navigation would read as a new warning each time. */}
         <TrialNotice />
 
+        {/*
+          WCAG 2.3.3 Animation from Interactions. `useReducedMotion` reads the
+          OS setting, and somebody who asked for less motion gets a cut rather
+          than a slide — for a vestibular disorder this is not a preference.
+        */}
         <motion.div
           key={pathname}
-          initial={{ opacity: 0, y: 6 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.2, ease: "easeOut" }}
+          initial={reduceMotion ? false : { opacity: 0, y: 6 }}
+          animate={reduceMotion ? { opacity: 1, y: 0 } : { opacity: 1, y: 0 }}
+          transition={reduceMotion ? { duration: 0 } : { duration: 0.2, ease: "easeOut" }}
           className={cx(
             "w-full min-w-0 px-4 pb-8 pt-5 sm:px-6 lg:px-7 lg:pt-6",
             pathname.startsWith("/calendar") ? "" : "mx-auto max-w-[1024px]",
