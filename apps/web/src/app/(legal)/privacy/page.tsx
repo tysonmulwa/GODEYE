@@ -97,9 +97,6 @@ export default function PrivacyPage() {
         <li>
           <code>pages_read_engagement</code>, to read back likes and comments on those posts.
         </li>
-        <li>
-          <code>business_management</code>, to list Pages held in your Business Manager.
-        </li>
       </ul>
       <p>
         Instagram is connected separately, through Instagram Login, and grants two further

@@ -249,12 +249,21 @@ export function metaAuthorizeUrl(state: string): string {
     // doubled the App Review surface. Do not add them back without also
     // restoring the permissions in the Meta app, or Meta rejects this whole
     // dialog and Page publishing goes down with it.
-    scope: [
-      "pages_manage_posts",
-      "pages_read_engagement",
-      "pages_show_list",
-      "business_management",
-    ].join(","),
+    //
+    // business_management was requested here and used NOWHERE: no /businesses
+    // call, no business_id, in either service. Meta's App Review rejects on
+    // Policy 1.6 -- "not needed to support its core functionality" -- and an
+    // unused permission in the request is the clearest possible instance of
+    // that. It was removed after a second rejection.
+    //
+    // Every scope below is named against the call that needs it, because that
+    // sentence is what App Review asks for and guessing it later is how the
+    // list grew in the first place:
+    //
+    //   pages_show_list       GET /me/accounts -- list the Pages to publish to
+    //   pages_manage_posts    POST /{page-id}/feed and /photos -- the publish
+    //   pages_read_engagement GET /{post-id}/insights -- likes and comments back
+    scope: ["pages_manage_posts", "pages_read_engagement", "pages_show_list"].join(","),
   });
   return `https://www.facebook.com/${env.meta.graphVersion}/dialog/oauth?${params}`;
 }
