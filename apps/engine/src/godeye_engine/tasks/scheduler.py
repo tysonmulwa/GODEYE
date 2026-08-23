@@ -24,7 +24,7 @@ from ..db import (
 from ..events import publish_event
 from ..metrics_registry import PUBLISH_RESULTS
 from ..publishers import PublishError, get_publisher
-from ..publishers.base import PostPayload
+from ..publishers.base import PostPayload, TikTokPostSettings
 from ..security import decrypt_credentials
 from .products import attach_imported_photo
 
@@ -323,6 +323,7 @@ def publish_post(scheduled_post_id: str, claimed_at: str | None = None) -> dict:
         content["slideshowSeconds"],
         bool(content["renderAsVideo"]),
         post["orgId"],
+        post.get("tiktokSettings"),
     )
 
     try:
@@ -385,6 +386,7 @@ def _build_payload(
     slideshow_seconds: int | None = None,
     render_as_video: bool = True,
     org_id: str | None = None,
+    tiktok_settings: object = None,
 ) -> PostPayload:
     """A/B variant wins if assigned; else platform variant; else canonical body."""
     ab_variants = content.get("abVariants") or {}
@@ -408,6 +410,10 @@ def _build_payload(
         slideshow_seconds=slideshow_seconds,
         render_as_video=render_as_video,
         org_id=org_id,
+        # Read from the row rather than decided here. TikTok requires these to
+        # be the creator's choices, and this function runs minutes to weeks
+        # after they made them.
+        tiktok=TikTokPostSettings.from_json(tiktok_settings),
     )
 
 

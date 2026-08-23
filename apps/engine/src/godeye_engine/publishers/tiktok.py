@@ -144,14 +144,11 @@ class TikTokPublisher(BasePublisher):
                 # the caption and privacy are chosen in the app when publishing.
                 return f"{API}/post/publish/inbox/video/init/", {"source_info": source_info}
             return f"{API}/post/publish/video/init/", {
-                "post_info": {
-                    "title": payload.text[:CAPTION_LIMIT],
-                    "privacy_level": privacy or self._privacy_level(headers),
-                },
+                "post_info": self._post_info(payload, headers, privacy),
                 "source_info": source_info,
             }
 
-        drafts = self._to_drafts()
+        drafts = self._to_drafts(payload)
         endpoint, init_json = video_target(drafts)
         init = self._post(endpoint, headers=headers, json=init_json)
 
@@ -226,14 +223,14 @@ class TikTokPublisher(BasePublisher):
                 {"title": (payload.title or payload.text)[:TITLE_LIMIT]}
                 if drafts
                 else {
+                    **self._post_info(payload, headers, privacy, photos=True),
                     "title": (payload.title or payload.text)[:TITLE_LIMIT],
                     "description": payload.text[:CAPTION_LIMIT],
-                    "privacy_level": privacy or self._privacy_level(headers),
                 }
             )
             return body
 
-        drafts = self._to_drafts()
+        drafts = self._to_drafts(payload)
         endpoint = f"{API}/post/publish/content/init/"
         init = self._post(endpoint, headers=headers, json=photo_body(drafts))
 
@@ -264,18 +261,30 @@ class TikTokPublisher(BasePublisher):
         self._await_publish(publish_id, headers, kind="photo")
         return PublishResult(external_post_id=publish_id, external_post_url=None)
 
-    def _to_drafts(self) -> bool:
+    def _to_drafts(self, payload: PostPayload | None = None) -> bool:
         """Should this post land in the user's TikTok inbox rather than live?
 
-        Only when asked for. A draft waits for someone to open the app and press
-        publish, so on a quiet day nothing is posted at all, which is the
-        opposite of what a scheduler is for. It stays available because TikTok's
-        music library lives in that editor and nowhere else.
+        Only when asked for -- or when the creator never made the choices
+        TikTok requires them to make. A draft waits for someone to open the app
+        and press publish, so on a quiet day nothing is posted at all, which is
+        the opposite of what a scheduler is for. It stays available because
+        TikTok's music library lives in that editor and nowhere else.
 
         "auto" used to mean drafts-until-audited and is still honoured for
         anyone who set it, but it is no longer the default: sound now comes from
         the slideshow instead of from a person.
+
+        The `payload.tiktok is None` case is the compliance one. TikTok's
+        Content Sharing Guidelines make privacy, interaction and content
+        disclosure the CREATOR's decisions; a post carrying none of them has no
+        recorded consent, and the honest thing to do with it is put it where the
+        creator makes those choices themselves -- inside TikTok -- rather than
+        pick a visibility on their behalf. That is what this app was rejected
+        for doing.
         """
+        if payload is not None and payload.tiktok is None:
+            logger.info("TikTok post has no creator settings; sending to drafts")
+            return True
         mode = get_settings().tiktok_post_mode.strip().lower()
         if mode == "drafts":
             return True
@@ -381,6 +390,45 @@ class TikTokPublisher(BasePublisher):
             level, settings.tiktok_audited, settings.tiktok_post_mode,
         )
         return level
+
+    def _post_info(
+        self,
+        payload: PostPayload,
+        headers: dict[str, str],
+        override: str | None = None,
+        photos: bool = False,
+    ) -> dict[str, Any]:
+        """The `post_info` block, built from what the CREATOR chose.
+
+        TikTok's Content Sharing Guidelines require privacy, interaction and
+        content-disclosure settings to be the creator's decisions, taken in our
+        UI. Their absence is not a reason to pick one -- a post with no recorded
+        choice is a post nobody consented to publish, so it goes to the drafts
+        inbox instead, where the creator makes every one of these choices inside
+        TikTok before it goes live.
+
+        `override` is the audit fallback only: TikTok refuses anything but
+        SELF_ONLY from an unaudited app, whatever the creator chose, and that
+        refusal arrives at publish time rather than at compose time.
+        """
+        title = payload.text[:CAPTION_LIMIT]
+        settings = payload.tiktok
+
+        if settings is None:
+            # Reachable only for posts written before the composer collected
+            # these, and for the unaudited path. _to_drafts() is what normally
+            # keeps us out of here.
+            return {"title": title, "privacy_level": override or SELF_ONLY}
+
+        info = settings.post_info(title)
+        if override:
+            info["privacy_level"] = override
+        if photos:
+            # Duet and stitch are video interactions; TikTok rejects them on a
+            # photo post rather than ignoring them.
+            info.pop("disable_duet", None)
+            info.pop("disable_stitch", None)
+        return info
 
     def _privacy_level(self, headers: dict[str, str]) -> str:
         """The visibility to request for this post.

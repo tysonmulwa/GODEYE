@@ -1,0 +1,16 @@
+-- TikTok publish settings, chosen by the creator in the composer.
+--
+-- TikTok's Content Sharing Guidelines ("Required UX Implementation in Your
+-- App", points 2-4) require the privacy level, the interaction settings and the
+-- content disclosure to be the CREATOR's decisions, taken in our UI. GODEYE
+-- chose the privacy level itself, server-side, at publish time -- which is what
+-- the app was rejected for.
+--
+-- A scheduled post is written now and published later, so the choices have to
+-- travel with it.
+--
+-- Expand-only. Nullable, so every existing row is valid and the currently
+-- deployed release neither reads nor writes it. A post with NULL here carries
+-- no recorded consent, and the publisher sends it to the creator's TikTok
+-- drafts inbox rather than guessing a visibility for them.
+ALTER TABLE "ScheduledPost" ADD COLUMN IF NOT EXISTS "tiktokSettings" JSONB;

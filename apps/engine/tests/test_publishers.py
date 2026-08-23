@@ -9,7 +9,7 @@ from godeye_engine.config import get_settings
 from godeye_engine.publishers import base as base_mod
 from godeye_engine.publishers import get_publisher
 from godeye_engine.publishers import meta as meta_mod
-from godeye_engine.publishers.base import PostPayload, PublishError
+from godeye_engine.publishers.base import PostPayload, PublishError, TikTokPostSettings
 from godeye_engine.publishers.linkedin import LinkedInPublisher
 from godeye_engine.publishers.meta import FacebookPublisher, InstagramPublisher
 from godeye_engine.publishers.telegram import TelegramPublisher
@@ -720,7 +720,10 @@ class TestTikTokDraftMode:
         assert "privacy_level" not in captured["json"]["post_info"]
         get_settings.cache_clear()
 
-    def test_a_direct_photo_post_still_carries_privacy_level(self, monkeypatch):
+    def test_a_direct_photo_post_carries_what_the_creator_chose(self, monkeypatch):
+        """Updated deliberately: this used to assert a privacy level the SERVER
+        picked, which is the thing TikTok rejected the app for. It now asserts
+        the level travels from the creator's choice."""
         captured = {}
         monkeypatch.setenv("TIKTOK_POST_MODE", "direct")
         get_settings.cache_clear()
@@ -729,13 +732,48 @@ class TestTikTokDraftMode:
             lambda self, url, **kw: captured.update(json=kw.get("json"))
             or http_response(200, {"data": {"publish_id": "p1"}}),
         )
-        monkeypatch.setattr(TikTokPublisher, "_privacy_level", lambda self, h: "SELF_ONLY")
+        monkeypatch.setattr(TikTokPublisher, "_await_publish", lambda *a, **kw: None)
+        TikTokPublisher().publish(
+            self.CREDS,
+            PostPayload(
+                text="hi",
+                media_urls=["https://cdn/x.jpg"],
+                tiktok=TikTokPostSettings(privacy_level="SELF_ONLY", disable_comment=True),
+            ),
+        )
+        assert captured["json"]["post_mode"] == "DIRECT_POST"
+        assert captured["json"]["post_info"]["privacy_level"] == "SELF_ONLY"
+        assert captured["json"]["post_info"]["disable_comment"] is True
+        # Duet and stitch are video interactions. TikTok rejects them on a photo
+        # post rather than ignoring them.
+        assert "disable_duet" not in captured["json"]["post_info"]
+        assert "disable_stitch" not in captured["json"]["post_info"]
+        get_settings.cache_clear()
+
+    def test_a_post_with_no_creator_settings_goes_to_drafts(self, monkeypatch):
+        """The compliance rule, and the reason this app was rejected.
+
+        TikTok's Content Sharing Guidelines make privacy, interaction and
+        content disclosure the CREATOR's decisions. A post carrying none of them
+        has no recorded consent, so it goes where the creator makes those
+        choices themselves -- the TikTok inbox -- rather than being published
+        under a visibility the server picked for them.
+        """
+        captured = {}
+        monkeypatch.setenv("TIKTOK_POST_MODE", "direct")
+        get_settings.cache_clear()
+        monkeypatch.setattr(
+            TikTokPublisher, "_post",
+            lambda self, url, **kw: captured.update(json=kw.get("json"))
+            or http_response(200, {"data": {"publish_id": "p1"}}),
+        )
         monkeypatch.setattr(TikTokPublisher, "_await_publish", lambda *a, **kw: None)
         TikTokPublisher().publish(
             self.CREDS, PostPayload(text="hi", media_urls=["https://cdn/x.jpg"])
         )
-        assert captured["json"]["post_mode"] == "DIRECT_POST"
-        assert captured["json"]["post_info"]["privacy_level"] == "SELF_ONLY"
+        assert captured["json"]["post_mode"] == "MEDIA_UPLOAD"
+        # And no privacy level is asserted on the creator's behalf.
+        assert "privacy_level" not in (captured["json"].get("post_info") or {})
         get_settings.cache_clear()
 
 
@@ -762,7 +800,15 @@ class TestTikTokScopeFallback:
         monkeypatch.setattr(TikTokPublisher, "_await_publish", lambda *a, **kw: None)
         try:
             TikTokPublisher().publish(
-                self.CREDS, PostPayload(text="hi", media_urls=["https://cdn/x.jpg"])
+                self.CREDS,
+                PostPayload(
+                    text="hi",
+                    media_urls=["https://cdn/x.jpg"],
+                    # The creator chose PUBLIC. The point of this class is what
+                    # happens when TikTok refuses that because the APP is
+                    # unaudited -- a limit on us, not on them.
+                    tiktok=TikTokPostSettings(privacy_level="PUBLIC_TO_EVERYONE"),
+                ),
             )
         finally:
             get_settings.cache_clear()
@@ -781,7 +827,11 @@ class TestTikTokScopeFallback:
         assert len(sent) == 2, "expected a retry"
         assert sent[0]["post_mode"] == "MEDIA_UPLOAD"
         assert sent[1]["post_mode"] == "DIRECT_POST"
-        assert sent[1]["post_info"]["privacy_level"] == "SELF_ONLY"
+        # Updated deliberately: this asserted SELF_ONLY, which was the level the
+        # SERVER picked. Falling back from drafts to direct is our decision
+        # about the scope, not TikTok refusing the creator's choice, so the
+        # creator's choice is what goes out.
+        assert sent[1]["post_info"]["privacy_level"] == "PUBLIC_TO_EVERYONE"
 
     def test_a_working_draft_is_not_retried(self, monkeypatch):
         sent = self._run(monkeypatch, [http_response(200, {"data": {"publish_id": "p1"}})])
@@ -1159,7 +1209,12 @@ class TestTikTokUnauditedRetry:
         monkeypatch.setattr(TikTokPublisher, "_await_publish", lambda *a, **kw: None)
         try:
             TikTokPublisher().publish(
-                self.CREDS, PostPayload(text="hi", media_urls=["https://cdn/x.jpg"])
+                self.CREDS,
+                PostPayload(
+                    text="hi",
+                    media_urls=["https://cdn/x.jpg"],
+                    tiktok=TikTokPostSettings(privacy_level="PUBLIC_TO_EVERYONE"),
+                ),
             )
         finally:
             get_settings.cache_clear()
@@ -1174,6 +1229,8 @@ class TestTikTokUnauditedRetry:
             ],
         )
         assert len(sent) == 2, "expected a retry"
+        # First attempt honours the creator; the retry is forced by TikTok's
+        # refusal, not chosen by us. The creator's other choices survive it.
         assert sent[0]["post_info"]["privacy_level"] == "PUBLIC_TO_EVERYONE"
         assert sent[1]["post_info"]["privacy_level"] == "SELF_ONLY"
 

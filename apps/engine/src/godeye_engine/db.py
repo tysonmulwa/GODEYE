@@ -205,6 +205,9 @@ ScheduledPost = Table(
     Column("variantKey", String),
     Column("planId", String),
     Column("attempts", Integer, nullable=False),
+    # What the creator chose for TikTok in the composer. NULL means no consent
+    # was recorded, and the publisher routes those to the drafts inbox.
+    Column("tiktokSettings", JSONB),
     Column("lockedAt", DateTime(timezone=False)),
     Column("publishedAt", DateTime(timezone=False)),
     Column("externalPostId", String),

@@ -145,6 +145,63 @@ class PublishResult:
     external_post_url: str | None = None
 
 
+@dataclass(frozen=True)
+class TikTokPostSettings:
+    """What the creator chose, in our UI, before this post was scheduled.
+
+    TikTok's Content Sharing Guidelines, "Required UX Implementation in Your
+    App", points 2 to 4. All three are requirements about *who decides*:
+
+      2. Privacy level. Selected by the creator from the options their own
+         account offers, with nothing pre-selected -- so there is no default
+         here and `privacy_level` is not optional.
+      3. Interaction settings. Comment, duet and stitch, each of which the
+         creator's account may forbid outright.
+      4. Content disclosure. Whether the post promotes the creator's own brand,
+         a third party's, or neither.
+
+    GODEYE previously chose the privacy level itself, server-side, at publish
+    time -- reading creator_info and taking the most public option available.
+    That is the thing the guidelines forbid, and it is why the app was rejected.
+    """
+
+    privacy_level: str
+    disable_comment: bool = False
+    disable_duet: bool = False
+    disable_stitch: bool = False
+    #: "Your brand" -- the creator promoting their own business.
+    brand_organic: bool = False
+    #: "Branded content" -- a paid partnership with a third party.
+    branded_content: bool = False
+
+    @classmethod
+    def from_json(cls, raw: object) -> "TikTokPostSettings | None":
+        """Build from the JSON column, or None if the post predates the feature."""
+        if not isinstance(raw, dict) or not raw.get("privacyLevel"):
+            return None
+        return cls(
+            privacy_level=str(raw["privacyLevel"]),
+            disable_comment=bool(raw.get("disableComment")),
+            disable_duet=bool(raw.get("disableDuet")),
+            disable_stitch=bool(raw.get("disableStitch")),
+            brand_organic=bool(raw.get("brandOrganic")),
+            branded_content=bool(raw.get("brandedContent")),
+        )
+
+    def post_info(self, title: str) -> dict[str, object]:
+        """The `post_info` block TikTok's publish endpoints take."""
+        return {
+            "title": title,
+            "privacy_level": self.privacy_level,
+            "disable_comment": self.disable_comment,
+            "disable_duet": self.disable_duet,
+            "disable_stitch": self.disable_stitch,
+            "brand_content_toggle": self.branded_content,
+            "brand_organic_toggle": self.brand_organic,
+        }
+
+
+
 @dataclass
 class PostPayload:
     """What a publisher needs to post: final text + optional media + title."""
@@ -170,6 +227,16 @@ class PostPayload:
     # between it and a Reel. Always subject to a track existing, a silent
     # Reel is worse than the carousel it would replace.
     render_as_video: bool = True
+    # The creator's own publishing choices for TikTok, made in the composer
+    # before the post was scheduled.
+    #
+    # TikTok's Content Sharing Guidelines require these to be the CREATOR's
+    # decisions, taken in our UI, not ours taken on their behalf. Every one is
+    # therefore carried from the post rather than inferred here, and a post
+    # written before this existed carries None -- which the publisher treats as
+    # "no consent recorded" and refuses to publish directly, rather than
+    # guessing a visibility for somebody.
+    tiktok: "TikTokPostSettings | None" = None
 
 
 class BasePublisher(ABC):

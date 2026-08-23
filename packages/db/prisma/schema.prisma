@@ -574,6 +574,14 @@ model ScheduledPost {
   externalPostId  String?
   externalPostUrl String?
   error           String?        @db.Text
+  /// What the creator chose for TikTok in the composer: privacy level,
+  /// interaction settings and content disclosure. TikTok requires these to be
+  /// their decisions rather than ours, and a scheduled post is written now and
+  /// published later, so the choices travel with it.
+  ///
+  /// NULL means no consent was recorded -- the publisher routes those to the
+  /// creator's TikTok drafts inbox rather than picking a visibility.
+  tiktokSettings  Json?
   createdAt       DateTime       @default(now())
   updatedAt       DateTime       @updatedAt
 
