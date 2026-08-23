@@ -50,6 +50,26 @@ export class SchedulingService {
       throw new BadRequestException("One or more connections not found or inactive");
     }
 
+    // TikTok's Content Sharing Guidelines require the creator to choose the
+    // visibility, the interaction settings and the content disclosure in our
+    // UI before the post is scheduled. Refused here rather than defaulted:
+    // choosing on somebody's behalf is what the app was rejected for, and a
+    // default is the same act with a nicer name.
+    //
+    // The alternative — accepting it and letting the publisher route it to the
+    // TikTok drafts inbox — is the fallback for posts written before this
+    // existed. For a post being scheduled *now*, by a composer that offers the
+    // choices, silence means the client is broken and should say so.
+    const tiktokTargets = connections.filter((c) => c.platform === "TIKTOK");
+    if (tiktokTargets.length > 0 && !input.tiktok) {
+      throw new BadRequestException({
+        code: "TIKTOK_SETTINGS_REQUIRED",
+        message:
+          "TikTok needs you to choose an audience, interaction settings and content " +
+          "disclosure before this can be scheduled.",
+      });
+    }
+
     await this.billing.assertWithinLimit(orgId, "postsPerMonth", connections.length);
 
     // If the content carries A/B variants, split them evenly across connections.
@@ -65,6 +85,13 @@ export class SchedulingService {
             scheduledAt,
             timezone: input.timezone,
             variantKey: isAb ? (index % 2 === 0 ? "A" : "B") : null,
+            // Stored per post, not per content item: the same content can go to
+            // TikTok and to five other places, and only TikTok has these.
+            // Prisma.DbNull, not JS null: on a Json? column a bare null means
+            // "the JSON value null", which reads back as a present-but-empty
+            // object. DbNull is the SQL NULL the publisher tests for.
+            tiktokSettings:
+              conn.platform === "TIKTOK" && input.tiktok ? input.tiktok : Prisma.DbNull,
           },
         }),
       ),

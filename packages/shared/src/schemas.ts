@@ -295,6 +295,49 @@ export const renderOptionsSchema = z.object({
 
 // ---------- Scheduling ----------
 
+/**
+ * The visibilities TikTok can offer. Which of them a given creator may use
+ * comes from their own account, via `creator_info`, so this is the vocabulary
+ * and not the menu.
+ */
+export const TIKTOK_PRIVACY_LEVELS = [
+  "PUBLIC_TO_EVERYONE",
+  "MUTUAL_FOLLOW_FRIENDS",
+  "FOLLOWER_OF_CREATOR",
+  "SELF_ONLY",
+] as const;
+export type TikTokPrivacyLevel = (typeof TIKTOK_PRIVACY_LEVELS)[number];
+
+/**
+ * What the creator chose for a TikTok post, in the composer.
+ *
+ * TikTok's Content Sharing Guidelines make these the creator's decisions, not
+ * the app's — GODEYE previously picked the privacy level server-side and was
+ * rejected for it. `privacyLevel` has **no default** on purpose: TikTok
+ * requires it to be selected with nothing pre-selected, so a request that
+ * omits it is a post nobody consented to publish.
+ */
+export const tiktokPostSettingsSchema = z
+  .object({
+    privacyLevel: z.enum(TIKTOK_PRIVACY_LEVELS),
+    disableComment: z.boolean().default(false),
+    disableDuet: z.boolean().default(false),
+    disableStitch: z.boolean().default(false),
+    /** "Your brand" — the creator promoting their own business. */
+    brandOrganic: z.boolean().default(false),
+    /** "Branded content" — a paid partnership with a third party. */
+    brandedContent: z.boolean().default(false),
+  })
+  .refine((v) => !(v.brandedContent && v.privacyLevel === "SELF_ONLY"), {
+    // TikTok's own rule, restated where a request can be refused by it. A paid
+    // partnership visible to nobody cannot be disclosed to anybody, so TikTok
+    // rejects the combination — and it rejects it at publish time, minutes or
+    // weeks after the composer accepted it.
+    message: "Branded content cannot be posted privately. Choose another audience.",
+    path: ["privacyLevel"],
+  });
+export type TikTokPostSettings = z.infer<typeof tiktokPostSettingsSchema>;
+
 export const schedulePostSchema = z.object({
   contentItemId: z.string().min(1),
   connectionIds: z.array(z.string().min(1)).min(1),
@@ -305,6 +348,14 @@ export const schedulePostSchema = z.object({
   // anything. Optional so a caller that does not care keeps what is stored.
   slideshowSeconds: slideshowLengthSchema.optional(),
   renderAsVideo: z.boolean().optional(),
+  /**
+   * Required when any destination is TikTok, and rejected when none is.
+   *
+   * Optional in the schema because the same endpoint schedules to six other
+   * platforms; the API checks the destinations and refuses a TikTok post that
+   * arrives without it, rather than defaulting one in.
+   */
+  tiktok: tiktokPostSettingsSchema.optional(),
 });
 export type SchedulePostInput = z.infer<typeof schedulePostSchema>;
 

@@ -144,6 +144,24 @@ export class ConnectionsController {
     }
   }
 
+  /**
+   * What this creator's TikTok account allows.
+   *
+   * VIEWER, not EDITOR: the composer calls it to render the publish options,
+   * and it returns the account's own settings, nothing a viewer could not
+   * already see in TikTok.
+   */
+  @Get(":id/tiktok/creator-info")
+  @MinRole("VIEWER")
+  @ApiBearerAuth()
+  @Throttle({ default: { limit: 30, ttl: 60_000 } })
+  @ApiOperation({
+    summary: "The privacy levels and interaction settings this TikTok account permits",
+  })
+  tiktokCreatorInfo(@CurrentAuth() auth: AccessTokenPayload, @Param("id") id: string) {
+    return this.connections.tiktokCreatorInfo(auth.orgId, id);
+  }
+
   @Post("x")
   @MinRole("ADMIN")
   @ApiBearerAuth()

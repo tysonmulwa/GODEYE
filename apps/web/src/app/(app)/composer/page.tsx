@@ -8,6 +8,12 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { PLATFORM_DEFAULT_PRESET } from "@godeye/shared";
 import { api } from "@/lib/api";
+import {
+  TikTokPostSettingsPanel,
+  tiktokSettingsComplete,
+  EMPTY_TIKTOK_SETTINGS,
+  type TikTokSettings,
+} from "@/components/tiktok-post-settings";
 import { useAuthStore } from "@/lib/auth-store";
 import { useToast } from "@/lib/toast";
 import { GodeyeSpinner } from "@/components/logo";
@@ -66,6 +72,8 @@ export default function ComposerPage() {
   const [tone, setTone] = useState("");
   const [cta, setCta] = useState("");
   const [selectedConnections, setSelectedConnections] = useState<string[]>([]);
+  // TikTok requires the creator to choose these; nothing is pre-selected.
+  const [tiktokSettings, setTiktokSettings] = useState<TikTokSettings>(EMPTY_TIKTOK_SETTINGS);
   const [abTest, setAbTest] = useState(false);
   const [agentRunId, setAgentRunId] = useState<string | null>(null);
   const [content, setContent] = useState<ContentItem | null>(null);
@@ -89,6 +97,15 @@ export default function ComposerPage() {
     queryFn: () => api("/media/brand-kit"),
   });
   const activeConnections = connections.filter((c) => c.status === "ACTIVE");
+
+  // The TikTok destination, if one is selected. Its settings panel is rendered
+  // per connection because creator_info describes an ACCOUNT: two TikTok
+  // accounts can allow different audiences.
+  const tiktokConnection = activeConnections.find(
+    (c) => c.platform === "TIKTOK" && selectedConnections.includes(c.id),
+  );
+
+  const tiktokReady = !tiktokConnection || tiktokSettingsComplete(tiktokSettings);
 
   const selectedPlatforms = [
     ...new Set(
@@ -162,6 +179,9 @@ export default function ComposerPage() {
           timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
           slideshowSeconds,
           renderAsVideo,
+          // Only when a TikTok destination is selected. The API refuses a
+          // TikTok post without them rather than defaulting one in.
+          ...(tiktokConnection ? { tiktok: tiktokSettings } : {}),
         },
       }),
     onSuccess: () => {
@@ -625,6 +645,16 @@ export default function ComposerPage() {
                     )}
                   </div>
 
+                  {tiktokConnection && (
+                    <div className="mb-4">
+                      <TikTokPostSettingsPanel
+                        connectionId={tiktokConnection.id}
+                        value={tiktokSettings}
+                        onChange={setTiktokSettings}
+                      />
+                    </div>
+                  )}
+
                   <Label>Publish time (your timezone)</Label>
                   <div className="flex gap-2">
                     <Input
@@ -635,13 +665,27 @@ export default function ComposerPage() {
                     />
                     <Button
                       loading={scheduleMutation.isPending}
-                      disabled={scheduled || !scheduledAt || approvalPending}
+                      disabled={
+                        scheduled ||
+                        !scheduledAt ||
+                        approvalPending ||
+                        // TikTok requires an explicit audience before anything
+                        // can be published. The button stays off until there
+                        // is one, so the app never sends a post nobody chose a
+                        // visibility for.
+                        !tiktokReady
+                      }
                       onClick={() => scheduleMutation.mutate()}
                     >
                       <CalendarClock className="h-4 w-4" />
                       {scheduled ? "Scheduled ✓" : "Schedule"}
                     </Button>
                   </div>
+                  {!tiktokReady && (
+                    <p className="mt-2 text-xs text-muted" role="status">
+                      Choose who can see your TikTok post before scheduling.
+                    </p>
+                  )}
                   {scheduled && (
                     <div className="mt-3 rounded-lg border border-emerald-500/40 bg-emerald-500/8 p-3">
                       <p className="text-sm font-medium text-emerald-600">

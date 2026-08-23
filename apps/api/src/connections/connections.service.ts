@@ -16,6 +16,7 @@ import { BillingService } from "../billing/billing.module";
 import { AuditService } from "../common/audit.service";
 import { CryptoService } from "../common/crypto.service";
 import { env } from "../common/env";
+import { httpRequest, TIMEOUTS } from "../common/http-client";
 import { PrismaService } from "../common/prisma.service";
 import { EngineService } from "../engine/engine.service";
 import { OAuthStateService, type OAuthProvider } from "./oauth-state.service";
@@ -82,6 +83,77 @@ export class ConnectionsService {
     private readonly engine: EngineService,
     private readonly billing: BillingService,
   ) {}
+
+  /**
+   * What this creator's TikTok account allows, straight from TikTok.
+   *
+   * The composer cannot offer a visibility the account forbids, and it must not
+   * offer duet or stitch to a creator who has turned them off — TikTok's
+   * Content Sharing Guidelines require disallowed options to be *shown as
+   * disabled*, not hidden and not silently ignored. Only TikTok knows which
+   * those are, and the answer changes when the creator changes their settings,
+   * so it is fetched when the composer opens rather than cached against the
+   * connection.
+   *
+   * Proxied rather than called from the browser: the access token is the
+   * workspace's credential and never leaves this process.
+   */
+  async tiktokCreatorInfo(orgId: string, connectionId: string) {
+    const connection = await this.prisma.socialConnection.findFirst({
+      where: { id: connectionId, orgId, platform: "TIKTOK" },
+    });
+    if (!connection) throw new NotFoundException("TikTok connection not found");
+
+    const credentials = this.crypto.decryptJson<{ accessToken?: string }>(
+      connection.encryptedCredentials,
+      `org:${orgId}`,
+    );
+    if (!credentials?.accessToken) {
+      throw new BadRequestException("That TikTok connection needs reconnecting");
+    }
+
+    const response = await httpRequest("https://open.tiktokapis.com/v2/post/publish/creator_info/query/", {
+      method: "POST",
+      timeoutMs: TIMEOUTS.platform,
+      upstream: "tiktok",
+      headers: {
+        Authorization: `Bearer ${credentials.accessToken}`,
+        "Content-Type": "application/json; charset=UTF-8",
+      },
+    });
+
+    const body = (await response.json()) as {
+      data?: Record<string, unknown>;
+      error?: { code?: string; message?: string };
+    };
+    if (!response.ok || (body.error?.code && body.error.code !== "ok")) {
+      // Named, because the composer has to tell the creator something they can
+      // act on — usually "reconnect TikTok", occasionally "your account is
+      // under review".
+      throw new BadRequestException({
+        code: "TIKTOK_CREATOR_INFO_FAILED",
+        message: body.error?.message ?? "TikTok would not describe this account right now.",
+      });
+    }
+
+    const data = body.data ?? {};
+    return {
+      creatorUsername: (data.creator_username as string) ?? null,
+      creatorNickname: (data.creator_nickname as string) ?? null,
+      creatorAvatarUrl: (data.creator_avatar_url as string) ?? null,
+      // The menu the composer may show. Never widened here: an option TikTok
+      // omits is one this account may not use.
+      privacyLevelOptions: Array.isArray(data.privacy_level_options)
+        ? (data.privacy_level_options as string[])
+        : [],
+      // TikTok reports these as "disabled" flags, and the UI shows the matching
+      // control greyed out with the reason rather than dropping it.
+      commentDisabled: Boolean(data.comment_disabled),
+      duetDisabled: Boolean(data.duet_disabled),
+      stitchDisabled: Boolean(data.stitch_disabled),
+      maxVideoPostDurationSec: Number(data.max_video_post_duration_sec ?? 0) || null,
+    };
+  }
 
   async list(orgId: string) {
     const rows = await this.prisma.socialConnection.findMany({

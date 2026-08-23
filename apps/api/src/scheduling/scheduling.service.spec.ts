@@ -374,4 +374,109 @@ describe("SchedulingService", () => {
       expect(prisma.scheduledPost.updateMany).not.toHaveBeenCalled();
     });
   });
+
+  /**
+   * TikTok's Content Sharing Guidelines make the privacy level, the interaction
+   * settings and the content disclosure the CREATOR's decisions, taken in our
+   * UI. The app was rejected for choosing the privacy level itself, so the API
+   * refuses a TikTok post that arrives without them rather than defaulting one
+   * in — a default is the same act with a nicer name.
+   */
+  describe("TikTok publish settings", () => {
+    const CHOICES = {
+      privacyLevel: "PUBLIC_TO_EVERYONE" as const,
+      disableComment: true,
+      disableDuet: false,
+      disableStitch: false,
+      brandOrganic: false,
+      brandedContent: false,
+    };
+
+    beforeEach(() => {
+      prisma.contentItem.findFirst.mockResolvedValue({ id: "content1" });
+      prisma.scheduledPost.create.mockImplementation(({ data }: never) =>
+        Promise.resolve({ id: "sp", ...(data as object) }),
+      );
+      prisma.contentItem.update.mockResolvedValue({});
+    });
+
+    it("refuses a TikTok post with no creator choices", async () => {
+      prisma.socialConnection.findMany.mockResolvedValue([{ id: "c1", platform: "TIKTOK" }]);
+      await expect(
+        service.schedule("org1", "user1", {
+          contentItemId: "content1",
+          connectionIds: ["c1"],
+          scheduledAt: future,
+          timezone: "UTC",
+        }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      // And nothing is written. A refused post must not leave a row.
+      expect(prisma.scheduledPost.create).not.toHaveBeenCalled();
+    });
+
+    it("says what the caller has to collect", async () => {
+      prisma.socialConnection.findMany.mockResolvedValue([{ id: "c1", platform: "TIKTOK" }]);
+      await expect(
+        service.schedule("org1", "user1", {
+          contentItemId: "content1",
+          connectionIds: ["c1"],
+          scheduledAt: future,
+          timezone: "UTC",
+        }),
+      ).rejects.toMatchObject({ response: { code: "TIKTOK_SETTINGS_REQUIRED" } });
+    });
+
+    it("stores them on the TikTok post", async () => {
+      prisma.socialConnection.findMany.mockResolvedValue([{ id: "c1", platform: "TIKTOK" }]);
+      await service.schedule("org1", "user1", {
+        contentItemId: "content1",
+        connectionIds: ["c1"],
+        scheduledAt: future,
+        timezone: "UTC",
+        tiktok: CHOICES,
+      });
+      expect(prisma.scheduledPost.create).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ tiktokSettings: CHOICES }) }),
+      );
+    });
+
+    /**
+     * The same content goes to TikTok and to five other places from one call,
+     * and only TikTok has these. Writing them onto a LinkedIn row would be
+     * storing a consent that means nothing there.
+     */
+    it("stores them only on the TikTok post, not on its siblings", async () => {
+      prisma.socialConnection.findMany.mockResolvedValue([
+        { id: "c1", platform: "TIKTOK" },
+        { id: "c2", platform: "LINKEDIN" },
+      ]);
+      await service.schedule("org1", "user1", {
+        contentItemId: "content1",
+        connectionIds: ["c1", "c2"],
+        scheduledAt: future,
+        timezone: "UTC",
+        tiktok: CHOICES,
+      });
+      const written = prisma.scheduledPost.create.mock.calls.map(
+        ([arg]: [{ data: { connectionId: string; tiktokSettings: unknown } }]) => arg.data,
+      );
+      expect(written.find((d) => d.connectionId === "c1")?.tiktokSettings).toEqual(CHOICES);
+      // Prisma.DbNull, not JS null: on a Json? column a bare null stores the
+      // JSON value `null`, which reads back as present-but-empty.
+      expect(written.find((d) => d.connectionId === "c2")?.tiktokSettings).not.toEqual(CHOICES);
+    });
+
+    it("does not require them when no destination is TikTok", async () => {
+      prisma.socialConnection.findMany.mockResolvedValue([{ id: "c2", platform: "LINKEDIN" }]);
+      await expect(
+        service.schedule("org1", "user1", {
+          contentItemId: "content1",
+          connectionIds: ["c2"],
+          scheduledAt: future,
+          timezone: "UTC",
+        }),
+      ).resolves.toBeDefined();
+    });
+  });
+
 });
