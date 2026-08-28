@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { PLANS, PLAN_FEATURES, TRIAL_HOURS } from "@godeye/shared";
-import { GodeyeCrest } from "@/components/logo";
 import { SITE_NAME } from "@/lib/site";
 
 /**
@@ -81,16 +80,15 @@ const faqJsonLd = {
 
 export default function PricingPage() {
   return (
-    <main className="mx-auto flex min-h-svh max-w-5xl flex-col px-6 py-16">
+    // The wordmark and the footer come from the (marketing) layout now — this
+    // page carried its own of each before it had a shell around it.
+    <div className="mx-auto flex max-w-5xl flex-col px-6 pb-20 pt-14">
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(faqJsonLd) }}
       />
       <header className="mx-auto max-w-2xl text-center">
-        <Link href="/" aria-label="GODEYE home" className="inline-block">
-          <GodeyeCrest size={64} />
-        </Link>
-        <h1 className="mt-8 text-[30px] font-bold leading-[1.15] tracking-[-0.02em] sm:text-[38px]">
+        <h1 className="text-display-lg font-display font-semibold text-primary">
           Priced for what you publish
         </h1>
         <p className="mt-4 text-[15px] leading-relaxed text-ink-2">
@@ -119,7 +117,10 @@ export default function PricingPage() {
                   {p.name}
                 </h2>
                 {featured && (
-                  <span className="rounded-full bg-accent px-2.5 py-0.5 text-[11px] font-semibold text-white">
+                  // Violet text on a violet wash, not white on violet: white
+                  // on --accent-violet measures 3.96:1 and fails 1.4.3 at this
+                  // size.
+                  <span className="rounded-full bg-accent-soft px-2.5 py-0.5 text-[11px] font-semibold text-lilac">
                     Most chosen
                   </span>
                 )}
@@ -144,13 +145,13 @@ export default function PricingPage() {
                   </li>
                 ))}
               </ul>
+              {/* The same two buttons the rest of the marketing pages use, so
+                  the primary action looks like the primary action everywhere.
+                  Also fixes the contrast: the old `bg-accent text-white` is
+                  3.96:1 on the marketing palette. */}
               <Link
                 href="/register"
-                className={`mt-7 block rounded-lg px-5 py-2.5 text-center text-sm font-semibold transition-colors ${
-                  featured
-                    ? "bg-accent text-white hover:bg-accent-hover"
-                    : "border border-line hover:border-ink-3"
-                }`}
+                className={`mt-7 w-full justify-center text-sm ${featured ? "btn-brand" : "btn-ghost"}`}
               >
                 Start with {p.name}
               </Link>
@@ -173,18 +174,6 @@ export default function PricingPage() {
         </div>
       </section>
 
-      <footer className="mt-16 flex flex-wrap items-center gap-x-5 gap-y-2 border-t border-line pt-8 text-[13px] text-ink-3">
-        <span>© {new Date().getFullYear()} GODEYE</span>
-        <Link href="/" className="hover:text-ink-2">
-          Home
-        </Link>
-        <Link href="/privacy" className="hover:text-ink-2">
-          Privacy
-        </Link>
-        <Link href="/terms" className="hover:text-ink-2">
-          Terms
-        </Link>
-      </footer>
-    </main>
+    </div>
   );
 }

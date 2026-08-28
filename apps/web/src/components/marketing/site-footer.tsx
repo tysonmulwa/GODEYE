@@ -1,0 +1,94 @@
+import Link from "next/link";
+import { GodeyeMark } from "@/components/logo";
+
+/**
+ * The footer.
+ *
+ * Every link points at a page that exists. The brief asked for "legal, status,
+ * docs, contact" — there is no status page and no `/docs` route, so those two
+ * are absent rather than pointed at a 404. A dead link in the footer of a page
+ * whose job is to look trustworthy costs more than a missing column.
+ *
+ * The contact address is the one already published on `/privacy`, `/terms` and
+ * `/data-deletion`, so this is the same address in one more place rather than a
+ * new disclosure.
+ */
+const COLUMNS = [
+  {
+    heading: "Product",
+    links: [
+      { href: "/#what-it-does", label: "What it does" },
+      { href: "/#how-it-works", label: "How it works" },
+      { href: "/pricing", label: "Pricing" },
+    ],
+  },
+  {
+    heading: "Integrations",
+    links: [
+      { href: "/integrations/tiktok", label: "TikTok" },
+      { href: "/integrations/meta", label: "Facebook & Instagram" },
+    ],
+  },
+  {
+    heading: "Legal",
+    links: [
+      { href: "/privacy", label: "Privacy" },
+      { href: "/terms", label: "Terms" },
+      { href: "/data-deletion", label: "Data deletion" },
+    ],
+  },
+] as const;
+
+export function SiteFooter() {
+  return (
+    <footer className="border-t border-subtle px-6 py-14">
+      <div className="mx-auto max-w-[1200px]">
+        <div className="flex flex-col gap-12 lg:flex-row lg:justify-between">
+          <div className="max-w-xs">
+            <span className="inline-flex items-center gap-2.5 text-primary">
+              <GodeyeMark className="h-6 w-6 text-violet" />
+              <span className="font-brand text-[14px] tracking-[0.2em]">GODEYE</span>
+            </span>
+            <p className="mt-4 text-[14px] leading-relaxed text-muted">
+              Marketing that runs without you in the room.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-2 gap-10 sm:grid-cols-3 lg:gap-16">
+            {COLUMNS.map((col) => (
+              <div key={col.heading}>
+                <h2 className="text-eyebrow uppercase text-muted">{col.heading}</h2>
+                {/* min-h-11 rather than padding arithmetic: a footer link is
+                    ~17px of text, and WCAG 2.5.5's 44px target is the one thing
+                    a footer reliably fails on a phone. The minimum height also
+                    supplies the row rhythm, so there is no separate gap. */}
+                <ul className="mt-2">
+                  {col.links.map((link) => (
+                    <li key={link.href}>
+                      <Link
+                        href={link.href}
+                        className="flex min-h-11 items-center text-[14px] text-secondary transition-colors hover:text-primary"
+                      >
+                        {link.label}
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="mt-12 flex flex-col gap-3 border-t border-subtle pt-6 text-[13px] text-muted sm:flex-row sm:items-center sm:justify-between">
+          <span>© {new Date().getFullYear()} GODEYE</span>
+          <a
+            href="mailto:tysonmulwa25@gmail.com"
+            className="inline-flex min-h-11 items-center transition-colors hover:text-secondary"
+          >
+            Contact
+          </a>
+        </div>
+      </div>
+    </footer>
+  );
+}
