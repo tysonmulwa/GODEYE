@@ -2,12 +2,91 @@
 
 @custom-variant dark (&:where(.dark, .dark *));
 
-@theme {
+/*
+ * `inline` is load-bearing, not a style preference.
+ *
+ * Without it Tailwind emits `--color-primary: var(--text-primary)` into :root
+ * and the var() is substituted THERE — so the utility freezes to whatever
+ * :root's value was. `.dark` gets away with it because it sits on <html>, the
+ * same element as :root. `.marketing` is a descendant, so every semantic colour
+ * stayed on its light value: the hero headline rendered #101319 on a near-black
+ * page, which is to say invisible.
+ *
+ * With `inline`, the utility is emitted as `color: var(--text-primary)` and
+ * resolves per element, so it follows any scope that redefines the token.
+ */
+@theme inline {
   --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
   /* Readability override: "mono" data/labels render in the normal UI font.
      Swap back to var(--font-jetbrains-mono) to restore the mono look. */
   --font-mono: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
-  --font-display: var(--font-michroma), ui-sans-serif, sans-serif;
+  /* Space Grotesk for display: a geometric grotesk that holds together at
+     4.5rem. Michroma moved to --font-brand — it is a wide decorative face,
+     right for a wordmark and wrong for a headline. */
+  --font-display: var(--font-space-grotesk), var(--font-inter), ui-sans-serif, sans-serif;
+  --font-brand: var(--font-michroma), ui-sans-serif, sans-serif;
+
+  /* ---- Display type scale -------------------------------------------
+     Tailwind 4 reads --text-{n}--line-height and --text-{n}--letter-spacing
+     off the same name, so `text-display-xl` carries all three and a caller
+     cannot apply the size while forgetting the tracking. */
+  --text-display-xl: clamp(2.75rem, 6vw, 4.5rem);
+  --text-display-xl--line-height: 1.03;
+  --text-display-xl--letter-spacing: -0.03em;
+
+  --text-display-lg: clamp(2rem, 4vw, 3rem);
+  --text-display-lg--line-height: 1.08;
+  --text-display-lg--letter-spacing: -0.02em;
+
+  --text-heading: 1.5rem;
+  --text-heading--line-height: 1.2;
+  --text-heading--letter-spacing: -0.01em;
+
+  --text-body-lg: 1.125rem;
+  --text-body-lg--line-height: 1.6;
+
+  --text-body: 1rem;
+  --text-body--line-height: 1.65;
+
+  --text-eyebrow: 0.75rem;
+  --text-eyebrow--line-height: 1;
+  --text-eyebrow--letter-spacing: 0.16em;
+
+  /* ---- Semantic surface / text / border names ------------------------
+     The public API. These are aliases onto the one ramp below, not a second
+     palette: --surface and --ink still resolve to the same values, so no
+     dashboard screen changes and the two cannot drift apart. */
+  --color-base: var(--bg-base);
+  --color-raised: var(--bg-raised);
+  --color-elevated: var(--bg-elevated);
+  --color-primary: var(--text-primary);
+  --color-secondary: var(--text-secondary);
+  --color-muted: var(--text-muted);
+  --color-subtle: var(--border-subtle);
+  --color-strong: var(--border-strong);
+
+  /* ---- Brand accents -------------------------------------------------
+     Magenta is for accents only and never for body text. That is a discipline
+     rule, not a contrast one — it measures 5.54:1 on --bg-base and would pass.
+     Four accent colours in running text is what makes a page look like a
+     template. See docs/design/tokens.md. */
+  --color-violet: var(--accent-violet);
+  --color-lilac: var(--accent-lilac);
+  --color-cyan: var(--accent-cyan);
+  --color-magenta: var(--accent-magenta);
+
+  /* ---- Status ---------------------------------------------------------
+     Deliberately NOT the brand accents. A post that failed must not be
+     coloured with the same violet as the primary CTA, or the palette is
+     saying two unrelated things with one colour. */
+  --color-published: var(--status-published);
+  --color-scheduled: var(--status-scheduled);
+  --color-failed: var(--status-failed);
+  /* `text-danger` and `border-token` were used in the composer and the TikTok
+     settings panel but never defined, so they generated no CSS at all: the
+     panel had no border and its error text rendered in body colour. */
+  --color-danger: var(--status-failed);
+  --color-token: var(--border-subtle);
 
   --color-surface: var(--surface);
   --color-surface-2: var(--surface-2);
@@ -29,6 +108,43 @@
 
 /* "Engineered" palette, cool gray ramp + one restrained indigo accent */
 :root {
+  /* ---- The semantic ramp, light -------------------------------------
+     Same values the app has always used, under the names the token layer
+     exposes. Adding names rather than changing colours is why the dashboard
+     looks identical after this change. The marketing scope below overrides
+     these; .dark is left alone deliberately, so adopting the new names in the
+     app is a rename and never a restyle. */
+  --bg-base: #f6f7f9;
+  --bg-raised: #ffffff;
+  --bg-elevated: #f4f5f7;
+  --text-primary: #101319;
+  --text-secondary: #565d6b;
+  --text-muted: #98a0ad;
+  --border-subtle: #e4e7ec;
+  --border-strong: #cdd2da;
+
+  --accent-violet: #6366f1;
+  --accent-lilac: #818cf8;
+  --accent-cyan: #0891b2;
+  --accent-magenta: #db2777;
+
+  /* Status. Own tokens, never the brand accents. */
+  --status-published: #15803d;
+  --status-scheduled: #a16207;
+  --status-failed: #b91c1c;
+
+  /* One gradient recipe for the whole system. Every gradient in the product
+     is this declaration or it is a bug. */
+  --brand-gradient: linear-gradient(100deg, #a78bfa 0%, #7c6bf7 45%, #22d3ee 100%);
+  --glow-violet: 0 0 48px -10px rgb(124 107 247 / 0.55);
+  --glow-cyan: 0 0 48px -10px rgb(34 211 238 / 0.45);
+
+  /* Motion. 180-420ms on one curve. */
+  --ease-out-expo: cubic-bezier(0.22, 1, 0.36, 1);
+  --dur-fast: 180ms;
+  --dur-mid: 280ms;
+  --dur-slow: 420ms;
+
   --surface: #f6f7f9; /* canvas */
   --surface-2: #ffffff; /* cards */
   --surface-3: #f4f5f7; /* chrome, chips */
@@ -99,6 +215,266 @@
   --wash-1: rgb(99 102 241 / 0.34);
   --wash-2: rgb(56 189 248 / 0.20);
   --wash-3: rgb(168 85 247 / 0.22);
+}
+
+/* ==========================================================================
+   Marketing scope — dark-first, and dark regardless of the app's theme.
+   ==========================================================================
+
+   The app is light by default and flips to dark by adding `.dark` to <html>
+   from a useEffect in theme-toggle.tsx. That is a poor foundation for a
+   marketing page: the class lands after first paint, so a dark landing page
+   built on it would flash white on every cold load, and it would also invert
+   whenever a visitor had toggled the dashboard to light.
+
+   So the marketing pages carry their own palette on their own wrapper and
+   never consult `.dark` at all. There is no theme switch on marketing.
+
+   Both the new semantic names AND the older --surface/--ink aliases are
+   restated here. They have to be: `--surface: var(--bg-base)` is substituted
+   where it is *declared*, at :root, so a descendant that redefines --bg-base
+   does not move --surface with it. Anything reusing a dashboard component
+   inside this scope (the product previews do) would otherwise render with
+   light-theme surfaces on a near-black page. */
+.marketing {
+  --bg-base: #05060b;
+  --bg-raised: #0b0d16;
+  --bg-elevated: #12141f;
+  --border-subtle: rgb(255 255 255 / 0.08);
+  --border-strong: rgb(255 255 255 / 0.14);
+
+  --text-primary: #f4f5fa;
+  --text-secondary: #a9aec4;
+  /* The brief suggested #6E7490. Measured against --bg-base that is 4.40:1,
+     which fails 1.4.3 for body text, and the eyebrow style uses this colour at
+     0.75rem. #7C82A0 is the same hue two steps lighter: 5.36:1. Verified in
+     src/test/tokens.test.ts rather than by eye. */
+  --text-muted: #7c82a0;
+
+  --accent-violet: #7c6bf7;
+  --accent-lilac: #a78bfa;
+  --accent-cyan: #22d3ee;
+  --accent-magenta: #e940a6;
+
+  --status-published: #34d399;
+  --status-scheduled: #fbbf24;
+  --status-failed: #f87171;
+
+  /* Aliases, so dashboard components dropped into this scope follow it. */
+  --surface: var(--bg-base);
+  --surface-2: var(--bg-raised);
+  --surface-3: var(--bg-elevated);
+  --sidebar: var(--bg-base);
+  --ink: var(--text-primary);
+  --ink-2: var(--text-secondary);
+  --ink-3: var(--text-muted);
+  --ink-4: #5c6180;
+  --line: var(--border-subtle);
+  --line-soft: rgb(255 255 255 / 0.05);
+  --line-hover: var(--border-strong);
+  --accent: var(--accent-violet);
+  --accent-hover: var(--accent-lilac);
+  --accent-soft: rgb(124 107 247 / 0.14);
+  --accent-soft-2: rgb(124 107 247 / 0.07);
+  --accent-border: rgb(124 107 247 / 0.34);
+
+  --glass: rgb(18 20 31 / 0.55);
+  --glass-strong: rgb(11 13 22 / 0.72);
+  --glass-edge: rgb(255 255 255 / 0.06);
+  --glass-line: var(--border-subtle);
+
+  color: var(--text-primary);
+  background-color: var(--bg-base);
+}
+
+/* The <body> background is painted by the rules further down and would show
+   through on overscroll and anywhere the wrapper does not reach. Repaint it
+   from the marketing palette when a marketing page is mounted. */
+html:has(.marketing) body {
+  background-color: #05060b;
+  background-image:
+    radial-gradient(60rem 40rem at 12% -8%, rgb(124 107 247 / 0.20), transparent 60%),
+    radial-gradient(50rem 36rem at 92% 2%, rgb(34 211 238 / 0.11), transparent 60%);
+}
+
+/* ---- Marketing utilities ------------------------------------------------ */
+
+/*
+ * Gradient text.
+ *
+ * `color` is set to a real colour FIRST and only then painted over. Where
+ * background-clip: text is unsupported — or where forced-colors strips the
+ * background — the text stays legible instead of rendering transparent on
+ * transparent, which is an invisible headline rather than an ugly one.
+ */
+.text-gradient {
+  color: var(--accent-lilac);
+  background: var(--brand-gradient);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  /* A descender clipped by a tight line-height is very visible on display text. */
+  padding-bottom: 0.08em;
+}
+
+@media (forced-colors: active) {
+  .text-gradient {
+    background: none;
+    -webkit-text-fill-color: CanvasText;
+    color: CanvasText;
+  }
+}
+
+/* Glow is a STATE, not decoration: the primary CTA, the active node, the live
+   data element. If it is on more than those, it has stopped meaning anything. */
+.glow-violet {
+  box-shadow: var(--glow-violet);
+}
+.glow-cyan {
+  box-shadow: var(--glow-cyan);
+}
+
+/* Surfaces are separated by a hairline and a lit top edge, not a drop shadow.
+   Shadows on a near-black canvas read as mud. */
+.hairline {
+  border: 1px solid var(--border-subtle);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.06);
+}
+
+/*
+ * The primary call to action — the one element on the page that carries the
+ * gradient and the glow together. If a second element gets this treatment,
+ * neither of them is the primary action any more.
+ */
+.btn-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  /* 2.75rem = 44px. WCAG 2.5.5: at the nav's 14px label this button computed to
+     41px tall, so the minimum is set here rather than at each call site. */
+  min-height: 2.75rem;
+  border-radius: 0.625rem;
+  padding: 0.625rem 1.125rem;
+  font-weight: 600;
+  /* Dark ink on a light violet-to-cyan fill: white text over the cyan end of
+     this gradient measures under 2:1. */
+  color: #08070f;
+  background: var(--brand-gradient);
+  box-shadow: var(--glow-violet);
+  transition:
+    transform var(--dur-fast) var(--ease-out-expo),
+    filter var(--dur-fast) var(--ease-out-expo);
+}
+.btn-brand:hover {
+  filter: brightness(1.08);
+  transform: translateY(-1px);
+}
+.btn-brand:active {
+  transform: translateY(0);
+}
+
+/* Secondary: a hairline, no fill, no glow. */
+.btn-ghost {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 2.75rem;
+  border-radius: 0.625rem;
+  border: 1px solid var(--border-strong);
+  padding: 0.625rem 1.125rem;
+  font-weight: 550;
+  color: var(--text-primary);
+  transition:
+    background-color var(--dur-fast) var(--ease-out-expo),
+    border-color var(--dur-fast) var(--ease-out-expo);
+}
+.btn-ghost:hover {
+  border-color: var(--accent-violet);
+  background: rgb(124 107 247 / 0.08);
+}
+
+/*
+ * 2.4.7 Focus Visible, on a dark ground.
+ *
+ * The app-wide ring is --accent, which inside .marketing is the same violet as
+ * the primary CTA sitting behind it. A light ring plus an offset in the page
+ * colour is what stays visible against both a near-black canvas and the
+ * gradient fill of the button itself.
+ */
+.marketing :focus-visible {
+  outline: 2px solid #f4f5fa;
+  outline-offset: 2px;
+}
+
+/* ---- Marketing motion ---------------------------------------------------
+   Entrances fire once on scroll-into-view (use-in-view.ts), never on a loop.
+   Only transform and opacity are animated. */
+
+.reveal {
+  opacity: 0;
+  transform: translateY(16px);
+  transition:
+    opacity var(--dur-slow) var(--ease-out-expo),
+    transform var(--dur-slow) var(--ease-out-expo);
+}
+.reveal[data-shown="true"] {
+  opacity: 1;
+  transform: none;
+}
+
+@keyframes marketing-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-8px);
+  }
+}
+
+@keyframes marketing-dash {
+  to {
+    stroke-dashoffset: -284;
+  }
+}
+
+.orbit-float {
+  animation: marketing-float var(--float-dur, 8s) ease-in-out infinite;
+  animation-delay: var(--float-delay, 0s);
+}
+
+.flow-dash {
+  /* A 6px dash reads as a dot crawling along the path rather than as data
+     moving through it; 44 is long enough to be a segment and short enough that
+     the line still reads as mostly empty. */
+  stroke-dasharray: 44 240;
+  animation: marketing-dash 7s linear infinite;
+  animation-delay: var(--float-delay, 0s);
+}
+
+/*
+ * 2.3.3 Animation from Interactions.
+ *
+ * The global reduce block further down flattens durations, but that alone
+ * would leave every .reveal element stuck at opacity:0 — a page that is
+ * blank for exactly the people who asked for less motion. The hero has to be
+ * a COMPLETE STATIC COMPOSITION here, so the end state is forced on and the
+ * looping animations are removed rather than shortened.
+ */
+@media (prefers-reduced-motion: reduce) {
+  .reveal {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+  .orbit-float,
+  .flow-dash {
+    animation: none;
+  }
+  .flow-dash {
+    stroke-dasharray: none;
+    opacity: 0.35;
+  }
 }
 
 html,

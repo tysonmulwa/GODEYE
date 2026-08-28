@@ -172,7 +172,7 @@ export function GodeyeLockup({
   return (
     <span className="inline-flex items-center gap-2 text-ink">
       <GodeyeEmblem variant="compact" style={{ width: size, height: size }} />
-      <span className={`font-display tracking-wider ${wordClass}`}>GODEYE</span>
+      <span className={`font-brand tracking-wider ${wordClass}`}>GODEYE</span>
     </span>
   );
 }
@@ -242,7 +242,7 @@ export function GodeyeCrest({
       }`}
     >
       <GodeyeEmblem style={{ width: size, height: size }} />
-      <span className={`font-display tracking-[0.22em] ${wordClass}`}>GODEYE</span>
+      <span className={`font-brand tracking-[0.22em] ${wordClass}`}>GODEYE</span>
     </span>
   );
 }

@@ -1,13 +1,30 @@
 import type { Metadata } from "next";
-import { Inter, JetBrains_Mono, Michroma } from "next/font/google";
+import { Inter, JetBrains_Mono, Michroma, Space_Grotesk } from "next/font/google";
 import { Providers } from "@/lib/providers";
 import { SITE_DESCRIPTION, SITE_NAME, SITE_URL } from "@/lib/site";
 import { organizationJsonLd, softwareJsonLd } from "@/lib/structured-data";
 import "./globals.css";
 
-const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
+/*
+ * All four faces are downloaded at build time and served from this origin.
+ * next/font/google is not a runtime request to Google — that is why
+ * fonts.gstatic.com is deliberately absent from font-src in lib/csp.ts.
+ *
+ * `adjustFontFallback` (on by default) synthesises a size-adjusted local
+ * fallback from each face's metrics, so the swap does not move the text and
+ * the page holds CLS near zero while a font is still loading.
+ */
+const inter = Inter({ subsets: ["latin"], variable: "--font-inter", display: "swap" });
 const jetbrainsMono = JetBrains_Mono({ subsets: ["latin"], variable: "--font-jetbrains-mono" });
 const michroma = Michroma({ subsets: ["latin"], weight: "400", variable: "--font-michroma" });
+/* Display face for marketing headlines. Michroma stays, but only as the
+   wordmark's face (--font-brand): it is a wide decorative grotesk that is
+   unreadable as a 4.5rem sentence. */
+const spaceGrotesk = Space_Grotesk({
+  subsets: ["latin"],
+  variable: "--font-space-grotesk",
+  display: "swap",
+});
 
 export const metadata: Metadata = {
   // Everything below resolves against this, so a relative canonical or og:url
@@ -36,7 +53,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html
       lang="en"
-      className={`${inter.variable} ${jetbrainsMono.variable} ${michroma.variable}`}
+      className={`${inter.variable} ${jetbrainsMono.variable} ${michroma.variable} ${spaceGrotesk.variable}`}
       suppressHydrationWarning
     >
       <body className="font-sans">
