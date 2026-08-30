@@ -31,6 +31,8 @@ function block(selector: string): Record<string, string> {
 
 const marketing = block(".marketing");
 const root = block(":root");
+/** The explicit light override. The media-query copy carries the same values. */
+const light = block('.marketing[data-theme="light"]');
 
 // --- WCAG 2.1 relative luminance and contrast ------------------------------
 
@@ -47,6 +49,12 @@ function luminance(hex: string): number {
     0.7152 * channel(((n >> 8) & 255) / 255) +
     0.0722 * channel((n & 255) / 255)
   );
+}
+
+/** Follows one level of `var(--x)` within the same scope. */
+function resolve(scope: Record<string, string>, value: string): string {
+  const m = /^var\(--([\w-]+)\)$/.exec(value.trim());
+  return m ? scope[m[1]] : value;
 }
 
 function contrast(a: string, b: string): number {
@@ -100,6 +108,59 @@ describe("contrast · WCAG 1.4.3", () => {
   });
 });
 
+/**
+ * The light theme, measured on its own terms.
+ *
+ * Adding a second palette doubles the number of ways contrast can fail, and the
+ * failures are not symmetrical: the button that passes at 7.25:1 on dark was
+ * 3.94:1 on light with the same ink, and two status colours that clear 4.5:1 on
+ * the canvas missed it on a card. Both were found here rather than in review.
+ */
+describe("light theme contrast · WCAG 1.4.3", () => {
+  const bg = light["bg-base"];
+  const raised = light["bg-raised"];
+
+  it.each([
+    ["--text-primary", "text-primary"],
+    ["--text-secondary", "text-secondary"],
+    ["--text-muted", "text-muted"],
+  ])("%s clears 4.5:1 on the light canvas", (_l, key) => {
+    expect(contrast(light[key], bg)).toBeGreaterThanOrEqual(4.5);
+  });
+
+  /**
+   * Status text appears inside cards as well as on the canvas, and a card is
+   * the LIGHTER of the two surfaces, so it is the harder test of the pair.
+   */
+  it.each([
+    ["published", "status-published"],
+    ["scheduled", "status-scheduled"],
+    ["failed", "status-failed"],
+  ])("status %s is legible on the light canvas and on a light card", (_l, key) => {
+    expect(contrast(light[key], bg)).toBeGreaterThanOrEqual(4.5);
+    expect(contrast(light[key], raised)).toBeGreaterThanOrEqual(4.5);
+  });
+
+  /**
+   * Fill and label are chosen as a pair per theme. Checking the button's own
+   * two tokens against each other is the only way to catch a combination that
+   * is individually fine and jointly unreadable.
+   */
+  it.each([
+    ["dark", marketing],
+    ["light", light],
+  ])("the %s primary button's label clears 4.5:1 on its own fill", (_l, scope) => {
+    expect(contrast(scope["btn-ink"], resolve(scope, scope["btn-fill"]))).toBeGreaterThanOrEqual(
+      4.5,
+    );
+  });
+
+  it("keeps the light theme genuinely light", () => {
+    expect(luminance(light["bg-base"])).toBeGreaterThan(luminance(marketing["bg-base"]));
+    expect(luminance(light["text-primary"])).toBeLessThan(luminance(light["bg-base"]));
+  });
+});
+
 describe("the rules the palette is supposed to hold to", () => {
   /**
    * Brief: "exactly one gradient recipe reused everywhere". Defined once, in
@@ -142,15 +203,27 @@ describe("the rules the palette is supposed to hold to", () => {
   });
 
   /**
-   * Gradient text sets `color` before painting over it, so it degrades to a
-   * legible solid rather than transparent-on-transparent where
-   * background-clip: text does not apply.
+   * The headline is one colour.
+   *
+   * `.text-gradient` used to paint the brand gradient across two words of the
+   * h1. It was removed on request: a gradient over type reads as decoration
+   * applied to a sentence rather than as emphasis inside it. This asserts the
+   * class does not come back by copy-paste, since the CSS would still work and
+   * nothing else would fail.
    */
-  it("gives gradient text a solid colour fallback first", () => {
-    const start = CSS.indexOf(".text-gradient {");
+  it("has no gradient-text utility", () => {
+    expect(CSS).not.toContain(".text-gradient");
+  });
+
+  /** The one gradient left is the brand recipe, and nothing sets type in it. */
+  it("keeps the primary button on a flat fill", () => {
+    const start = CSS.indexOf(".btn-brand {");
     const rule = CSS.slice(start, CSS.indexOf("}", start));
-    expect(rule.indexOf("color:")).toBeLessThan(rule.indexOf("background-clip"));
-    expect(rule).toContain("var(--accent-lilac)");
+    // The declaration, not the comment above it: the comment legitimately says
+    // "not a gradient", which a bare substring check matches.
+    const background = /background:\s*([^;]+);/.exec(rule)?.[1] ?? "";
+    expect(background).toBe("var(--btn-fill)");
+    expect(background).not.toContain("gradient");
   });
 });
 

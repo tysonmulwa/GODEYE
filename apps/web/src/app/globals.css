@@ -20,10 +20,11 @@
   /* Readability override: "mono" data/labels render in the normal UI font.
      Swap back to var(--font-jetbrains-mono) to restore the mono look. */
   --font-mono: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
-  /* Space Grotesk for display: a geometric grotesk that holds together at
-     4.5rem. Michroma moved to --font-brand — it is a wide decorative face,
-     right for a wordmark and wrong for a headline. */
-  --font-display: var(--font-space-grotesk), var(--font-inter), ui-sans-serif, sans-serif;
+  /* Display is the body face, one weight heavier. A distinct display family
+     was tried and read as decoration rather than as the product; the whole
+     page now sets in Inter, which is also one less font to download. Michroma
+     stays as --font-brand for the wordmark only. */
+  --font-display: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
   --font-brand: var(--font-michroma), ui-sans-serif, sans-serif;
 
   /* ---- Display type scale -------------------------------------------
@@ -237,6 +238,7 @@
    inside this scope (the product previews do) would otherwise render with
    light-theme surfaces on a near-black page. */
 .marketing {
+  /* ---- Dark, the brand default ------------------------------------- */
   --bg-base: #05060b;
   --bg-raised: #0b0d16;
   --bg-elevated: #12141f;
@@ -245,10 +247,9 @@
 
   --text-primary: #f4f5fa;
   --text-secondary: #a9aec4;
-  /* The brief suggested #6E7490. Measured against --bg-base that is 4.40:1,
-     which fails 1.4.3 for body text, and the eyebrow style uses this colour at
-     0.75rem. #7C82A0 is the same hue two steps lighter: 5.36:1. Verified in
-     src/test/tokens.test.ts rather than by eye. */
+  /* Adjusted from the #6E7490 originally specified: that measures 4.40:1 on
+     --bg-base and fails 1.4.3 for body text, and the eyebrow uses this colour
+     at 0.75rem. Verified in src/test/tokens.test.ts, not by eye. */
   --text-muted: #7c82a0;
 
   --accent-violet: #7c6bf7;
@@ -260,7 +261,121 @@
   --status-scheduled: #fbbf24;
   --status-failed: #f87171;
 
-  /* Aliases, so dashboard components dropped into this scope follow it. */
+  /* Glass, dark. On a near-black canvas a pane reads as a LIFT: slightly
+     lighter than what is behind it, with a lit top edge. Without that edge a
+     translucent panel dissolves into the page. */
+  --m-glass: rgb(255 255 255 / 0.045);
+  --m-glass-strong: rgb(18 20 31 / 0.72);
+  --m-glass-edge: rgb(255 255 255 / 0.10);
+  --m-glass-shadow: 0 1px 2px rgb(0 0 0 / 0.4), 0 16px 40px -12px rgb(0 0 0 / 0.75);
+
+  /* The constellation behind everything. */
+  --net-node: rgb(167 139 250 / 0.85);
+  --net-node-alt: rgb(34 211 238 / 0.8);
+  --net-line: rgb(160 150 220 / 0.20);
+
+  /* The primary button as a PAIR. Fill and label have to be chosen together or
+     one theme always loses: dark ink on lilac is 7.25:1 here, while the same
+     ink on the light theme's violet is 3.94:1 and fails. */
+  --btn-fill: var(--accent-lilac);
+  --btn-ink: #0b0916;
+
+  color-scheme: dark;
+  color: var(--text-primary);
+  background-color: var(--bg-base);
+}
+
+/*
+ * Light.
+ *
+ * Two selectors, on purpose. Someone whose OS is set to light gets light on
+ * first paint with no flash and no JavaScript; the explicit toggle then wins
+ * over the OS in both directions. The `:not([data-theme="dark"])` guard is what
+ * lets a visitor force dark on a light machine.
+ */
+@media (prefers-color-scheme: light) {
+  .marketing:not([data-theme="dark"]) {
+    --bg-base: #eceae4;
+    --bg-raised: #f4f3ef;
+    --bg-elevated: #f9f8f6;
+    --border-subtle: rgb(24 22 18 / 0.10);
+    --border-strong: rgb(24 22 18 / 0.20);
+
+    --text-primary: #16150f;
+    --text-secondary: #4b4941;
+    --text-muted: #6a675c;
+
+    --accent-violet: #5b4bd6;
+    --accent-lilac: #6d5bdd;
+    --accent-cyan: #0e7490;
+    --accent-magenta: #be1e73;
+
+    --status-published: #166534;
+    --status-scheduled: #7c4a05;
+    --status-failed: #b91c1c;
+
+    --m-glass: rgb(255 255 255 / 0.55);
+    --m-glass-strong: rgb(255 255 255 / 0.75);
+    --m-glass-edge: rgb(255 255 255 / 0.9);
+    --m-glass-shadow: 0 1px 2px rgb(24 22 18 / 0.05), 0 16px 40px -14px rgb(24 22 18 / 0.18);
+
+    --net-node: rgb(91 75 214 / 0.75);
+    --net-node-alt: rgb(14 116 144 / 0.7);
+    --net-line: rgb(60 50 90 / 0.16);
+
+    /* White on a deeper violet: 7.27:1. */
+    --btn-fill: #4f3fc9;
+    --btn-ink: #ffffff;
+
+    color-scheme: light;
+  }
+}
+
+.marketing[data-theme="light"] {
+  --bg-base: #eceae4;
+  --bg-raised: #f4f3ef;
+  --bg-elevated: #f9f8f6;
+  --border-subtle: rgb(24 22 18 / 0.10);
+  --border-strong: rgb(24 22 18 / 0.20);
+
+  --text-primary: #16150f;
+  --text-secondary: #4b4941;
+  --text-muted: #6a675c;
+
+  --accent-violet: #5b4bd6;
+  --accent-lilac: #6d5bdd;
+  --accent-cyan: #0e7490;
+  --accent-magenta: #be1e73;
+
+  --status-published: #166534;
+  --status-scheduled: #7c4a05;
+  --status-failed: #b91c1c;
+
+  --m-glass: rgb(255 255 255 / 0.55);
+  --m-glass-strong: rgb(255 255 255 / 0.75);
+  --m-glass-edge: rgb(255 255 255 / 0.9);
+  --m-glass-shadow: 0 1px 2px rgb(24 22 18 / 0.05), 0 16px 40px -14px rgb(24 22 18 / 0.18);
+
+  --net-node: rgb(91 75 214 / 0.75);
+  --net-node-alt: rgb(14 116 144 / 0.7);
+  --net-line: rgb(60 50 90 / 0.16);
+
+  --btn-fill: #4f3fc9;
+  --btn-ink: #ffffff;
+
+  color-scheme: light;
+}
+
+/*
+ * The older --surface/--ink aliases, restated for whichever theme won above.
+ *
+ * They have to be restated here rather than left to :root: `--surface:
+ * var(--bg-base)` is substituted where it is DECLARED, so a descendant that
+ * redefines --bg-base does not drag --surface with it. Dashboard components
+ * reused on these pages (the product previews are) would otherwise render with
+ * light-theme surfaces on a near-black page.
+ */
+.marketing {
   --surface: var(--bg-base);
   --surface-2: var(--bg-raised);
   --surface-3: var(--bg-elevated);
@@ -268,9 +383,9 @@
   --ink: var(--text-primary);
   --ink-2: var(--text-secondary);
   --ink-3: var(--text-muted);
-  --ink-4: #5c6180;
+  --ink-4: var(--text-muted);
   --line: var(--border-subtle);
-  --line-soft: rgb(255 255 255 / 0.05);
+  --line-soft: var(--border-subtle);
   --line-hover: var(--border-strong);
   --accent: var(--accent-violet);
   --accent-hover: var(--accent-lilac);
@@ -278,23 +393,26 @@
   --accent-soft-2: rgb(124 107 247 / 0.07);
   --accent-border: rgb(124 107 247 / 0.34);
 
-  --glass: rgb(18 20 31 / 0.55);
-  --glass-strong: rgb(11 13 22 / 0.72);
-  --glass-edge: rgb(255 255 255 / 0.06);
+  --glass: var(--m-glass);
+  --glass-strong: var(--m-glass-strong);
+  --glass-edge: var(--m-glass-edge);
   --glass-line: var(--border-subtle);
-
-  color: var(--text-primary);
-  background-color: var(--bg-base);
 }
 
-/* The <body> background is painted by the rules further down and would show
-   through on overscroll and anywhere the wrapper does not reach. Repaint it
-   from the marketing palette when a marketing page is mounted. */
+/* The canvas the constellation is drawn on. Kept flat: the network itself is
+   the only thing behind the content, and a radial wash underneath it turned the
+   nodes to mush in the corners. */
 html:has(.marketing) body {
   background-color: #05060b;
-  background-image:
-    radial-gradient(60rem 40rem at 12% -8%, rgb(124 107 247 / 0.20), transparent 60%),
-    radial-gradient(50rem 36rem at 92% 2%, rgb(34 211 238 / 0.11), transparent 60%);
+  background-image: none;
+}
+@media (prefers-color-scheme: light) {
+  html:has(.marketing:not([data-theme="dark"])) body {
+    background-color: #eceae4;
+  }
+}
+html:has(.marketing[data-theme="light"]) body {
+  background-color: #eceae4;
 }
 
 /* ---- Marketing utilities ------------------------------------------------ */
@@ -307,26 +425,53 @@ html:has(.marketing) body {
  * background — the text stays legible instead of rendering transparent on
  * transparent, which is an invisible headline rather than an ugly one.
  */
-.text-gradient {
-  color: var(--accent-lilac);
-  background: var(--brand-gradient);
-  -webkit-background-clip: text;
-  background-clip: text;
-  -webkit-text-fill-color: transparent;
-  /* A descender clipped by a tight line-height is very visible on display text. */
-  padding-bottom: 0.08em;
+/*
+ * Glass.
+ *
+ * The panes everything floats on. backdrop-filter is the whole effect and it is
+ * expensive, so this is applied to persistent surfaces (cards, the nav, the
+ * stat strip) and never to small repeated chips.
+ *
+ * `saturate` matters more here than the blur: blurring alone washes out the
+ * colour a pane picks up from the constellation behind it, and a grey pane
+ * reads as painted-on rather than floating.
+ */
+.m-glass {
+  background: var(--m-glass);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border: 1px solid var(--border-subtle);
+  box-shadow:
+    inset 0 1px 0 0 var(--m-glass-edge),
+    var(--m-glass-shadow);
 }
 
-@media (forced-colors: active) {
-  .text-gradient {
-    background: none;
-    -webkit-text-fill-color: CanvasText;
-    color: CanvasText;
+.m-glass-strong {
+  background: var(--m-glass-strong);
+  backdrop-filter: blur(28px) saturate(180%);
+  -webkit-backdrop-filter: blur(28px) saturate(180%);
+  border: 1px solid var(--border-subtle);
+  box-shadow:
+    inset 0 1px 0 0 var(--m-glass-edge),
+    var(--m-glass-shadow);
+}
+
+/* Two ways this becomes unreadable, both of which people ask for explicitly. */
+@media (prefers-reduced-transparency: reduce) {
+  .m-glass,
+  .m-glass-strong {
+    background: var(--bg-raised);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+}
+@supports not (backdrop-filter: blur(1px)) {
+  .m-glass,
+  .m-glass-strong {
+    background: var(--bg-raised);
   }
 }
 
-/* Glow is a STATE, not decoration: the primary CTA, the active node, the live
-   data element. If it is on more than those, it has stopped meaning anything. */
 .glow-violet {
   box-shadow: var(--glow-violet);
 }
@@ -349,34 +494,34 @@ html:has(.marketing) body {
 .btn-brand {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 0.5rem;
-  /* 2.75rem = 44px. WCAG 2.5.5: at the nav's 14px label this button computed to
-     41px tall, so the minimum is set here rather than at each call site. */
+  /* 2.75rem = 44px. WCAG 2.5.5: at the nav's 14px label this computed to 41px,
+     so the floor is set here rather than at each call site. */
   min-height: 2.75rem;
   border-radius: 0.625rem;
   padding: 0.625rem 1.125rem;
   font-weight: 600;
-  /* Dark ink on a light violet-to-cyan fill: white text over the cyan end of
-     this gradient measures under 2:1. */
-  color: #08070f;
-  background: var(--brand-gradient);
-  box-shadow: var(--glow-violet);
+  /* One flat accent, not a gradient. Dark ink on it because white over this
+     violet measures 3.96:1 and fails 1.4.3 at button-label size. */
+  color: var(--btn-ink);
+  background: var(--btn-fill);
   transition:
     transform var(--dur-fast) var(--ease-out-expo),
     filter var(--dur-fast) var(--ease-out-expo);
 }
 .btn-brand:hover {
-  filter: brightness(1.08);
+  filter: brightness(1.06);
   transform: translateY(-1px);
 }
 .btn-brand:active {
   transform: translateY(0);
 }
 
-/* Secondary: a hairline, no fill, no glow. */
 .btn-ghost {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 0.5rem;
   min-height: 2.75rem;
   border-radius: 0.625rem;
@@ -384,13 +529,15 @@ html:has(.marketing) body {
   padding: 0.625rem 1.125rem;
   font-weight: 550;
   color: var(--text-primary);
+  background: var(--m-glass);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
   transition:
     background-color var(--dur-fast) var(--ease-out-expo),
     border-color var(--dur-fast) var(--ease-out-expo);
 }
 .btn-ghost:hover {
   border-color: var(--accent-violet);
-  background: rgb(124 107 247 / 0.08);
 }
 
 /*
@@ -438,15 +585,39 @@ html:has(.marketing) body {
   }
 }
 
+/*
+ * The ring turns; the icons do not.
+ *
+ * Two counter-rotating animations at the same duration: the ring carries each
+ * icon around the circle, and each icon spins backwards by the same amount so
+ * a logo never appears upside down. 90s is deliberately slower than feels
+ * right in isolation — it should be something you notice on second glance, not
+ * a carousel.
+ */
+@keyframes orbit-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes orbit-counter-spin {
+  to {
+    transform: rotate(-360deg);
+  }
+}
+
+.orbit-ring {
+  animation: orbit-spin 90s linear infinite;
+}
+.orbit-upright {
+  animation: orbit-counter-spin 90s linear infinite;
+}
+
 .orbit-float {
   animation: marketing-float var(--float-dur, 8s) ease-in-out infinite;
   animation-delay: var(--float-delay, 0s);
 }
 
 .flow-dash {
-  /* A 6px dash reads as a dot crawling along the path rather than as data
-     moving through it; 44 is long enough to be a segment and short enough that
-     the line still reads as mostly empty. */
   stroke-dasharray: 44 240;
   animation: marketing-dash 7s linear infinite;
   animation-delay: var(--float-delay, 0s);
@@ -468,6 +639,8 @@ html:has(.marketing) body {
     transition: none;
   }
   .orbit-float,
+  .orbit-ring,
+  .orbit-upright,
   .flow-dash {
     animation: none;
   }
