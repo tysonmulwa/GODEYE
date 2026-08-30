@@ -28,10 +28,10 @@ export function Hero() {
         <div className="mx-auto max-w-4xl text-center">
           <p className="text-eyebrow uppercase text-muted">Marketing automation, run by agents</p>
 
-          <h1 className="mt-5 text-display-xl font-semibold font-display text-primary">
-            Marketing that runs{" "}
-            {/* The single gradient recipe, on the two words the sentence turns on. */}
-            <span className="text-gradient">without you</span> in the room
+          {/* One colour. A gradient across the words was tried and read as
+              decoration applied to the sentence rather than as emphasis in it. */}
+          <h1 className="mt-5 text-display-xl font-bold font-display text-primary">
+            Marketing that runs without you in the room
           </h1>
 
           <p className="mx-auto mt-6 max-w-2xl text-body-lg text-secondary">

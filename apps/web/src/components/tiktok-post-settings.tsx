@@ -197,7 +197,7 @@ export function TikTokPostSettingsPanel({
                   {PRIVACY_LABELS[level]}
                   {blocked ? (
                     <span className="block text-xs text-muted">
-                      Not available while Branded content is on — a paid partnership has to be
+                      Not available while Branded content is on. A paid partnership has to be
                       visible to someone.
                     </span>
                   ) : null}
