@@ -68,7 +68,13 @@ export const organizationJsonLd = {
  *
  * `alternateName` is not a marketing alias. It is there because the domain
  * itself reads "godeye automation", so that is what people type, and without it
- * the two spellings compete instead of resolving to the same site.
+ * the two spellings compete instead of resolving to the same site. An array,
+ * because Google accepts several and each is one more spelling that resolves
+ * here rather than competing with the name.
+ *
+ * The `url` carries its trailing slash. Google's own example for this block
+ * uses the homepage with one, and this property is documented as "the homepage
+ * URL" rather than the origin, so it is written the way they write it.
  *
  * No `potentialAction`/SearchAction: the sitelinks search box requires a real
  * site-search URL that returns results, and there is no such endpoint. Claiming
@@ -78,8 +84,8 @@ export const websiteJsonLd = {
   "@context": "https://schema.org",
   "@type": "WebSite",
   name: SITE_NAME,
-  alternateName: "GODEYE Automation",
-  url: SITE_URL,
+  alternateName: ["GODEYE AI", "GODEYE Automation"],
+  url: `${SITE_URL}/`,
 };
 
 /**

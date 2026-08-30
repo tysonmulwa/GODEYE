@@ -31,7 +31,14 @@ export function Hero() {
     <section className="relative overflow-hidden px-6 pb-[clamp(3rem,7vw,6rem)] pt-[clamp(3rem,7vw,5.5rem)]">
       <div className="mx-auto max-w-[1200px]">
         <div className="mx-auto max-w-4xl text-center">
-          <p className="text-eyebrow uppercase text-muted">Marketing automation, run by agents</p>
+          {/* The brand, above the headline.
+              Google reads visible headings when deciding what name to print
+              above a search result, and the h1 is a positioning line with no
+              brand in it. Putting GODEYE here makes the name visible at the top
+              of the page without turning the headline into a wordmark. */}
+          <p className="text-eyebrow uppercase text-muted">
+            <span className="text-secondary">GODEYE</span> · AI marketing automation
+          </p>
 
           {/* One colour. A gradient across the words was tried and read as
               decoration applied to the sentence rather than as emphasis in it. */}

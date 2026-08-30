@@ -25,7 +25,21 @@ import { RedirectIfSignedIn } from "./redirect-if-signed-in";
  * the four components that genuinely need an observer or a scroll listener.
  */
 export const metadata: Metadata = {
-  title: "Marketing that runs without you in the room",
+  /**
+   * Brand first, and `absolute` so the layout's `%s · GODEYE` template does not
+   * append a second one.
+   *
+   * The homepage title is one of the handful of signals Google reads when it
+   * decides what to print above a result. It previously read "Marketing that
+   * runs without you in the room · GODEYE": the name was present but last,
+   * behind nine words of positioning, while the domain spells out a longer
+   * name. Leading with it removes that competition.
+   *
+   * This is the only page whose title is brand-first. Every other page keeps
+   * `%s · GODEYE`, because "Pricing · GODEYE" is the right shape for a result
+   * and only the homepage feeds the site-name signal.
+   */
+  title: { absolute: `${SITE_NAME} · AI marketing automation` },
   description: SITE_DESCRIPTION,
   alternates: { canonical: "/" },
   // The layout sets these site-wide, so without an override a shared link is
@@ -38,11 +52,14 @@ export const metadata: Metadata = {
     // in the build output: every app page had the tag and none of the marketing
     // pages did.
     siteName: SITE_NAME,
-    title: "Marketing that runs without you in the room",
+    // Matches the <title> rather than restating the headline. og:title is read
+    // alongside it for the same decision, and two different answers is a
+    // weaker signal than one answer twice.
+    title: `${SITE_NAME} · AI marketing automation`,
     description: SITE_DESCRIPTION,
     url: "/",
   },
-  twitter: { title: "Marketing that runs without you in the room" },
+  twitter: { title: `${SITE_NAME} · AI marketing automation` },
 };
 
 /**

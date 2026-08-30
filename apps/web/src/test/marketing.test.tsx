@@ -122,13 +122,27 @@ describe("metadata and structured data", () => {
     expect(metadata.openGraph).toHaveProperty("siteName", "GODEYE");
   });
 
-  it("keeps the canonical, the title and the twitter title", () => {
+  /**
+   * The homepage title leads with the brand, and all three titles agree.
+   *
+   * Google reads the <title>, og:title and visible headings together when it
+   * decides what name to print above a result. The previous title put GODEYE
+   * ninth, behind the positioning line, while the domain spells out a longer
+   * name — so the domain won and every result was headed
+   * "godeyeautomation.com". Two different answers across these tags is a weaker
+   * signal than one answer given twice, which is why they are asserted equal
+   * rather than merely present.
+   */
+  it("leads the homepage title with the brand, consistently", () => {
     expect(metadata.alternates?.canonical).toBe("/");
-    expect(metadata.title).toBe("Marketing that runs without you in the room");
-    expect(metadata.twitter).toHaveProperty(
-      "title",
-      "Marketing that runs without you in the room",
-    );
+
+    const title = metadata.title as { absolute: string };
+    // `absolute`, or the layout's `%s · GODEYE` template appends a second one.
+    expect(title.absolute).toMatch(/^GODEYE/);
+    expect(title.absolute).not.toMatch(/GODEYE.*GODEYE/);
+
+    expect(metadata.openGraph).toHaveProperty("title", title.absolute);
+    expect(metadata.twitter).toHaveProperty("title", title.absolute);
   });
 });
 

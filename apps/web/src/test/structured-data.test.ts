@@ -45,8 +45,12 @@ describe("every block", () => {
     ["organization", organizationJsonLd],
     ["website", websiteJsonLd],
     ["software", softwareJsonLd],
-  ])("points %s at the canonical site URL", (_label, block) => {
-    expect(block.url).toBe(SITE_URL);
+  ])("points %s at the canonical site origin", (_label, block) => {
+    // Origin rather than exact string: WebSite carries the homepage with its
+    // trailing slash (Google documents that property as the homepage URL and
+    // writes it that way), while Organization and SoftwareApplication name the
+    // site itself. What must never differ is the origin.
+    expect(new URL(block.url).origin).toBe(SITE_URL);
   });
 });
 
@@ -167,13 +171,31 @@ describe("WebSite", () => {
 
   /** Google reads this from the domain root, so the URL has to BE the root. */
   it("points at the root of the domain", () => {
-    expect(websiteJsonLd.url).toBe(SITE_URL);
+    // The homepage, with its trailing slash: this property is documented as
+    // "the URL of the homepage" and Google's own example writes it that way.
+    // The origin must still match, so a typo cannot point the block elsewhere.
+    expect(websiteJsonLd.url).toBe(`${SITE_URL}/`);
+    expect(new URL(websiteJsonLd.url).origin).toBe(SITE_URL);
     expect(new URL(websiteJsonLd.url).pathname).toBe("/");
   });
 
-  it("offers the spelling people actually type", () => {
-    expect(websiteJsonLd.alternateName).toBeTruthy();
-    expect(websiteJsonLd.alternateName).not.toBe(websiteJsonLd.name);
+  /**
+   * The domain reads "godeye automation", so that is what people type. Listing
+   * those spellings resolves them to this site instead of leaving them to
+   * compete with the name.
+   *
+   * None of them may equal the name: an alternate that repeats it adds no
+   * signal, and one that equals the hostname re-creates the bug.
+   */
+  it("offers the spellings people actually type, and none of them is the name", () => {
+    const alternates = websiteJsonLd.alternateName;
+    expect(Array.isArray(alternates)).toBe(true);
+    expect(alternates.length).toBeGreaterThan(0);
+    expect(new Set(alternates).size).toBe(alternates.length);
+    for (const alternate of alternates) {
+      expect(alternate).not.toBe(websiteJsonLd.name);
+      expect(alternate).not.toContain(".");
+    }
   });
 
   /**
