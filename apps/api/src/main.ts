@@ -29,7 +29,11 @@ async function bootstrap() {
     // written rather than masked after (row 4).
     bufferLogs: true,
   });
-  app.useLogger(app.get(StructuredLogger));
+  // `resolve`, not `get`. StructuredLogger is Scope.TRANSIENT so every injector
+  // gets its own instance, and Nest refuses `get()` for anything transient or
+  // request-scoped: it throws InvalidClassScopeException and the whole boot
+  // fails. Transient means there is no single instance for `get()` to return.
+  app.useLogger(await app.resolve(StructuredLogger));
 
   // One error shape for the whole API (RFC 9457), and the place unhandled
   // exceptions are recorded onto their span.

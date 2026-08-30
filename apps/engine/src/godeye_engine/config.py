@@ -204,7 +204,19 @@ def validate_config() -> None:
 
     settings = get_settings()
     problems: list[str] = []
-    for field in ("engine_internal_secret", "indexnow_key_secret"):
+    # Only the secrets the engine cannot do ANY work without.
+    #
+    # indexnow_key_secret used to be in this list and should not have been. It
+    # is read in exactly one place, seo/indexnow.py, via the same `require()`
+    # that already raises when it is blank -- so the feature was protected
+    # either way, while the boot gate additionally took down publishing,
+    # scheduling and metrics for the sake of one SEO submission.
+    #
+    # Failing closed is right; failing closed on the whole engine because an
+    # optional feature lacks a key is the wrong granularity. The lazy require()
+    # is the correct blast radius, and the equality check below still applies
+    # whenever the value IS set.
+    for field in ("engine_internal_secret",):
         try:
             settings.require(field)
         except InsecureConfigError as e:
