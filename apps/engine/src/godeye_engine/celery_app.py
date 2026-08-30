@@ -138,7 +138,8 @@ app.conf.update(
 # an earlier deploy keeps taking tasks, so publishes land on old code at random
 # and the symptom comes and goes for no visible reason.
 @control_command()
-def build_info(state) -> dict:  # noqa: ANN001. Celery hands in its worker state
+# `state` is untyped because Celery hands in its own worker state object.
+def build_info(state) -> dict:  # noqa: ANN001
     sha = get_settings().railway_git_commit_sha
     # Whether the worker can render is a separate question from which build it
     # is on, and it is the one that decides if a TikTok post gets sound. The

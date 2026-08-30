@@ -20,11 +20,27 @@ dependencies = [
     "boto3>=1.35",
     "Pillow>=11.0",
     "beautifulsoup4>=4.12",
+    # Imported at module scope by api.py and metrics_registry.py, so every
+    # engine process needs it to start at all. It was missing here while being
+    # present in local virtualenvs, which is why 816 tests passed and all three
+    # Railway services then crashed on import.
+    "prometheus-client>=0.21",
 ]
 
 [project.optional-dependencies]
 openai = ["openai>=1.55"]
 google = ["google-genai>=0.3"]
+# Only imported when OTEL_EXPORTER_OTLP_ENDPOINT is set. That import is NOT
+# guarded, so setting the variable on an image built without this extra will
+# stop the engine at startup. Build with [otel] before enabling the exporter.
+otel = [
+    "opentelemetry-api>=1.28",
+    "opentelemetry-sdk>=1.28",
+    "opentelemetry-exporter-otlp-proto-http>=1.28",
+]
+# Optional in the real sense: products/render.py catches ImportError and reports
+# the renderer as unavailable, so the engine runs fine without it.
+browser = ["playwright>=1.49"]
 dev = ["pytest>=8.3", "pytest-mock>=3.14", "pytest-cov>=6.0", "ruff>=0.8"]
 
 [build-system]
