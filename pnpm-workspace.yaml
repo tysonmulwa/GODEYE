@@ -19,4 +19,8 @@ allowBuilds:
   esbuild: true
   prisma: true
   sharp: true
-  protobufjs: set this to true or false
+  # Transitive (OpenTelemetry). Its install script is not needed to consume the
+  # package, and leaving this unanswered made pnpm exit non-zero on every
+  # `pnpm install` — which is what silently broke `pnpm build`, and with it
+  # every OpenNext deploy, since OpenNext shells out to `pnpm build`.
+  protobufjs: false
