@@ -216,7 +216,10 @@ export function HeroVisual() {
           className="absolute left-1/2 top-1/2 h-[84%] w-[84%] -translate-x-1/2 -translate-y-1/2 rounded-full border border-subtle"
         />
         <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
-          <GodeyeEmblem className="h-24 w-24 text-lilac sm:h-28 sm:w-28" />
+          {/* Neutral like the rest of the crest marks. The violet glow behind it
+            still makes this read as the lit centre of the system, without the
+            logo itself carrying a colour it does not carry anywhere else. */}
+        <GodeyeEmblem className="h-24 w-24 text-primary sm:h-28 sm:w-28" />
         </div>
         {/* The ring itself turns. Icons are positioned inside it, so rotating
             this one element carries all eight around the circle. */}

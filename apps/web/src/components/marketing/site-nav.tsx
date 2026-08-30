@@ -2,7 +2,7 @@
 
 import { Menu, X } from "lucide-react";
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { TRIAL_HOURS } from "@godeye/shared";
 import { GodeyeEmblem } from "@/components/logo";
 import { useFocusTrap } from "@/lib/use-focus-trap";
@@ -47,38 +47,47 @@ export function SiteNav() {
   const [scrolled, setScrolled] = useState(false);
   const [drawer, setDrawer] = useState(false);
 
+  const sentinel = useRef<HTMLDivElement>(null);
+
   const closeDrawer = useCallback(() => setDrawer(false), []);
   const drawerRef = useFocusTrap<HTMLDivElement>(drawer, closeDrawer);
   useScrollLock(drawer);
 
   /**
-   * One passive listener, coalesced into an animation frame. A scroll handler
-   * that does work on every event is the classic way to make a page that
-   * animates beautifully and scrolls badly.
+   * Has the page moved? Answered by watching a 1px sentinel, not by reading a
+   * scroll offset.
+   *
+   * `window.scrollY` is ALWAYS 0 on this site. globals.css sets
+   * `html, body { height: 100%; overflow-x: hidden }` to stop a wide table
+   * pushing the page sideways, and that combination makes <body> the scrolling
+   * element: scroll to the footer and `document.body.scrollTop` reads 4000+
+   * while `window.scrollY` and `documentElement.scrollTop` both read 0.
+   *
+   * So the previous scroll listener never fired, `scrolled` never became true,
+   * the header never got its pane, and every section slid underneath a fully
+   * transparent bar — which is exactly the overlap that was reported.
+   *
+   * A sentinel sidesteps the question entirely: it does not care which element
+   * scrolls, it costs no scroll handler, and it cannot be broken again by a
+   * change to overflow somewhere else in the stylesheet.
    */
   useEffect(() => {
-    let frame = 0;
-    const onScroll = () => {
-      if (frame) return;
-      frame = requestAnimationFrame(() => {
-        // 4px, not 80. The header is translucent, so between 0 and the
-        // threshold a headline scrolls UNDER it with no pane behind it and the
-        // two sets of text overlap. The pane has to arrive the moment the page
-        // moves at all.
-        setScrolled(window.scrollY > 4);
-        frame = 0;
-      });
-    };
-    onScroll();
-    window.addEventListener("scroll", onScroll, { passive: true });
-    return () => {
-      window.removeEventListener("scroll", onScroll);
-      if (frame) cancelAnimationFrame(frame);
-    };
+    const node = sentinel.current;
+    if (!node) return;
+    const io = new IntersectionObserver(([entry]) => setScrolled(!entry.isIntersecting), {
+      threshold: 0,
+    });
+    io.observe(node);
+    return () => io.disconnect();
   }, []);
 
   return (
-    <header
+    <>
+      {/* Sits in normal flow at the very top of the page, so it scrolls away
+          while the header stays put. Its leaving the viewport IS "the page has
+          moved". */}
+      <div ref={sentinel} aria-hidden className="absolute top-0 h-px w-full" />
+      <header
       className={`sticky top-0 z-50 transition-all duration-[--dur-mid] ${
         scrolled ? "m-glass-strong border-b border-subtle" : "border-b border-transparent"
       }`}
@@ -183,6 +192,7 @@ export function SiteNav() {
           </div>
         </div>
       ) : null}
-    </header>
+      </header>
+    </>
   );
 }

@@ -279,10 +279,11 @@
   --net-node-alt: rgb(34 211 238 / 0.8);
   --net-line: rgb(160 150 220 / 0.20);
 
-  /* The primary button as a PAIR. Fill and label have to be chosen together or
-     one theme always loses: dark ink on lilac is 7.25:1 here, while the same
-     ink on the light theme's violet is 3.94:1 and fails. */
-  --btn-fill: var(--accent-lilac);
+  /* The primary button as a PAIR: fill and label chosen together, because a
+     combination can be individually fine and jointly unreadable. Neutral
+     rather than violet, so the only colour on the chrome is the constellation
+     behind it. 17.9:1 on dark. */
+  --btn-fill: #f4f5fa;
   --btn-ink: #0b0916;
 
   color-scheme: dark;
@@ -329,8 +330,8 @@
     --net-node-alt: rgb(14 116 144 / 0.7);
     --net-line: rgb(60 50 90 / 0.16);
 
-    /* White on a deeper violet: 7.27:1. */
-    --btn-fill: #4f3fc9;
+    /* The same inversion on light: near-black fill, white label. 16.4:1. */
+    --btn-fill: #16150f;
     --btn-ink: #ffffff;
 
     color-scheme: light;
@@ -367,7 +368,7 @@
   --net-node-alt: rgb(14 116 144 / 0.7);
   --net-line: rgb(60 50 90 / 0.16);
 
-  --btn-fill: #4f3fc9;
+  --btn-fill: #16150f;
   --btn-ink: #ffffff;
 
   color-scheme: light;
