@@ -36,6 +36,19 @@ import { useInView } from "@/lib/use-in-view";
  */
 
 /**
+ * Where the ring's edge sits, in pixels from the centre.
+ *
+ * The orbit box is 440px at its widest and the ring is 84% of it, so the edge
+ * is at 0.42 x 440 = 185px. The flow lines stop 14px beyond that, which is far
+ * enough to read as "outside" without leaving a visible gap.
+ *
+ * Declared once because it is the one number the CSS ring and the SVG gutters
+ * both depend on; when they disagreed, the lines ran into the circle.
+ */
+const RING_RADIUS = 185;
+const RING_EDGE = RING_RADIUS + 14;
+
+/**
  * Eight channels, evenly spaced, deliberately offset by 22.5° so that no icon
  * sits at 0° or 180° where the flow lines leave the hub.
  */
@@ -140,65 +153,92 @@ export function HeroVisual() {
         "of posts already published and scheduled."
       }
     >
-      {/* ---- Flow lines, desktop only ------------------------------------ */}
+      {/*
+        ---- Flow lines, desktop only -------------------------------------
+
+        Two SVGs, one per gutter, each stopping clear of the ring — rather than
+        one SVG across the whole composition.
+
+        The single-SVG version could not be made to line up. Its coordinates
+        were fixed in a 1160-unit viewBox scaled with `meet`, while the ring's
+        size comes from CSS (84% of a max-440px square). Those two systems
+        disagree at every viewport width, which is why a line that was supposed
+        to stop at the edge ended up terminating *inside* the circle, and why
+        the travelling dash appeared to break there.
+
+        Anchoring each gutter to `calc(50% ± RING_EDGE)` makes it exact at any
+        width: the line physically cannot enter the circle, because the element
+        drawing it stops before the circle begins.
+
+        `preserveAspectRatio="none"` is safe here because each SVG's pixel
+        height equals its viewBox height, so the vertical scale is exactly 1 and
+        stroke weight is unaffected. Only the horizontal axis stretches, and
+        these are near-horizontal lines.
+      */}
       <svg
-        className="pointer-events-none absolute inset-0 hidden h-full w-full md:block"
-        viewBox="0 0 1160 460"
+        className="pointer-events-none absolute left-0 top-1/2 hidden h-[100px] -translate-y-1/2 md:block"
+        // An explicit width, not a `right` anchor. <svg> is a replaced element:
+        // with width:auto it takes its INTRINSIC size from the viewBox (300px)
+        // and ignores `right` entirely, so the gutter never reached the ring and
+        // the line stopped wherever 300px happened to land.
+        style={{ width: `calc(50% - ${RING_EDGE}px)` }}
+        viewBox="0 0 300 100"
+        preserveAspectRatio="none"
         fill="none"
-        preserveAspectRatio="xMidYMid meet"
         aria-hidden
       >
         <defs>
-          <linearGradient id="flow-left" x1="0" y1="0" x2="1" y2="0">
-            <stop offset="0%" stopColor="#22D3EE" stopOpacity="0" />
-            <stop offset="100%" stopColor="#7C6BF7" stopOpacity="0.85" />
-          </linearGradient>
-          <linearGradient id="flow-right" x1="0" y1="0" x2="1" y2="0">
-            <stop offset="0%" stopColor="#7C6BF7" stopOpacity="0.85" />
-            <stop offset="100%" stopColor="#22D3EE" stopOpacity="0" />
+          {/* Fades in from the edge of the frame rather than starting in mid
+              air, which read as a line coming from nothing. */}
+          <linearGradient id="flow-in" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0%" stopColor="var(--accent-violet)" stopOpacity="0.05" />
+            <stop offset="40%" stopColor="var(--accent-violet)" stopOpacity="0.5" />
+            <stop offset="100%" stopColor="var(--accent-violet)" stopOpacity="0.95" />
           </linearGradient>
         </defs>
+        <path d="M0 50 H300" stroke="url(#flow-in)" strokeWidth="1.5" />
+        <path
+          d="M0 50 H300"
+          stroke="var(--accent-violet)"
+          strokeWidth="2.5"
+          strokeLinecap="round"
+          className="flow-dash"
+        />
+      </svg>
 
-        {/* One brief, coming in. */}
+      <svg
+        className="pointer-events-none absolute right-0 top-1/2 hidden h-[220px] -translate-y-1/2 md:block"
+        style={{ width: `calc(50% - ${RING_EDGE}px)` }}
+        viewBox="0 0 300 220"
+        preserveAspectRatio="none"
+        fill="none"
+        aria-hidden
+      >
+        <defs>
+          <linearGradient id="flow-out" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0%" stopColor="var(--accent-violet)" stopOpacity="0.95" />
+            <stop offset="60%" stopColor="var(--accent-cyan)" stopOpacity="0.6" />
+            <stop offset="100%" stopColor="var(--accent-cyan)" stopOpacity="0.2" />
+          </linearGradient>
+        </defs>
+        {/* Leaves the ring together, then fans to the two ends of the week. */}
+        <path d="M0 110 C 110 110, 150 40, 300 40" stroke="url(#flow-out)" strokeWidth="1.5" />
+        <path d="M0 110 C 110 110, 150 180, 300 180" stroke="url(#flow-out)" strokeWidth="1.5" />
         <path
-          d="M40 230 C 200 230, 280 230, 400 230"
-          stroke="url(#flow-left)"
-          strokeWidth="1.5"
-        />
-        <path
-          d="M40 230 C 200 230, 280 230, 400 230"
-          stroke="#A78BFA"
+          d="M0 110 C 110 110, 150 40, 300 40"
+          stroke="var(--accent-cyan)"
           strokeWidth="2.5"
           strokeLinecap="round"
           className="flow-dash"
-        />
-
-        {/* A week, going out. */}
-        <path
-          d="M760 230 C 880 230, 940 150, 1080 150"
-          stroke="url(#flow-right)"
-          strokeWidth="1.5"
+          style={{ ["--float-delay" as string]: "1.2s" }}
         />
         <path
-          d="M760 230 C 880 230, 940 310, 1080 310"
-          stroke="url(#flow-right)"
-          strokeWidth="1.5"
-        />
-        <path
-          d="M760 230 C 880 230, 940 150, 1080 150"
-          stroke="#22D3EE"
+          d="M0 110 C 110 110, 150 180, 300 180"
+          stroke="var(--accent-cyan)"
           strokeWidth="2.5"
           strokeLinecap="round"
           className="flow-dash"
-          style={{ ["--float-delay" as string]: "1.4s" }}
-        />
-        <path
-          d="M760 230 C 880 230, 940 310, 1080 310"
-          stroke="#22D3EE"
-          strokeWidth="2.5"
-          strokeLinecap="round"
-          className="flow-dash"
-          style={{ ["--float-delay" as string]: "2.8s" }}
+          style={{ ["--float-delay" as string]: "2.6s" }}
         />
       </svg>
 

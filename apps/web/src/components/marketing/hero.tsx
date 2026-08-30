@@ -14,11 +14,16 @@ import { HeroVisual } from "./hero-visual";
  */
 
 /** Positioned around the visual on desktop, a plain list under it on mobile. */
+/**
+ * Anchored to the same two gutters the flow lines occupy, at matching offsets,
+ * so the four read as one frame around the composition rather than four labels
+ * dropped at four unrelated percentages.
+ */
 const ANNOTATIONS = [
-  { text: "One brief, every platform", at: "left-0 top-[18%]" },
-  { text: "Connected once", at: "left-[4%] bottom-[16%]" },
-  { text: "A week that fills itself", at: "right-0 top-[16%]" },
-  { text: "Findable, not just posted", at: "right-[3%] bottom-[18%]" },
+  { text: "One brief, every platform", at: "left-0 top-[14%] text-left" },
+  { text: "Connected once", at: "left-0 bottom-[14%] text-left" },
+  { text: "A week that fills itself", at: "right-0 top-[14%] text-right" },
+  { text: "Findable, not just posted", at: "right-0 bottom-[14%] text-right" },
 ] as const;
 
 export function Hero() {
@@ -63,7 +68,7 @@ export function Hero() {
             {ANNOTATIONS.map((a) => (
               <span
                 key={a.text}
-                className={`absolute ${a.at} max-w-[9rem] text-eyebrow uppercase text-muted`}
+                className={`absolute ${a.at} w-[11rem] text-eyebrow uppercase leading-[1.5] text-muted`}
               >
                 {a.text}
               </span>

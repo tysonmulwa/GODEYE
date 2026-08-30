@@ -28,7 +28,7 @@ export function ConnectOnce() {
   return (
     <Section
       id="channels"
-      eyebrow="Connected once"
+      eyebrow="Your channels"
       title="Press connect, authorize, done"
       lede="No developer keys to hunt down, no tokens to paste. Connecting a channel is a redirect and an authorization, the same as signing into anything else."
     >
