@@ -53,8 +53,8 @@ export function SiteFooter() {
         <div className="flex flex-col gap-12 lg:flex-row lg:justify-between">
           <div className="max-w-xs">
             <span className="inline-flex items-center gap-2.5 text-primary">
-              <GodeyeEmblem variant="compact" className="h-8 w-8 text-violet" />
-              <span className="font-brand text-[14px] tracking-[0.2em]">GODEYE</span>
+              <GodeyeEmblem variant="compact" className="h-10 w-10 text-primary" />
+              <span className="font-brand text-[16px] tracking-[0.2em]">GODEYE</span>
             </span>
             <p className="mt-4 text-[14px] leading-relaxed text-muted">
               Marketing that runs without you in the room.

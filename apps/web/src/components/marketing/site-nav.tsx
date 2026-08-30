@@ -37,8 +37,8 @@ function Wordmark() {
       {/* The real crest, in its compact cut. `compact` exists precisely for
           chrome at this size: fewer rays and heavier strokes, because the full
           variant's 1px detail collapses into a smudge below about 32px. */}
-      <GodeyeEmblem variant="compact" className="h-8 w-8 text-violet" />
-      <span className="font-brand text-[15px] tracking-[0.2em]">GODEYE</span>
+      <GodeyeEmblem variant="compact" className="h-10 w-10 text-primary" />
+      <span className="font-brand text-[17px] tracking-[0.2em]">GODEYE</span>
     </Link>
   );
 }
@@ -61,7 +61,11 @@ export function SiteNav() {
     const onScroll = () => {
       if (frame) return;
       frame = requestAnimationFrame(() => {
-        setScrolled(window.scrollY > 80);
+        // 4px, not 80. The header is translucent, so between 0 and the
+        // threshold a headline scrolls UNDER it with no pane behind it and the
+        // two sets of text overlap. The pane has to arrive the moment the page
+        // moves at all.
+        setScrolled(window.scrollY > 4);
         frame = 0;
       });
     };
@@ -81,7 +85,7 @@ export function SiteNav() {
     >
       <nav
         aria-label="Main"
-        className="mx-auto flex h-16 max-w-[1200px] items-center justify-between px-6"
+        className="mx-auto flex h-[4.5rem] max-w-[1200px] items-center justify-between px-6"
       >
         <Wordmark />
 

@@ -264,10 +264,15 @@
   /* Glass, dark. On a near-black canvas a pane reads as a LIFT: slightly
      lighter than what is behind it, with a lit top edge. Without that edge a
      translucent panel dissolves into the page. */
-  --m-glass: rgb(255 255 255 / 0.045);
-  --m-glass-strong: rgb(18 20 31 / 0.72);
-  --m-glass-edge: rgb(255 255 255 / 0.10);
-  --m-glass-shadow: 0 1px 2px rgb(0 0 0 / 0.4), 0 16px 40px -12px rgb(0 0 0 / 0.75);
+  --m-glass: rgb(255 255 255 / 0.055);
+  /* The sticky header sits over scrolling content, so it is the one pane that
+     has to stay READABLE rather than merely translucent. 0.72 let headlines
+     show through it; 0.9 plus a heavier blur reads as frosted glass instead of
+     as two overlapping layers of text. */
+  --m-glass-strong: rgb(9 10 18 / 0.90);
+  --m-glass-edge: rgb(255 255 255 / 0.12);
+  --m-glass-shadow: 0 1px 2px rgb(0 0 0 / 0.4), 0 20px 50px -14px rgb(0 0 0 / 0.85);
+  --m-glass-shadow-lift: 0 2px 6px rgb(0 0 0 / 0.45), 0 30px 70px -18px rgb(0 0 0 / 0.95);
 
   /* The constellation behind everything. */
   --net-node: rgb(167 139 250 / 0.85);
@@ -314,10 +319,11 @@
     --status-scheduled: #7c4a05;
     --status-failed: #b91c1c;
 
-    --m-glass: rgb(255 255 255 / 0.55);
-    --m-glass-strong: rgb(255 255 255 / 0.75);
-    --m-glass-edge: rgb(255 255 255 / 0.9);
-    --m-glass-shadow: 0 1px 2px rgb(24 22 18 / 0.05), 0 16px 40px -14px rgb(24 22 18 / 0.18);
+    --m-glass: rgb(255 255 255 / 0.62);
+    --m-glass-strong: rgb(246 245 241 / 0.93);
+    --m-glass-edge: rgb(255 255 255 / 0.95);
+    --m-glass-shadow: 0 1px 2px rgb(24 22 18 / 0.05), 0 20px 50px -16px rgb(24 22 18 / 0.22);
+    --m-glass-shadow-lift: 0 2px 8px rgb(24 22 18 / 0.07), 0 32px 72px -20px rgb(24 22 18 / 0.28);
 
     --net-node: rgb(91 75 214 / 0.75);
     --net-node-alt: rgb(14 116 144 / 0.7);
@@ -351,10 +357,11 @@
   --status-scheduled: #7c4a05;
   --status-failed: #b91c1c;
 
-  --m-glass: rgb(255 255 255 / 0.55);
-  --m-glass-strong: rgb(255 255 255 / 0.75);
-  --m-glass-edge: rgb(255 255 255 / 0.9);
-  --m-glass-shadow: 0 1px 2px rgb(24 22 18 / 0.05), 0 16px 40px -14px rgb(24 22 18 / 0.18);
+  --m-glass: rgb(255 255 255 / 0.62);
+  --m-glass-strong: rgb(246 245 241 / 0.93);
+  --m-glass-edge: rgb(255 255 255 / 0.95);
+  --m-glass-shadow: 0 1px 2px rgb(24 22 18 / 0.05), 0 20px 50px -16px rgb(24 22 18 / 0.22);
+  --m-glass-shadow-lift: 0 2px 8px rgb(24 22 18 / 0.07), 0 32px 72px -20px rgb(24 22 18 / 0.28);
 
   --net-node: rgb(91 75 214 / 0.75);
   --net-node-alt: rgb(14 116 144 / 0.7);
@@ -438,8 +445,8 @@ html:has(.marketing[data-theme="light"]) body {
  */
 .m-glass {
   background: var(--m-glass);
-  backdrop-filter: blur(20px) saturate(180%);
-  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  backdrop-filter: blur(26px) saturate(200%);
+  -webkit-backdrop-filter: blur(26px) saturate(200%);
   border: 1px solid var(--border-subtle);
   box-shadow:
     inset 0 1px 0 0 var(--m-glass-edge),
@@ -448,12 +455,26 @@ html:has(.marketing[data-theme="light"]) body {
 
 .m-glass-strong {
   background: var(--m-glass-strong);
-  backdrop-filter: blur(28px) saturate(180%);
-  -webkit-backdrop-filter: blur(28px) saturate(180%);
+  backdrop-filter: blur(36px) saturate(200%);
+  -webkit-backdrop-filter: blur(36px) saturate(200%);
   border: 1px solid var(--border-subtle);
   box-shadow:
     inset 0 1px 0 0 var(--m-glass-edge),
     var(--m-glass-shadow);
+}
+
+@media (hover: hover) {
+  .m-glass {
+    transition:
+      box-shadow var(--dur-mid) var(--ease-out-expo),
+      transform var(--dur-mid) var(--ease-out-expo);
+  }
+  .m-glass:hover {
+    box-shadow:
+      inset 0 1px 0 0 var(--m-glass-edge),
+      var(--m-glass-shadow-lift);
+    transform: translateY(-2px);
+  }
 }
 
 /* Two ways this becomes unreadable, both of which people ask for explicitly. */

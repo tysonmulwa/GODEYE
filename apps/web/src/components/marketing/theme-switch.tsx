@@ -31,30 +31,49 @@ function systemPrefersLight(): boolean {
   return window.matchMedia("(prefers-color-scheme: light)").matches;
 }
 
+function read(): Choice {
+  try {
+    const raw = localStorage.getItem(KEY);
+    return raw === "light" || raw === "dark" ? raw : null;
+  } catch {
+    // Private mode, or site data blocked. Falling back to the OS preference is
+    // correct here, and a theme toggle is not worth an error boundary.
+    return null;
+  }
+}
+
+function applyChoice(next: Choice) {
+  const scope = document.querySelector(".marketing");
+  if (!scope) return;
+  if (next) scope.setAttribute("data-theme", next);
+  else scope.removeAttribute("data-theme");
+}
+
+/**
+ * Applies a stored choice without rendering a control.
+ *
+ * The sign-in and sign-up pages share this surface but have no room for a
+ * switch. Without this they would fall back to `prefers-color-scheme`, so
+ * someone who chose light on the landing page and then clicked Sign in would
+ * watch the theme change under them.
+ */
+export function ThemeSync() {
+  useEffect(() => {
+    applyChoice(read());
+  }, []);
+  return null;
+}
+
 export function ThemeSwitch() {
   const [choice, setChoice] = useState<Choice>(null);
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
     setMounted(true);
-    let stored: Choice = null;
-    try {
-      const raw = localStorage.getItem(KEY);
-      if (raw === "light" || raw === "dark") stored = raw;
-    } catch {
-      // Private mode, or site data blocked. Falling back to the OS preference
-      // is correct here, and a theme toggle is not worth an error boundary.
-    }
+    const stored = read();
     setChoice(stored);
-    apply(stored);
+    applyChoice(stored);
   }, []);
-
-  function apply(next: Choice) {
-    const scope = document.querySelector(".marketing");
-    if (!scope) return;
-    if (next) scope.setAttribute("data-theme", next);
-    else scope.removeAttribute("data-theme");
-  }
 
   function toggle() {
     // With nothing chosen yet, the first press means "the opposite of what I am
@@ -62,7 +81,7 @@ export function ThemeSwitch() {
     const current: "light" | "dark" = choice ?? (systemPrefersLight() ? "light" : "dark");
     const next: "light" | "dark" = current === "dark" ? "light" : "dark";
     setChoice(next);
-    apply(next);
+    applyChoice(next);
     try {
       localStorage.setItem(KEY, next);
     } catch {
