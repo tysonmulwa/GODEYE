@@ -62,7 +62,7 @@ function VideoStrip() {
 function CatalogueChips() {
   return (
     <div className="flex flex-wrap gap-1.5" aria-hidden>
-      {["Linen shirt", "$48", "4 colours", "S–XL", "In stock"].map((chip) => (
+      {["Linen shirt", "$48", "4 colours", "S to XL", "In stock"].map((chip) => (
         <span
           key={chip}
           className="rounded-md border border-subtle bg-elevated px-2 py-1 text-[11px] text-secondary"
@@ -107,7 +107,7 @@ function Tile({
 }) {
   return (
     <Reveal delay={delay} className={className}>
-      <article className="hairline flex h-full flex-col rounded-2xl bg-raised p-6">
+      <article className="m-glass flex h-full flex-col rounded-2xl p-6">
         <h3 className="text-[16px] font-semibold leading-snug text-primary">{title}</h3>
         <p className="mt-2.5 flex-1 text-[14px] leading-relaxed text-secondary">{body}</p>
         {visual ? <div className="mt-6">{visual}</div> : null}
@@ -128,7 +128,7 @@ export function FeatureBento() {
         {/* The large tile. One per grid — a bento with two focal points has
             none. */}
         <Reveal className="lg:col-span-2 lg:row-span-2">
-          <article className="hairline flex h-full flex-col rounded-2xl bg-raised p-6 sm:p-8">
+          <article className="m-glass flex h-full flex-col rounded-2xl p-6 sm:p-8">
             <h3 className="max-w-lg text-heading font-display font-semibold text-primary">
               Writes for each platform, not once for all of them
             </h3>

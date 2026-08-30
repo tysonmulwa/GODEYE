@@ -76,10 +76,10 @@ export function Findable() {
       id="findable"
       eyebrow="Findable, not just posted"
       title="Posting is half of it. Being found is the other half."
-      lede="GODEYE crawls your site, scores it, and writes the fixes out ready to publish — then re-crawls to confirm each one actually took effect."
+      lede="GODEYE crawls your site, scores it, and writes the fixes out ready to publish, then re-crawls to confirm each one actually took effect."
       className="border-t border-subtle"
     >
-      <div ref={ref} className="hairline grid gap-8 rounded-2xl bg-raised p-6 sm:p-9 lg:grid-cols-[auto_1fr] lg:gap-14">
+      <div ref={ref} className="m-glass grid gap-8 rounded-2xl p-6 sm:p-9 lg:grid-cols-[auto_1fr] lg:gap-14">
         {/* ---- The dial ---- */}
         <div className="flex items-center gap-6 lg:flex-col lg:items-start lg:gap-4">
           <div className="relative shrink-0">

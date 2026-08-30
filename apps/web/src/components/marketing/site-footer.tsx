@@ -1,16 +1,20 @@
 import Link from "next/link";
-import { GodeyeMark } from "@/components/logo";
+import { GodeyeEmblem } from "@/components/logo";
 
 /**
  * The footer.
  *
- * Every link points at a page that exists. The brief asked for "legal, status,
- * docs, contact" — there is no status page and no `/docs` route, so those two
- * are absent rather than pointed at a 404. A dead link in the footer of a page
- * whose job is to look trustworthy costs more than a missing column.
+ * Every link points at a page that exists. There is no status page and no
+ * /docs route, so neither is listed: a dead link in the footer of a page whose
+ * whole job is to look trustworthy costs more than a missing column.
  *
- * The contact address is the one already published on `/privacy`, `/terms` and
- * `/data-deletion`, so this is the same address in one more place rather than a
+ * The two integration pages sit in Essentials alongside Privacy and Terms.
+ * They are reference material a visitor goes looking for once, in the same
+ * spirit as the legal pages, rather than part of the primary path through the
+ * product.
+ *
+ * The contact address is the one already published on /privacy, /terms and
+ * /data-deletion, so this is the same address in one more place rather than a
  * new disclosure.
  */
 const COLUMNS = [
@@ -19,22 +23,25 @@ const COLUMNS = [
     links: [
       { href: "/#what-it-does", label: "What it does" },
       { href: "/#how-it-works", label: "How it works" },
+      { href: "/#findable", label: "SEO" },
       { href: "/pricing", label: "Pricing" },
     ],
   },
   {
-    heading: "Integrations",
+    heading: "Essentials",
     links: [
       { href: "/integrations/tiktok", label: "TikTok" },
-      { href: "/integrations/meta", label: "Facebook & Instagram" },
-    ],
-  },
-  {
-    heading: "Legal",
-    links: [
+      { href: "/integrations/meta", label: "Facebook and Instagram" },
       { href: "/privacy", label: "Privacy" },
       { href: "/terms", label: "Terms" },
       { href: "/data-deletion", label: "Data deletion" },
+    ],
+  },
+  {
+    heading: "Account",
+    links: [
+      { href: "/register", label: "Start free" },
+      { href: "/login", label: "Sign in" },
     ],
   },
 ] as const;
@@ -46,7 +53,7 @@ export function SiteFooter() {
         <div className="flex flex-col gap-12 lg:flex-row lg:justify-between">
           <div className="max-w-xs">
             <span className="inline-flex items-center gap-2.5 text-primary">
-              <GodeyeMark className="h-6 w-6 text-violet" />
+              <GodeyeEmblem variant="compact" className="h-8 w-8 text-violet" />
               <span className="font-brand text-[14px] tracking-[0.2em]">GODEYE</span>
             </span>
             <p className="mt-4 text-[14px] leading-relaxed text-muted">
@@ -59,9 +66,9 @@ export function SiteFooter() {
               <div key={col.heading}>
                 <h2 className="text-eyebrow uppercase text-muted">{col.heading}</h2>
                 {/* min-h-11 rather than padding arithmetic: a footer link is
-                    ~17px of text, and WCAG 2.5.5's 44px target is the one thing
-                    a footer reliably fails on a phone. The minimum height also
-                    supplies the row rhythm, so there is no separate gap. */}
+                    ~17px of text, and the 44px target is the one thing a footer
+                    reliably fails on a phone. The minimum height also supplies
+                    the row rhythm, so there is no separate gap. */}
                 <ul className="mt-2">
                   {col.links.map((link) => (
                     <li key={link.href}>

@@ -65,7 +65,12 @@ describe("the links that had to survive", () => {
     expect(links).toContain("/register");
   });
 
-  it("keeps every footer destination the old page had", () => {
+  /**
+   * The integration pages moved out of the nav and into the footer, beside
+   * Privacy and Terms: they are reference material a visitor goes looking for
+   * once, not part of the primary path through the product.
+   */
+  it("keeps every footer destination the old page had, including the integrations", () => {
     const { container } = render(<SiteFooter />);
     const links = hrefs(container);
     for (const href of [
@@ -87,14 +92,7 @@ describe("the links that had to survive", () => {
   it("links nowhere that does not exist", () => {
     const { container } = render(<SiteNav />);
     const internal = hrefs(container).filter((h) => h?.startsWith("/"));
-    const REAL = [
-      "/",
-      "/pricing",
-      "/login",
-      "/register",
-      "/integrations/tiktok",
-      "/integrations/meta",
-    ];
+    const REAL = ["/", "/pricing", "/login", "/register"];
     for (const href of internal) {
       const path = href!.split("#")[0] || "/";
       expect(REAL).toContain(path);
@@ -229,18 +227,18 @@ describe("keyboard", () => {
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 
-  it("closes the integrations menu on Escape rather than leaving it over the page", async () => {
+  it("offers a working theme switch", async () => {
     const user = userEvent.setup();
-    render(<SiteNav />);
-
-    const trigger = screen.getByRole("button", { name: /integrations/i });
-    expect(trigger).toHaveAttribute("aria-expanded", "false");
-
-    await user.click(trigger);
-    expect(trigger).toHaveAttribute("aria-expanded", "true");
-
-    await user.keyboard("{Escape}");
-    expect(trigger).toHaveAttribute("aria-expanded", "false");
+    render(
+      <div className="marketing">
+        <SiteNav />
+      </div>,
+    );
+    // Two of them: the desktop bar and the mobile row. Either must work.
+    const [toggle] = screen.getAllByRole("button", { name: /switch to (light|dark) theme/i });
+    const before = toggle.getAttribute("aria-label");
+    await user.click(toggle);
+    expect(toggle.getAttribute("aria-label")).not.toBe(before);
   });
 
   it("gives the FAQ a keyboard-operable disclosure per question", async () => {

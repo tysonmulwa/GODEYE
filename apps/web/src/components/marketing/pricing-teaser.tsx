@@ -27,11 +27,11 @@ export function PricingTeaser() {
       id="pricing"
       eyebrow="Pricing"
       title={`Start with ${TRIAL_HOURS} hours. No card.`}
-      lede="The trial is the full product publishing to your real accounts, not a preview. When it ends nothing is deleted — the workspace turns read-only until you pick a plan."
+      lede="The trial is the full product publishing to your real accounts, not a preview. When it ends nothing is deleted. The workspace turns read-only until you pick a plan."
       className="border-t border-subtle"
     >
       <Reveal>
-        <div className="hairline flex flex-col gap-8 rounded-2xl bg-raised p-6 sm:p-9 lg:flex-row lg:items-center lg:justify-between">
+        <div className="m-glass flex flex-col gap-8 rounded-2xl p-6 sm:p-9 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <p className="text-eyebrow uppercase text-muted">Most businesses start here</p>
             <div className="mt-3 flex items-baseline gap-2">

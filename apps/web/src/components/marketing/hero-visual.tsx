@@ -87,25 +87,30 @@ function OrbitIcon({ platform, index }: { platform: (typeof ORBIT)[number]; inde
       className="group absolute"
       style={{ left: `${left}%`, top: `${top}%`, transform: "translate(-50%, -50%)" }}
     >
-      <div
-        // Independent float per icon: staggered delays and slightly different
-        // periods, so the ring breathes instead of pulsing in lockstep.
-        className="orbit-float"
-        style={
-          {
-            "--float-delay": `${(index * 0.7).toFixed(2)}s`,
-            "--float-dur": `${6 + (index % 4)}s`,
-          } as React.CSSProperties
-        }
-      >
+      {/* Counter-spin, so a logo carried around the ring never tips over. Same
+          duration as .orbit-ring or the two drift apart. */}
+      <div className="orbit-upright">
+        <div
+          // A small independent float on top of the orbit: staggered delays and
+          // slightly different periods, so the ring breathes rather than
+          // travelling as one rigid object.
+          className="orbit-float"
+          style={
+            {
+              "--float-delay": `${(index * 0.7).toFixed(2)}s`,
+              "--float-dur": `${6 + (index % 4)}s`,
+            } as React.CSSProperties
+          }
+        >
         <span
-          className="hairline flex h-11 w-11 items-center justify-center rounded-xl bg-elevated text-primary transition-all duration-[--dur-mid] group-hover:scale-110 sm:h-12 sm:w-12"
+          className="m-glass flex h-11 w-11 items-center justify-center rounded-xl text-primary transition-all duration-[--dur-mid] group-hover:scale-110 sm:h-12 sm:w-12"
           style={{ ["--brand" as string]: brand }}
         >
           <svg viewBox="0 0 24 24" className="h-5 w-5" aria-hidden>
             {PLATFORM_MARKS[platform]}
           </svg>
         </span>
+        </div>
       </div>
       {/* Tooltip. Mouse affordance only — every channel is named in the
           composition's description for anyone not using a pointer. */}
@@ -213,9 +218,13 @@ export function HeroVisual() {
         <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
           <GodeyeEmblem className="h-24 w-24 text-lilac sm:h-28 sm:w-28" />
         </div>
-        {ORBIT.map((platform, i) => (
-          <OrbitIcon key={platform} platform={platform} index={i} />
-        ))}
+        {/* The ring itself turns. Icons are positioned inside it, so rotating
+            this one element carries all eight around the circle. */}
+        <div className="orbit-ring absolute inset-0">
+          {ORBIT.map((platform, i) => (
+            <OrbitIcon key={platform} platform={platform} index={i} />
+          ))}
+        </div>
       </div>
 
       {/* ---- Calendar cluster, desktop only -------------------------------
@@ -229,7 +238,7 @@ export function HeroVisual() {
           <div
             key={slot.day}
             data-shown={shown}
-            className="reveal hairline flex items-center gap-2.5 rounded-lg bg-raised px-3 py-2"
+            className="reveal m-glass flex items-center gap-2.5 rounded-lg px-3 py-2"
             style={{ transitionDelay: `${200 + i * 90}ms` }}
           >
             <span className="w-8 text-[11px] text-muted">{slot.day}</span>

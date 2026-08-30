@@ -13,7 +13,7 @@ const STEPS = [
   {
     n: "01",
     title: "Write one brief",
-    body: "A sentence about what you want said. Not a caption — the point you are trying to make.",
+    body: "A sentence about what you want said. Not a caption. The point you are trying to make.",
   },
   {
     n: "02",
@@ -55,7 +55,7 @@ export function HowItWorks() {
                 {/* Vertical timeline on mobile: the marker column keeps the
                     steps visually threaded without the horizontal line. */}
                 <div className="flex gap-4 lg:block">
-                  <span className="hairline flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-raised font-display text-[15px] font-semibold text-lilac lg:h-16 lg:w-16">
+                  <span className="m-glass flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl font-display text-[15px] font-semibold text-lilac lg:h-16 lg:w-16">
                     {step.n}
                   </span>
                   <div className="lg:mt-6">

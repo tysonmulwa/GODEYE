@@ -1,34 +1,30 @@
 "use client";
 
-import { Menu, X, ChevronDown } from "lucide-react";
+import { Menu, X } from "lucide-react";
 import Link from "next/link";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { TRIAL_HOURS } from "@godeye/shared";
-import { GodeyeMark } from "@/components/logo";
+import { GodeyeEmblem } from "@/components/logo";
 import { useFocusTrap } from "@/lib/use-focus-trap";
 import { useScrollLock } from "@/lib/use-scroll-lock";
+import { ThemeSwitch } from "./theme-switch";
 
 /**
  * The marketing header.
  *
- * Transparent over the hero, then a blurred panel with a hairline once the page
- * has moved. `backdrop-filter` is expensive — globals.css says so — so this is
- * the only element on the marketing pages that uses it, and it inherits the
- * app's existing `prefers-reduced-transparency` fallback for free.
+ * Transparent over the hero, then a glass pane with a hairline once the page
+ * has moved. backdrop-filter is expensive, so the nav and the page's cards are
+ * the only places it is used, and both inherit the existing
+ * prefers-reduced-transparency fallback.
+ *
+ * The integration pages are NOT in this nav. They are reference pages a visitor
+ * reaches when they want detail about one platform, which puts them with
+ * Privacy and Terms in the footer rather than in the primary path.
  */
-
 const SECTIONS = [
   { href: "/#what-it-does", label: "Product" },
   { href: "/#how-it-works", label: "How it works" },
-] as const;
-
-/**
- * There is no `/docs` route, so the nav does not claim one. These two pages
- * exist and were previously reachable only from the footer.
- */
-const INTEGRATIONS = [
-  { href: "/integrations/tiktok", label: "TikTok" },
-  { href: "/integrations/meta", label: "Facebook & Instagram" },
+  { href: "/pricing", label: "Pricing" },
 ] as const;
 
 function Wordmark() {
@@ -38,63 +34,12 @@ function Wordmark() {
       className="inline-flex min-h-11 items-center gap-2.5 rounded text-primary"
       aria-label="GODEYE, home"
     >
-      <GodeyeMark className="h-7 w-7 text-violet" />
+      {/* The real crest, in its compact cut. `compact` exists precisely for
+          chrome at this size: fewer rays and heavier strokes, because the full
+          variant's 1px detail collapses into a smudge below about 32px. */}
+      <GodeyeEmblem variant="compact" className="h-8 w-8 text-violet" />
       <span className="font-brand text-[15px] tracking-[0.2em]">GODEYE</span>
     </Link>
-  );
-}
-
-/** Desktop-only disclosure for the two integration pages. */
-function IntegrationsMenu() {
-  const [open, setOpen] = useState(false);
-  const wrap = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
-    // A menu that only closes by clicking the trigger again is a menu that
-    // stays open over the content the visitor moved on to read.
-    const onPointer = (e: PointerEvent) => {
-      if (!wrap.current?.contains(e.target as Node)) setOpen(false);
-    };
-    document.addEventListener("keydown", onKey);
-    document.addEventListener("pointerdown", onPointer);
-    return () => {
-      document.removeEventListener("keydown", onKey);
-      document.removeEventListener("pointerdown", onPointer);
-    };
-  }, [open]);
-
-  return (
-    <div ref={wrap} className="relative">
-      <button
-        type="button"
-        aria-expanded={open}
-        aria-haspopup="true"
-        onClick={() => setOpen((v) => !v)}
-        className="inline-flex min-h-11 items-center gap-1 rounded text-[14px] text-secondary transition-colors hover:text-primary"
-      >
-        Integrations
-        <ChevronDown
-          className={`h-3.5 w-3.5 transition-transform duration-[--dur-fast] ${open ? "rotate-180" : ""}`}
-          aria-hidden
-        />
-      </button>
-      {open ? (
-        <div className="hairline absolute left-1/2 top-[calc(100%+0.75rem)] w-60 -translate-x-1/2 rounded-xl bg-elevated p-1.5">
-          {INTEGRATIONS.map((item) => (
-            <Link
-              key={item.href}
-              href={item.href}
-              onClick={() => setOpen(false)}
-              className="block rounded-lg px-3 py-2 text-[14px] text-secondary transition-colors hover:bg-raised hover:text-primary"
-            >
-              {item.label}
-            </Link>
-          ))}
-        </div>
-      ) : null}
-    </div>
   );
 }
 
@@ -130,8 +75,8 @@ export function SiteNav() {
 
   return (
     <header
-      className={`sticky top-0 z-50 transition-colors duration-[--dur-mid] ${
-        scrolled ? "glass-strong border-b border-subtle" : "border-b border-transparent"
+      className={`sticky top-0 z-50 transition-all duration-[--dur-mid] ${
+        scrolled ? "m-glass-strong border-b border-subtle" : "border-b border-transparent"
       }`}
     >
       <nav
@@ -150,16 +95,10 @@ export function SiteNav() {
               {item.label}
             </Link>
           ))}
-          <IntegrationsMenu />
-          <Link
-            href="/pricing"
-            className="flex min-h-11 items-center rounded text-[14px] text-secondary transition-colors hover:text-primary"
-          >
-            Pricing
-          </Link>
         </div>
 
-        <div className="hidden items-center gap-3 md:flex">
+        <div className="hidden items-center gap-2 md:flex">
+          <ThemeSwitch />
           <Link
             href="/login"
             className="inline-flex min-h-11 items-center rounded-lg px-3 text-[14px] text-secondary transition-colors hover:text-primary"
@@ -171,16 +110,19 @@ export function SiteNav() {
           </Link>
         </div>
 
-        {/* 44px minimum target — WCAG 2.5.8. */}
-        <button
-          type="button"
-          onClick={() => setDrawer(true)}
-          aria-label="Open menu"
-          aria-expanded={drawer}
-          className="-mr-2 inline-flex h-11 w-11 items-center justify-center rounded-lg text-secondary md:hidden"
-        >
-          <Menu className="h-5 w-5" aria-hidden />
-        </button>
+        <div className="flex items-center gap-1 md:hidden">
+          <ThemeSwitch />
+          {/* 44px minimum target, WCAG 2.5.5. */}
+          <button
+            type="button"
+            onClick={() => setDrawer(true)}
+            aria-label="Open menu"
+            aria-expanded={drawer}
+            className="-mr-2 inline-flex h-11 w-11 items-center justify-center rounded-lg text-secondary"
+          >
+            <Menu className="h-5 w-5" aria-hidden />
+          </button>
+        </div>
       </nav>
 
       {drawer ? (
@@ -197,7 +139,7 @@ export function SiteNav() {
             role="dialog"
             aria-modal="true"
             aria-label="Main navigation"
-            className="absolute inset-y-0 right-0 flex w-[min(20rem,85vw)] flex-col gap-1 border-l border-subtle bg-raised p-5"
+            className="m-glass-strong absolute inset-y-0 right-0 flex w-[min(20rem,85vw)] flex-col gap-1 border-l border-subtle p-5"
           >
             <div className="mb-4 flex items-center justify-between">
               <Wordmark />
@@ -211,7 +153,7 @@ export function SiteNav() {
               </button>
             </div>
 
-            {[...SECTIONS, { href: "/pricing", label: "Pricing" }, ...INTEGRATIONS].map((item) => (
+            {SECTIONS.map((item) => (
               <Link
                 key={item.href}
                 href={item.href}
@@ -230,7 +172,7 @@ export function SiteNav() {
               >
                 Sign in
               </Link>
-              <Link href="/register" onClick={closeDrawer} className="btn-brand justify-center">
+              <Link href="/register" onClick={closeDrawer} className="btn-brand">
                 Start free for {TRIAL_HOURS} hours
               </Link>
             </div>

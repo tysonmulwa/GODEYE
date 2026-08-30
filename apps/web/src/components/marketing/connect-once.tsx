@@ -36,7 +36,7 @@ export function ConnectOnce() {
         {CHANNELS.map((c, i) => (
           <Reveal key={c.key} delay={i * 40}>
             <div className="flex h-full items-start gap-4 bg-raised p-5">
-              <span className="hairline flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-elevated text-primary">
+              <span className="m-glass flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-primary">
                 <svg viewBox="0 0 24 24" className="h-[18px] w-[18px]" aria-hidden>
                   {PLATFORM_MARKS[c.key]}
                 </svg>

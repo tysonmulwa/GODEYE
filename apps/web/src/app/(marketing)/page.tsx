@@ -77,7 +77,7 @@ const FAQ = [
   },
   {
     q: "How do I cancel?",
-    a: "Any time, from the billing page. You keep the paid plan until the end of the period you have already paid for, and your posts, connections and history stay. Nothing is deleted when a plan ends — the workspace turns read-only until you pick another.",
+    a: "Any time, from the billing page. You keep the paid plan until the end of the period you have already paid for, and your posts, connections and history stay. Nothing is deleted when a plan ends. The workspace turns read-only until you pick another.",
   },
   {
     q: "Can it post video to TikTok?",
