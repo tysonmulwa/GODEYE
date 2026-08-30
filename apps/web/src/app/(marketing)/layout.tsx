@@ -1,3 +1,4 @@
+import { Constellation } from "@/components/marketing/constellation";
 import { SiteFooter } from "@/components/marketing/site-footer";
 import { SiteNav } from "@/components/marketing/site-nav";
 
@@ -16,15 +17,27 @@ import { SiteNav } from "@/components/marketing/site-nav";
  * invert entirely for any visitor who had set the *dashboard* to light.
  *
  * So `.marketing` carries its own palette, on its own wrapper, and never
- * consults `.dark`. There is no theme switch out here. The token layer is in
- * globals.css and documented in docs/design/tokens.md.
+ * consults `.dark`. It has its own switch instead (ThemeSwitch), which writes
+ * `data-theme` on this element; with nothing written the CSS falls back to
+ * `prefers-color-scheme`, so a first visit matches the machine with no flash
+ * and no JavaScript. The token layer is in globals.css and documented in
+ * docs/design/tokens.md.
  */
 export default function MarketingLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="marketing relative min-h-svh font-sans">
+    // `isolate` is load-bearing. Without a stacking context here the
+    // constellation's negative z-index escapes to the root, where it lands
+    // BEHIND the propagated body background and is invisible. With it, the
+    // canvas paints above this element's own background and below content.
+    <div className="marketing relative isolate min-h-svh font-sans">
+      {/* Fixed, behind everything, and the only thing on the page that is not
+          content. It reads the palette off this scope, so it follows the theme
+          switch without being re-created. */}
+      <Constellation />
+
       {/*
        * 2.4.1 Bypass Blocks. First focusable thing on the page, visible only
-       * once focused. The same pattern as the dashboard's layout — a keyboard
+       * once focused. The same pattern as the dashboard's layout: a keyboard
        * user should not have to walk the whole nav on every page.
        */}
       <a
