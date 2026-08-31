@@ -88,6 +88,11 @@ export default function LoginPage() {
           </div>
         )}
         <ErrorNote message={error} />
+        <p className="-mt-1 text-right text-sm">
+          <Link href="/forgot-password" className="text-ink-2 hover:text-accent hover:underline">
+            Forgot your password?
+          </Link>
+        </p>
         <Button type="submit" loading={loading} className="w-full">
           Sign in
         </Button>

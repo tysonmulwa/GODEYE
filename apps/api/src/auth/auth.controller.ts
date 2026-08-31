@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Get,
@@ -15,19 +16,23 @@ import {
   acceptInvitationSchema,
   changeEmailSchema,
   changePasswordSchema,
+  forgotPasswordSchema,
   loginSchema,
   registerSchema,
+  resetPasswordSchema,
   switchOrgSchema,
   updateProfileSchema,
   type ChangeEmailInput,
   type ChangePasswordInput,
   type UpdateProfileInput,
 } from "@godeye/shared";
+import * as argon2 from "argon2";
 import type { Request, Response } from "express";
 import { z } from "zod";
 import { CurrentAuth } from "../common/current-auth.decorator";
 import { AccessTokenPayload, JwtAuthGuard } from "../common/jwt-auth.guard";
 import { env } from "../common/env";
+import { PasswordResetService } from "./password-reset.service";
 import { ZodPipe } from "../common/zod.pipe";
 import { AuthService, SessionResult } from "./auth.service";
 import { Public } from "../common/public.decorator";
@@ -76,7 +81,10 @@ const REFRESH_COOKIE_OPTS = {
 @ApiTags("auth")
 @Controller("auth")
 export class AuthController {
-  constructor(private readonly auth: AuthService) {}
+  constructor(
+    private readonly auth: AuthService,
+    private readonly passwordReset: PasswordResetService,
+  ) {}
 
   @Post("register")
   @Public()
@@ -103,6 +111,54 @@ export class AuthController {
   ) {
     const session = await this.auth.login(body, this.ctx(req));
     return this.respond(session, res);
+  }
+
+  /**
+   * Start a password reset.
+   *
+   * Always 202, always the same body, whether or not the address is
+   * registered. Anything else is a membership oracle: an attacker with a list
+   * of addresses learns which have GODEYE accounts, which is worth money on its
+   * own and is a far better starting point for credential stuffing.
+   *
+   * A delivery failure is logged rather than returned, for the same reason.
+   */
+  @Post("forgot-password")
+  @Public()
+  @HttpCode(202)
+  // Tighter than login: this one sends mail, so abuse costs money and puts the
+  // sending domain's reputation at risk, not just CPU.
+  @Throttle({ default: { limit: 5, ttl: 300_000 } })
+  @ApiOperation({ summary: "Email a password reset link, if the address is registered" })
+  async forgotPassword(
+    @Body(new ZodPipe(forgotPasswordSchema)) body: z.infer<typeof forgotPasswordSchema>,
+    @Req() req: Request,
+  ) {
+    await this.passwordReset.request(body.email, this.ctx(req).ip);
+    return { message: "If that address has an account, a reset link is on its way." };
+  }
+
+  /**
+   * Finish a password reset.
+   *
+   * One generic failure for every rejection. Distinguishing "expired" from
+   * "already used" from "never existed" tells an attacker which guesses were
+   * close enough to be worth refining.
+   */
+  @Post("reset-password")
+  @Public()
+  @HttpCode(200)
+  @Throttle({ default: { limit: 10, ttl: 300_000 } })
+  @ApiOperation({ summary: "Set a new password using a reset token" })
+  async resetPassword(
+    @Body(new ZodPipe(resetPasswordSchema)) body: z.infer<typeof resetPasswordSchema>,
+  ) {
+    const passwordHash = await argon2.hash(body.password, { type: argon2.argon2id });
+    const userId = await this.passwordReset.consume(body.token, passwordHash);
+    if (!userId) {
+      throw new BadRequestException("That reset link is no longer valid. Request a new one.");
+    }
+    return { message: "Your password has been changed. Sign in with it." };
   }
 
   @Post("refresh")

@@ -19,10 +19,11 @@ export default function PrivacyPage() {
         instruction. This policy explains exactly what we store, why, and how to get rid of it.
       </p>
 
-      <h2>Who we are</h2>
+      <h2>Who operates GODEYE</h2>
       <p>
-        GODEYE (&ldquo;we&rdquo;, &ldquo;the service&rdquo;) is operated by Tyson Mulwa. For any
-        privacy question or request, contact <a href="mailto:tysonmulwa25@gmail.com">tysonmulwa25@gmail.com</a>.
+        GODEYE (&ldquo;we&rdquo;, &ldquo;the service&rdquo;) is operated by GODEYE Automation
+        Services. For any privacy question or request, contact{" "}
+        <a href="mailto:contact@godeyeautomation.com">contact@godeyeautomation.com</a>.
       </p>
 
       <h2>What we collect</h2>
@@ -166,7 +167,7 @@ export default function PrivacyPage() {
 
       <h2>Contact</h2>
       <p>
-        Questions or requests: <a href="mailto:tysonmulwa25@gmail.com">tysonmulwa25@gmail.com</a>
+        Questions or requests: <a href="mailto:contact@godeyeautomation.com">contact@godeyeautomation.com</a>
       </p>
     </>
   );

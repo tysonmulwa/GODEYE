@@ -46,6 +46,8 @@ import { Public } from "../common/public.decorator";
 import { CsrfExempt } from "../common/csrf.guard";
 import { MinRole, RolesGuard } from "../common/roles.guard";
 import { ZodPipe } from "../common/zod.pipe";
+import { EmailService } from "../email/email.service";
+import { purchaseEmail } from "../email/templates";
 import { WorkspaceAccessService } from "./workspace-access.service";
 
 export interface PlanLimits {
@@ -116,6 +118,7 @@ export class BillingService implements OnModuleInit {
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
     private readonly access: WorkspaceAccessService,
+    private readonly email: EmailService,
   ) {}
 
   /**
@@ -626,6 +629,14 @@ export class BillingService implements OnModuleInit {
         `Activated ${planCode} for org ${orgId}` +
           (once ? ` until ${paidUntil?.toISOString()} (one month)` : " (subscription)"),
       );
+
+      // A receipt, to whoever owns the workspace.
+      //
+      // Outside the transaction and never awaited into the money decision, for
+      // the same reason the audit log is: a receipt that fails to send must not
+      // roll back a payment that succeeded. `send` cannot throw.
+      await this.notifyPurchase(orgId, planCode, reference, paidUntil ?? null);
+
       return true;
     } catch (e) {
       if (isUniqueViolation(e)) {
@@ -661,6 +672,46 @@ export class BillingService implements OnModuleInit {
     // returning false, and a thrown error here would read as a server fault
     // instead of a rejected forgery.
     return a.length === b.length && timingSafeEqual(a, b);
+  }
+
+  /**
+   * The receipt for a payment that has already been applied.
+   *
+   * Sent to the workspace OWNER rather than whoever clicked pay: on a team
+   * plan an editor can start a checkout, and the person who needs the record
+   * for their accounts is the one who owns the workspace.
+   *
+   * Every failure here is logged and swallowed by `EmailService.send`. The
+   * money has moved and the plan is active; a receipt is a courtesy on top of
+   * a completed transaction, and it is not allowed to look like a failure.
+   */
+  private async notifyPurchase(
+    orgId: string,
+    planCode: string,
+    reference: string,
+    paidUntil: Date | null,
+  ): Promise<void> {
+    const owner = await this.prisma.membership.findFirst({
+      where: { orgId, role: "OWNER" },
+      select: { user: { select: { email: true } } },
+      orderBy: { createdAt: "asc" },
+    });
+    if (!owner?.user?.email) {
+      this.logger.warn(`no owner to send a receipt to for org ${orgId} (${reference})`);
+      return;
+    }
+
+    const plan = PLANS.find((candidate) => candidate.code === planCode);
+    await this.email.send(
+      purchaseEmail(owner.user.email, {
+        planName: plan?.name ?? planCode,
+        // The catalogue that seeds the database and renders the pricing page,
+        // so a receipt cannot state a figure nobody was charged.
+        amount: plan ? `$${plan.priceMonthlyUsd.toFixed(2)}` : "",
+        reference,
+        paidUntil,
+      }),
+    );
   }
 
   async handlePaystackEvent(event: {

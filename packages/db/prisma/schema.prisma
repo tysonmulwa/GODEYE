@@ -27,6 +27,7 @@ model User {
   memberships      Membership[]
   refreshTokens    RefreshToken[]
   mfaBackupCodes   MfaBackupCode[]
+  passwordResets   PasswordResetToken[]
   auditLogs        AuditLog[]
   contentItems     ContentItem[]
   sentInvitations  Invitation[]    @relation("SentInvitations")
@@ -141,6 +142,31 @@ model Invitation {
 
   @@index([orgId])
   @@index([email])
+}
+
+/// A single-use link for choosing a new password.
+///
+/// Only the SHA-256 of the token is stored. The plaintext exists in exactly one
+/// place, the email that was sent, so a dump of this table cannot be used to
+/// reset anybody's password.
+///
+/// `usedAt` rather than deleting the row on use: a consumed token has to stay
+/// distinguishable from one that never existed, or a replay looks identical to
+/// a typo and neither can be investigated.
+model PasswordResetToken {
+  id        String    @id @default(cuid())
+  userId    String
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  /// Where the request came from, for investigating a burst of them.
+  requestIp String?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, usedAt])
+  @@index([expiresAt])
 }
 
 model RefreshToken {

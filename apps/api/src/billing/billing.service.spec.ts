@@ -68,7 +68,13 @@ function makePrisma() {
      * idempotency — it is a test of the happy path with an extra step.
      */
     paymentApplication: applications,
-    membership: { count: jest.fn().mockResolvedValue(1) },
+    membership: {
+      count: jest.fn().mockResolvedValue(1),
+      // The workspace owner, who the receipt goes to. Returns a real row so the
+      // receipt path runs; the assertions about payment still care only about
+      // whether the money was applied exactly once.
+      findFirst: jest.fn().mockResolvedValue({ user: { email: "owner@acme.com" } }),
+    },
     invitation: { count: jest.fn().mockResolvedValue(0) },
     user: { findUnique: jest.fn().mockResolvedValue({ email: "jane@acme.com" }) },
   };
@@ -103,6 +109,9 @@ describe("BillingService", () => {
       prisma as never,
       { log: jest.fn() } as unknown as AuditService,
       access as unknown as WorkspaceAccessService,
+      // Receipts. A no-op stub: a failed receipt must never affect whether a
+      // payment was applied, which is what these suites are about.
+      { send: jest.fn().mockResolvedValue({ sent: true }) } as never,
     );
   });
 

@@ -127,6 +127,38 @@ export const env = {
     return this.apiUrl;
   },
   jwtAudience: "godeye-api",
+  /**
+   * Transactional email, via Resend.
+   *
+   * Optional on purpose. Without a key the app runs and every send becomes a
+   * logged no-op, because an unsent welcome email must never be the reason a
+   * registration fails. The one place that changes is password reset, which
+   * refuses to pretend: see `email.service.ts`.
+   *
+   * `emailFrom` must be on a domain verified in Resend or every send is
+   * rejected at the API with a 403 that reads like an auth failure.
+   */
+  email: {
+    // Getters, not plain properties. A literal is evaluated once at module
+    // load, so `enabled` (a getter) and `apiKey` (a property) could disagree:
+    // enabled read the live variable while apiKey held whatever was set at
+    // import time. In production the difference never shows, because Railway
+    // sets the environment before Node starts. It showed up immediately in a
+    // test, as an Authorization header reading "Bearer " with nothing after it.
+    get apiKey(): string {
+      return process.env.RESEND_API_KEY ?? "";
+    },
+    get from(): string {
+      return process.env.EMAIL_FROM ?? "GODEYE <contact@godeyeautomation.com>";
+    },
+    get replyTo(): string {
+      return process.env.EMAIL_REPLY_TO ?? "contact@godeyeautomation.com";
+    },
+    get enabled(): boolean {
+      return Boolean(process.env.RESEND_API_KEY);
+    },
+  },
+
   get engineInternalSecret(): string {
     return requiredSecret("ENGINE_INTERNAL_SECRET");
   },

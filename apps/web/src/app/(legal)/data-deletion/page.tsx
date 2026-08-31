@@ -57,7 +57,7 @@ export default function DataDeletionPage() {
 
       <h2>3. Delete your entire GODEYE account</h2>
       <p>
-        Email <a href="mailto:tysonmulwa25@gmail.com">tysonmulwa25@gmail.com</a> from the address
+        Email <a href="mailto:contact@godeyeautomation.com">contact@godeyeautomation.com</a> from the address
         registered on the account, with the subject <strong>&ldquo;Delete my account&rdquo;</strong>.
       </p>
       <p>We will confirm within 7 days and complete deletion within 30 days. That removes:</p>
@@ -83,7 +83,7 @@ export default function DataDeletionPage() {
 
       <h2>Questions</h2>
       <p>
-        <a href="mailto:tysonmulwa25@gmail.com">tysonmulwa25@gmail.com</a>, we answer deletion
+        <a href="mailto:contact@godeyeautomation.com">contact@godeyeautomation.com</a>, we answer deletion
         requests first.
       </p>
     </>

@@ -28,6 +28,8 @@ import { PrismaService } from "../common/prisma.service";
 import { refreshTokenReuse } from "../common/metrics";
 import { signToken } from "../common/tokens";
 import { LoginBackoffService } from "./login-backoff.service";
+import { EmailService } from "../email/email.service";
+import { welcomeEmail } from "../email/templates";
 import { BreachedPasswordService } from "./breached-password.service";
 import { BackupCodesService } from "./backup-codes.service";
 import { MembershipService } from "../common/membership.service";
@@ -78,6 +80,7 @@ export class AuthService {
     private readonly backoff: LoginBackoffService,
     private readonly memberships: MembershipService,
     private readonly breached: BreachedPasswordService,
+    private readonly email: EmailService,
     private readonly backupCodes: BackupCodesService,
   ) {}
 
@@ -131,6 +134,12 @@ export class AuthService {
       userAgent: ctx.userAgent,
       metadata: { trialEndsAt: trialEndsAt?.toISOString() ?? null },
     });
+    // Not awaited into the response path in spirit, but awaited for
+    // determinism: `send` never throws and never blocks longer than its own
+    // timeout. A welcome email that fails must not turn a registration that
+    // already wrote a user, an org and a membership into a 500.
+    await this.email.send(welcomeEmail(user.email, user.name));
+
     return this.createSession(user, membership.org, membership.role, ctx, false);
   }
 

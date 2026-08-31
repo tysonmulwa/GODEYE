@@ -106,7 +106,7 @@ export default function TermsPage() {
 
       <h2>Contact</h2>
       <p>
-        <a href="mailto:tysonmulwa25@gmail.com">tysonmulwa25@gmail.com</a>
+        <a href="mailto:contact@godeyeautomation.com">contact@godeyeautomation.com</a>
       </p>
     </>
   );

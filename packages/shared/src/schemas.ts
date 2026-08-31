@@ -72,6 +72,30 @@ export const changePasswordSchema = z
   });
 export type ChangePasswordInput = z.infer<typeof changePasswordSchema>;
 
+/**
+ * "I forgot my password", step one.
+ *
+ * Only an address. The response is identical whether or not it is registered,
+ * so this schema deliberately gives the endpoint nothing else to leak.
+ */
+export const forgotPasswordSchema = z.object({
+  email: emailSchema,
+});
+export type ForgotPasswordInput = z.infer<typeof forgotPasswordSchema>;
+
+/**
+ * Step two: the token from the emailed link, plus the new password.
+ *
+ * `passwordSchema` is the same rule the register and change-password flows
+ * use. A reset path with weaker rules is the obvious way in, and it is a
+ * genuinely easy one to introduce by writing `z.string().min(8)` here.
+ */
+export const resetPasswordSchema = z.object({
+  token: z.string().min(20).max(400),
+  password: passwordSchema,
+});
+export type ResetPasswordInput = z.infer<typeof resetPasswordSchema>;
+
 export const changeEmailSchema = z.object({
   email: emailSchema,
   // An email address is how an account is recovered, so changing it is a

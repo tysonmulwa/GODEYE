@@ -7,6 +7,7 @@ import { AuditService } from "../common/audit.service";
 import { CryptoService } from "../common/crypto.service";
 import { AuthService } from "./auth.service";
 import { LoginBackoffService } from "./login-backoff.service";
+import { EmailService } from "../email/email.service";
 import { BreachedPasswordService } from "./breached-password.service";
 import { BackupCodesService } from "./backup-codes.service";
 import { MembershipService } from "../common/membership.service";
@@ -55,6 +56,7 @@ describe("AuthService", () => {
   let crypto: CryptoService;
   let audit: { log: jest.Mock };
   let breached: { assertNotBreached: jest.Mock };
+  let email: { send: jest.Mock; sendOrThrow: jest.Mock };
   let backupCodes: Record<string, jest.Mock>;
   let service: AuthService;
   let backoff: Record<string, jest.Mock>;
@@ -96,6 +98,7 @@ describe("AuthService", () => {
     };
     audit = { log: jest.fn() };
     breached = { assertNotBreached: jest.fn().mockResolvedValue(undefined) };
+    email = { send: jest.fn().mockResolvedValue({ sent: true }), sendOrThrow: jest.fn() };
     backupCodes = {
       redeem: jest.fn().mockResolvedValue(false),
       regenerate: jest.fn().mockResolvedValue(["AAAAA-BBBBB"]),
@@ -120,6 +123,11 @@ describe("AuthService", () => {
       // service's own behaviour -- k-anonymity, fail-open, the padding entries
       // -- is covered in breached-password.service.spec.ts.
       breached as unknown as BreachedPasswordService,
+      // Transactional email. Records what would have been sent so the welcome
+      // message can be asserted, and never throws -- which is the property the
+      // real service guarantees too, because a failed courtesy email must not
+      // fail a registration that already wrote three rows.
+      email as unknown as EmailService,
       // Recovery codes. redeem() returns false here, so the TOTP path is the
       // one every existing MFA test exercises -- unchanged. The codes' own
       // behaviour is covered in backup-codes.service.spec.ts.

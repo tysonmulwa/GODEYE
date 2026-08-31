@@ -1,6 +1,7 @@
 import { Module } from "@nestjs/common";
 import { APP_GUARD, APP_INTERCEPTOR, DiscoveryModule } from "@nestjs/core";
 import { ThrottlerModule, ThrottlerStorage } from "@nestjs/throttler";
+import { EmailModule } from "./email/email.module";
 import { AuthModule } from "./auth/auth.module";
 import { BillingModule } from "./billing/billing.module";
 import { TrialLockInterceptor } from "./billing/trial-lock.interceptor";
@@ -28,6 +29,7 @@ import { WebhooksModule } from "./webhooks/webhooks.module";
 
 @Module({
   imports: [
+    EmailModule,
     DiscoveryModule, // route enumeration for the boot-time authorization audit
     // Three layers, because one bucket is what S-4 was.
     //

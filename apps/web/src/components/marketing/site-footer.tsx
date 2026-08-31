@@ -89,7 +89,7 @@ export function SiteFooter() {
         <div className="mt-12 flex flex-col gap-3 border-t border-subtle pt-6 text-[13px] text-muted sm:flex-row sm:items-center sm:justify-between">
           <span>© {new Date().getFullYear()} GODEYE</span>
           <a
-            href="mailto:tysonmulwa25@gmail.com"
+            href="mailto:contact@godeyeautomation.com"
             className="inline-flex min-h-11 items-center transition-colors hover:text-secondary"
           >
             Contact

@@ -25,7 +25,14 @@ describe("verifyPaystackSignature", () => {
   beforeAll(async () => {
     env.paystack.secretKey = SECRET;
     const { BillingService } = await import("./billing.module");
-    const service = new BillingService({} as never, {} as never, {} as never);
+    // Four empty stubs: this suite only exercises signature verification,
+    // which touches none of the injected services.
+    const service = new BillingService(
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+    );
     verify = service.verifyPaystackSignature.bind(service);
   });
 
