@@ -9,6 +9,7 @@ from datetime import datetime, timedelta
 from sqlalchemy import and_, func, or_, select, update
 
 from ..celery_app import app
+from ..config import get_settings
 from ..db import (
     AgentRun,
     BrandKit,
@@ -154,10 +155,40 @@ def due_posts_query(now, stale_lock, batch=DISPATCH_BATCH, per_org=PER_ORG_PER_T
     )
 
 
+#: How long a beat heartbeat stays valid. Beat fires dispatch every 30s, so
+#: three missed ticks is a real outage rather than a slow moment.
+BEAT_HEARTBEAT_KEY = "godeye:beat:alive"
+BEAT_HEARTBEAT_TTL_SEC = 120
+
+
+def _record_beat_heartbeat(now) -> None:
+    """Prove the whole beat -> broker -> worker path is alive.
+
+    This runs inside a task that ONLY beat schedules, and it runs on a worker.
+    So the key is present if and only if beat is producing AND a worker is
+    consuming, which is exactly the pipeline a scheduled post depends on.
+
+    Nothing about it is load-bearing for publishing: a Redis failure here must
+    not stop a dispatch that has already selected its rows, so it is logged and
+    swallowed. The cost of getting that backwards is posts not going out
+    because a monitoring key could not be written.
+    """
+    try:
+        import redis as redis_lib
+
+        client = redis_lib.Redis.from_url(
+            get_settings().redis_url, socket_connect_timeout=2, socket_timeout=2
+        )
+        client.set(BEAT_HEARTBEAT_KEY, now.isoformat(), ex=BEAT_HEARTBEAT_TTL_SEC)
+    except Exception as e:  # noqa: BLE001
+        logger.warning("beat heartbeat not recorded: %s", e)
+
+
 @app.task(name="godeye_engine.tasks.scheduler.dispatch_due_posts")
 def dispatch_due_posts() -> int:
     """Claim due PENDING posts (row-locked, skip-locked) and dispatch publishing."""
     now = utcnow()
+    _record_beat_heartbeat(now)
     stale_lock = now - timedelta(minutes=LOCK_TIMEOUT_MINUTES)
 
     with get_session() as session:

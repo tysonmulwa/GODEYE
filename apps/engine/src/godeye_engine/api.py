@@ -5,6 +5,7 @@ from __future__ import annotations
 import hmac
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from datetime import UTC, datetime
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Response
 from fastapi.responses import FileResponse
@@ -113,6 +114,40 @@ class GenerateVideoRequest(BaseModel):
     contentItemId: str | None = None
 
 
+def _beat_status() -> str:
+    """How long since beat last drove a dispatch."""
+    from .tasks.scheduler import BEAT_HEARTBEAT_KEY, BEAT_HEARTBEAT_TTL_SEC
+
+    try:
+        import redis as redis_lib
+
+        client = redis_lib.Redis.from_url(
+            get_settings().redis_url, socket_connect_timeout=2, socket_timeout=2
+        )
+        raw = client.get(BEAT_HEARTBEAT_KEY)
+    except Exception as e:  # noqa: BLE001
+        return f"error: cannot read the beat heartbeat: {e}"
+
+    if raw is None:
+        return (
+            "error: no beat heartbeat in the last "
+            f"{BEAT_HEARTBEAT_TTL_SEC}s. Nothing is dispatching scheduled posts; "
+            "check that the beat service is running."
+        )
+
+    try:
+        last = datetime.fromisoformat(raw.decode())
+    except (AttributeError, TypeError, ValueError):
+        # Anything that is not a timestamp we wrote. TypeError matters as much
+        # as ValueError here: a client that hands back something other than
+        # bytes must degrade to "unreadable" rather than 500 the health
+        # endpoint, since this is the page somebody loads during an outage.
+        return "error: beat heartbeat is unreadable"
+
+    age = (datetime.now(UTC) - last).total_seconds()
+    return f"ok (last dispatch {int(age)}s ago)"
+
+
 @app.get("/health")
 def health(render: str = "") -> dict:
     # The build marker matters as much as the checks. Working out whether a
@@ -158,6 +193,18 @@ def health(render: str = "") -> dict:
         checks["workers"] = f"error: cannot confirm workers match this build ({build}): {detail}"
     else:
         checks["workers"] = f"ok ({len(workers)} on {build})"
+
+    # Beat, which nothing above can see.
+    #
+    # `workers` reports CONSUMERS. Beat is a producer, so it can be dead for
+    # days while this endpoint says ok and every scheduled post sits at PENDING
+    # past its time -- which is exactly what happened: four posts were forty
+    # minutes overdue while /health read "ok".
+    #
+    # The heartbeat is written by dispatch_due_posts, a task only beat
+    # schedules and only a worker executes, so a fresh key proves the entire
+    # beat -> broker -> worker path rather than any one process being up.
+    checks["beat"] = _beat_status()
 
     # Reported separately from the build: a current worker that cannot render
     # still publishes, it just drops the sound and says nothing.
