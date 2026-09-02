@@ -1,11 +1,26 @@
 {
   "$schema": "https://railway.app/railway.schema.json",
+  "_comment": [
+    "A SEPARATE beat service, for anyone running more than one worker replica.",
+    "",
+    "The default deployment does NOT use this file. railway.worker.json runs",
+    "`worker --beat`, so one service is both the scheduler and the consumer.",
+    "That is deliberate: a beat service is a fourth always-on container to pay",
+    "for, and its absence is silent -- scheduled posts simply stay PENDING with",
+    "no error anywhere, which is exactly what happened.",
+    "",
+    "`worker --beat` is only safe on a SINGLE replica. Two of them means two",
+    "schedulers. dispatch_due_posts is protected by FOR UPDATE SKIP LOCKED so",
+    "posts would still publish once, but the other periodic tasks have no such",
+    "guard. Scale the worker past one replica and you must split beat back out",
+    "using this file, and drop --beat from the worker's start command."
+  ],
   "build": {
     "builder": "DOCKERFILE",
     "dockerfilePath": "apps/engine/Dockerfile"
   },
   "deploy": {
-    "startCommand": "celery -A godeye_engine.celery_app beat --loglevel=info",
+    "startCommand": "celery -A godeye_engine.celery_app beat --schedule=/tmp/celerybeat-schedule --loglevel=info",
     "restartPolicyType": "ON_FAILURE",
     "restartPolicyMaxRetries": 10
   }

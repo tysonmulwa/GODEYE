@@ -88,27 +88,39 @@ root and point it at the Dockerfile, do **not** set root to `apps/api`.
 - `NODE_ENV=production` is required, it switches the refresh cookie to
   `SameSite=None; Secure` so login works across the Vercel↔API domain split.
 
-### 6. Engine, one image, three services
+### 6. Engine, one image, two services
 
 `apps/engine/Dockerfile` (context = repo root, includes ffmpeg). Deploy it as
-**three services sharing the same image**, overriding the start command on each:
+**two services sharing the same image**, overriding the start command on each:
 
 ```bash
 # 1. api, receives enqueue calls from NestJS (this is the only one with a port)
 uvicorn godeye_engine.api:app --host 0.0.0.0 --port $PORT   # image default
-# 2. worker, runs the AI/publish jobs
-celery -A godeye_engine.celery_app worker --loglevel=info
-# 3. beat, fires due posts / autopilot every 30s
-celery -A godeye_engine.celery_app beat --loglevel=info
+# 2. worker AND scheduler in one service
+celery -A godeye_engine.celery_app worker --beat --schedule=/tmp/celerybeat-schedule --loglevel=info
 ```
 
-All three need the same env: `DATABASE_URL`, `REDIS_URL`, `ENGINE_INTERNAL_SECRET`
+Both need the same env: `DATABASE_URL`, `REDIS_URL`, `ENGINE_INTERNAL_SECRET`
 (must match the API), an LLM key (`ANTHROPIC_API_KEY` or `OPENAI_API_KEY`),
 `GOOGLE_API_KEY` / image keys, and the `S3_*` set. Leave `FFMPEG_PATH` blank,
 ffmpeg is on the image and found via PATH.
 
-**Without the worker and beat services nothing publishes**, the API accepts the
-schedule but no process ever dispatches it.
+**Without the worker service nothing publishes.** The API accepts the schedule
+and no process ever dispatches it: posts sit at PENDING past their time with no
+error on the row and nothing in any log, because nothing ran.
+
+`--beat` on the worker is what makes that one service both the scheduler and
+the consumer. It was previously documented as a third, separate beat service,
+which is a container to remember to create and whose absence is completely
+silent. If you scale the worker past **one replica**, split beat back out using
+`railway.beat.json` and drop `--beat` here: two workers with `--beat` are two
+schedulers.
+
+`/health` reports `beat` now, so this failure is visible:
+
+    "beat": "ok (last dispatch 12s ago)"
+    "beat": "error: no beat heartbeat in the last 120s..."
+
 
 ### 7. Web. Vercel
 

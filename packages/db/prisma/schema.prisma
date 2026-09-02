@@ -71,6 +71,16 @@ model Organization {
   type            OrgType  @default(BUSINESS)
   logoUrl         String?
   requireApproval Boolean  @default(false) // content must be APPROVED before scheduling/publishing
+  /// Whether the workspace owner receives the Monday summary of the week.
+  ///
+  /// Opt-OUT rather than opt-in, and the column exists before the first send
+  /// rather than after: a recurring digest with no way to stop it is spam
+  /// regardless of how useful it is, and "we will add unsubscribe later" is how
+  /// a product ends up on a blocklist. Every send reads this.
+  weeklyReview    Boolean  @default(true)
+  /// When the last weekly review was sent, so a worker restart or a duplicate
+  /// beat tick cannot send the same summary twice.
+  weeklyReviewAt  DateTime?
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 

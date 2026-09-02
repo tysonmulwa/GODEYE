@@ -5,7 +5,7 @@
     "dockerfilePath": "apps/engine/Dockerfile"
   },
   "deploy": {
-    "startCommand": "celery -A godeye_engine.celery_app worker --loglevel=info --concurrency=2 --max-tasks-per-child=50",
+    "startCommand": "celery -A godeye_engine.celery_app worker --beat --schedule=/tmp/celerybeat-schedule --loglevel=info --concurrency=2 --max-tasks-per-child=50",
     "restartPolicyType": "ON_FAILURE",
     "restartPolicyMaxRetries": 10
   }

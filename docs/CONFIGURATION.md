@@ -152,3 +152,40 @@ curl -s https://api.godeyeautomation.com/health/ready
 `/health` reports booleans about payment configuration — never a key, never a
 plan code. "Upgrade does nothing" and "the key is not set on this service" look
 identical from a browser, and the answer is one variable either way.
+
+---
+
+## Transactional email (Resend)
+
+Set on the **API service only**. The engine does not send mail.
+
+| Variable | Required | Notes |
+|---|---|---|
+| `RESEND_API_KEY` | For any email at all | Absent, every send is a logged no-op and **password reset cannot work** |
+| `EMAIL_FROM` | Recommended | Default `GODEYE <contact@godeyeautomation.com>`. Must be on a domain **verified in Resend** |
+| `EMAIL_REPLY_TO` | Optional | Default `contact@godeyeautomation.com` |
+
+Without `RESEND_API_KEY` the API still boots. That is deliberate: a welcome
+email must not be able to fail a registration that already wrote a user, an org
+and a membership. `EmailService.send()` returns `{ sent: false, reason:
+"not-configured" }` and logs a warning once.
+
+The one exception is `sendOrThrow`, used by password reset alone, which raises
+rather than pretend. A silent no-op there leaves someone reading "check your
+inbox" for a message that was never sent.
+
+### Verifying a domain in Resend lets you SEND, not receive
+
+This catches people out and is worth stating plainly. Adding
+`godeyeautomation.com` to Resend and passing its DNS checks means Resend will
+accept mail **from** `contact@godeyeautomation.com`. It does **not** create a
+mailbox at that address, and mail sent **to** it goes nowhere.
+
+The site publishes `contact@godeyeautomation.com` on the privacy, terms and
+data-deletion pages and in the footer of every email, so something has to
+receive it. Cheapest option, since the domain is already on Cloudflare:
+**Cloudflare Email Routing** (Email → Email Routing) forwards `contact@` to any
+existing inbox for free. Resend's own inbound product works too.
+
+A 403 from Resend almost always means the From domain is not verified. It reads
+like an auth failure and is not one, so `EmailService` says so in the error.
