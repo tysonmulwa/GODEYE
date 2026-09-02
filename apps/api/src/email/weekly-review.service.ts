@@ -114,30 +114,46 @@ export class WeeklyReviewService {
   private async summarise(orgId: string, now: Date): Promise<WeeklySummary> {
     const since = new Date(now.getTime() - WINDOW_DAYS * 86_400_000);
 
-    const [published, scheduled, failedPosts, byPlatform] = await Promise.all([
+    const [published, scheduled, failedPosts, byConnection] = await Promise.all([
       this.prisma.scheduledPost.count({
         where: { orgId, status: "PUBLISHED", publishedAt: { gte: since } },
       }),
       this.prisma.scheduledPost.count({
-        where: { orgId, status: "PENDING", scheduledFor: { gte: now } },
+        where: { orgId, status: "PENDING", scheduledAt: { gte: now } },
       }),
       this.prisma.scheduledPost.count({
         where: { orgId, status: "FAILED", updatedAt: { gte: since } },
       }),
+      // Grouped by connection, not by platform: ScheduledPost records WHICH
+      // connection it goes to, and the platform lives on SocialConnection. The
+      // first draft of this grouped by a `platform` column that does not exist
+      // on the table, which is what broke the API build.
       this.prisma.scheduledPost.groupBy({
-        by: ["platform"],
+        by: ["connectionId"],
         where: { orgId, status: "PUBLISHED", publishedAt: { gte: since } },
-        _count: { platform: true },
-        orderBy: { _count: { platform: "desc" } },
+        _count: { connectionId: true },
+        orderBy: { _count: { connectionId: "desc" } },
         take: 1,
       }),
     ]);
+
+    // One extra lookup rather than a raw join, because this runs once a week
+    // per workspace and legibility is worth more than the round trip.
+    let topPlatform: string | null = null;
+    const topConnectionId = byConnection[0]?.connectionId;
+    if (topConnectionId) {
+      const connection = await this.prisma.socialConnection.findUnique({
+        where: { id: topConnectionId },
+        select: { platform: true },
+      });
+      topPlatform = connection?.platform ?? null;
+    }
 
     return {
       published,
       scheduled,
       failed: failedPosts,
-      topPlatform: byPlatform[0]?.platform ?? null,
+      topPlatform,
       // Left out rather than guessed at. The SEO score belongs to a crawl that
       // may be weeks old, and presenting a stale number weekly as if it were
       // this week's is the same problem as inventing a trend.
