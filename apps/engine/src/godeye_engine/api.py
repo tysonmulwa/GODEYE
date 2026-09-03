@@ -144,7 +144,8 @@ def _beat_status() -> str:
         # endpoint, since this is the page somebody loads during an outage.
         return "error: beat heartbeat is unreadable"
 
-    age = (datetime.now(UTC) - last).total_seconds()
+    # `last` is naive UTC (see db.utcnow: Prisma's timestamp(3) has no tz).
+    age = (datetime.now(UTC) - last.replace(tzinfo=UTC)).total_seconds()
     return f"ok (last dispatch {int(age)}s ago)"
 
 
