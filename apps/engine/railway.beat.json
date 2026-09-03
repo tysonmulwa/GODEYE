@@ -1,7 +1,7 @@
 {
   "$schema": "https://railway.app/railway.schema.json",
   "_comment": [
-    "`exec` is not decoration. A start command runs through a shell, so without it the shell is PID 1 and SIGTERM never reaches celery: the process is SIGKILLed when the grace period ends, in-flight tasks die mid-publish, and the node never deregisters from the broker. That is part of why stale workers accumulated across deploys.",
+    "This service builds with the DOCKERFILE builder, so Railway runs startCommand directly in exec form (overriding the image ENTRYPOINT) with no shell in between. celery is already PID 1 and already receives SIGTERM correctly. Do NOT add an `exec ` prefix here -- there is no shell to exec into, so the literal token `exec` is treated as the executable and the container fails with 'The executable `exec` could not be found.'",
     "",
     "THE SCHEDULER, and there must be exactly one of it.",
     "",
@@ -21,7 +21,7 @@
     "dockerfilePath": "apps/engine/Dockerfile"
   },
   "deploy": {
-    "startCommand": "exec celery -A godeye_engine.celery_app beat --schedule=/tmp/celerybeat-schedule --loglevel=info",
+    "startCommand": "celery -A godeye_engine.celery_app beat --schedule=/tmp/celerybeat-schedule --loglevel=info",
     "restartPolicyType": "ON_FAILURE",
     "restartPolicyMaxRetries": 10
   }
