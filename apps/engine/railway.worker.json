@@ -5,12 +5,12 @@
     "dockerfilePath": "apps/engine/Dockerfile"
   },
   "deploy": {
-    "startCommand": "exec celery -A godeye_engine.celery_app worker -Q background,publish,media --loglevel=info --concurrency=2 --max-tasks-per-child=50",
+    "startCommand": "celery -A godeye_engine.celery_app worker -Q background,publish,media --loglevel=info --concurrency=2 --max-tasks-per-child=50",
     "restartPolicyType": "ON_FAILURE",
     "restartPolicyMaxRetries": 10
   },
   "_comment": [
-    "`exec` is not decoration. A start command runs through a shell, so without it the shell is PID 1 and SIGTERM never reaches celery: the process is SIGKILLed when the grace period ends, in-flight tasks die mid-publish, and the node never deregisters from the broker. That is part of why stale workers accumulated across deploys.",
+    "This service builds with the DOCKERFILE builder, so Railway runs startCommand directly in exec form (overriding the image ENTRYPOINT) with no shell in between. celery is already PID 1 and already receives SIGTERM correctly. Do NOT add an `exec ` prefix here -- there is no shell to exec into, so the literal token `exec` is treated as the executable and the container fails with 'The executable `exec` could not be found.'",
     "",
     "CONSUMER ONLY. No --beat here: engine-beat is its own service, and a worker",
     "with --beat alongside it is a second scheduler. Every periodic task then",
