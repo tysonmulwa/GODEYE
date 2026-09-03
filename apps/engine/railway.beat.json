@@ -1,6 +1,8 @@
 {
   "$schema": "https://railway.app/railway.schema.json",
   "_comment": [
+    "`exec` is not decoration. A start command runs through a shell, so without it the shell is PID 1 and SIGTERM never reaches celery: the process is SIGKILLed when the grace period ends, in-flight tasks die mid-publish, and the node never deregisters from the broker. That is part of why stale workers accumulated across deploys.",
+    "",
     "THE SCHEDULER, and there must be exactly one of it.",
     "",
     "Beat only PRODUCES: it puts due tasks on the broker and consumes nothing.",
@@ -19,7 +21,7 @@
     "dockerfilePath": "apps/engine/Dockerfile"
   },
   "deploy": {
-    "startCommand": "celery -A godeye_engine.celery_app beat --schedule=/tmp/celerybeat-schedule --loglevel=info",
+    "startCommand": "exec celery -A godeye_engine.celery_app beat --schedule=/tmp/celerybeat-schedule --loglevel=info",
     "restartPolicyType": "ON_FAILURE",
     "restartPolicyMaxRetries": 10
   }

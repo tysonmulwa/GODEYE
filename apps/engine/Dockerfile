@@ -28,5 +28,18 @@ RUN useradd --create-home --uid 10001 godeye && chown -R godeye:godeye /app
 USER godeye
 
 EXPOSE 8000
-# Shell form so $PORT expands; hosts inject PORT, default 8000 for local runs.
-CMD uvicorn godeye_engine.api:app --host 0.0.0.0 --port ${PORT:-8000}
+# Exec form wrapping an explicit `sh -c ... exec`, which is not the same as
+# shell form and matters for shutdown.
+#
+# Shell form (`CMD uvicorn ...`) makes Docker run `/bin/sh -c "uvicorn ..."`, so
+# PID 1 is the shell and uvicorn is its child. SIGTERM then goes to the shell,
+# which does not forward it: the process never shuts down gracefully and the
+# container is SIGKILLed when the grace period expires. On a Celery worker that
+# means in-flight tasks are killed mid-publish rather than finished, and the
+# node never deregisters from the broker.
+#
+# `exec` replaces the shell with the real process, so it becomes PID 1 and
+# receives signals directly. `sh -c` is still there because ${PORT} needs a
+# shell to expand it, and hosts inject PORT. Docker's own linter flags the shell
+# form for exactly this reason (JSONArgsRecommended).
+CMD ["sh", "-c", "exec uvicorn godeye_engine.api:app --host 0.0.0.0 --port ${PORT:-8000}"]
