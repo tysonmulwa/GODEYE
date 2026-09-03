@@ -8,6 +8,24 @@
     "healthcheckPath": "/health/ready",
     "healthcheckTimeout": 120,
     "restartPolicyType": "ON_FAILURE",
-    "restartPolicyMaxRetries": 10
-  }
+    "restartPolicyMaxRetries": 10,
+    "startCommand": "node dist/main.js"
+  },
+  "_comment": [
+    "This service builds apps/api/Dockerfile: a NODE image. It has no python and",
+    "no celery binary, so a Celery start command cannot run here and the container",
+    "fails with 'The executable `celery` could not be found'.",
+    "",
+    "That happened: the API service was given `celery ... beat` as a custom start",
+    "command while trying to get the scheduler running. Every new deploy then",
+    "failed to boot, so Railway kept the previous container alive and retried for",
+    "two days showing 'building' -- while the old container went on serving.",
+    "",
+    "Celery belongs to the ENGINE image (apps/engine/Dockerfile), which is Python",
+    "and has ffmpeg. The scheduler runs there, on the worker service, via --beat.",
+    "",
+    "A custom start command set in the Railway dashboard OVERRIDES the value below",
+    "and the Dockerfile's CMD. If this service will not start, clear that field",
+    "first: the image already knows how to run itself."
+  ]
 }

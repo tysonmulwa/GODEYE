@@ -88,6 +88,28 @@ root and point it at the Dockerfile, do **not** set root to `apps/api`.
 - `NODE_ENV=production` is required, it switches the refresh cookie to
   `SameSite=None; Secure` so login works across the Vercel↔API domain split.
 
+### Which image runs which command
+
+Two images, and their start commands are **not interchangeable**:
+
+| Service | Image | Start command |
+|---|---|---|
+| `GODEYE` (API) | `apps/api/Dockerfile` — **Node** | `node dist/main.js` |
+| engine api | `apps/engine/Dockerfile` — **Python** | `uvicorn godeye_engine.api:app --host 0.0.0.0 --port $PORT` |
+| engine worker | `apps/engine/Dockerfile` — **Python** | `celery -A godeye_engine.celery_app worker --beat --schedule=/tmp/celerybeat-schedule --loglevel=info --concurrency=2 --max-tasks-per-child=50` |
+
+A Celery command on the API service fails with **"The executable `celery` could
+not be found"**: the Node image has no Python in it. This is worth stating
+because the failure is quiet in the worst way — the new container never starts,
+so Railway keeps the **previous** one serving and retries. The dashboard shows
+"building" indefinitely while the old build answers requests, which reads like a
+slow build rather than a broken command.
+
+If a service will not start, check its **custom start command** before anything
+else. A value set in the Railway dashboard overrides both `railway.json` and the
+Dockerfile's `CMD`. Clearing it is usually the fix, because each image already
+knows how to run itself.
+
 ### 6. Engine, one image, two services
 
 `apps/engine/Dockerfile` (context = repo root, includes ffmpeg). Deploy it as
