@@ -42,4 +42,10 @@ EXPOSE 8000
 # receives signals directly. `sh -c` is still there because ${PORT} needs a
 # shell to expand it, and hosts inject PORT. Docker's own linter flags the shell
 # form for exactly this reason (JSONArgsRecommended).
+#
+# This applies to the image CMD ONLY. Do not copy the `exec` into a Railway
+# startCommand: that builder runs the command directly as PID 1 with no shell,
+# so the first token must be a real binary and `exec celery ...` fails with
+# "The executable `exec` could not be found". It is also redundant there, since
+# running as PID 1 is precisely what this achieves here.
 CMD ["sh", "-c", "exec uvicorn godeye_engine.api:app --host 0.0.0.0 --port ${PORT:-8000}"]
