@@ -58,7 +58,8 @@ class TestSuccessClearsTheError:
     def test_publishing_passes_the_connection_through(self):
         """The clearing cannot happen if the caller never says which channel
         it was."""
-        source = inspect.getsource(scheduler.publish_post)
+        # The body, not the task wrapper around it. See _publish_post.
+        source = inspect.getsource(scheduler._publish_post)
         assert "connection_id=connection" in source
 
 

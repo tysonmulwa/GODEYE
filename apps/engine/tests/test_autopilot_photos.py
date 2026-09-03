@@ -139,7 +139,10 @@ class TestRetryingAFailedPost:
 
         from godeye_engine.tasks import scheduler
 
-        return inspect.getsource(scheduler.publish_post)
+        # `_publish_post` is the body; `publish_post` is the thin task
+        # wrapper that records an unclassified failure so a post cannot be
+        # left claimed. The logic these tests read lives in the body.
+        return inspect.getsource(scheduler._publish_post)
 
     def test_a_post_with_no_media_borrows_one_before_giving_up(self):
         source = self._publish_source()

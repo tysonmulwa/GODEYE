@@ -219,6 +219,36 @@ def dispatch_due_posts() -> int:
     time_limit=PUBLISH_HARD_LIMIT_SEC,
 )
 def publish_post(scheduled_post_id: str, claimed_at: str | None = None) -> dict:
+    """Publish one claimed post, and never leave it claimed.
+
+    The wrapper exists because of how this failed. Everything from the
+    credential decrypt onwards is classified: it records a failure, the reason
+    reaches ScheduledPost.error, and the calendar shows it. Everything BEFORE
+    that -- the row reads, attaching a catalogue photo, building the payload --
+    was unguarded, so an exception there escaped with the post still marked
+    PROCESSING and lockedAt set.
+
+    Nothing then resolved it. LOCK_TIMEOUT_MINUTES later the stale-lock branch
+    of due_posts_query re-claimed the row, dispatched it again, and it failed
+    in exactly the same place, forever. The calendar showed "processing" on
+    every post, no post carried an error, and the only trace was a traceback in
+    the worker log. An invisible failure that also never stops is the worst of
+    both: it looks like work in progress.
+
+    So an unclassified error is recorded like any other. Transient ones go back
+    to PENDING with backoff and retry; past MAX_ATTEMPTS it is FAILED with the
+    reason attached, which is the honest answer for a post that cannot be built
+    at all. Then it is re-raised, because the traceback is what says why and it
+    belongs in the worker log and the error tracker.
+    """
+    try:
+        return _publish_post(scheduled_post_id, claimed_at)
+    except Exception as e:
+        _fail_unclassified(scheduled_post_id, e)
+        raise
+
+
+def _publish_post(scheduled_post_id: str, claimed_at: str | None = None) -> dict:
     with get_session() as session:
         post = session.execute(
             select(ScheduledPost).where(ScheduledPost.c.id == scheduled_post_id)
@@ -487,6 +517,47 @@ _CONNECTION_FAULT_SIGNS = (
 def _is_connection_fault(error: str) -> bool:
     text = error.lower()
     return any(sign in text for sign in _CONNECTION_FAULT_SIGNS)
+
+
+def _fail_unclassified(post_id: str, error: BaseException) -> None:
+    """Record an error the publish path did not classify, so it stops looping.
+
+    Best effort by construction: this runs because something already went
+    wrong, so it must not raise on top of it and lose the original traceback.
+    It reads the row for the ids and attempt count rather than taking them as
+    arguments, since the caller may have failed before loading any of them.
+    """
+    detail = str(error).strip() or f"{type(error).__name__} (no message)"
+    try:
+        with get_session() as session:
+            post = session.execute(
+                select(ScheduledPost).where(ScheduledPost.c.id == post_id)
+            ).mappings().first()
+        if post is None or post["status"] != "PROCESSING":
+            # Already resolved, or never ours. Do not overwrite a real outcome.
+            return
+        attempts = (post["attempts"] or 0) + 1
+        _record_failure(
+            post_id,
+            post["orgId"],
+            post["connectionId"],
+            detail,
+            attempts,
+            permanent=attempts >= MAX_ATTEMPTS,
+        )
+        logger.exception(
+            "Publish %s failed before the publish attempt (attempt %d): %s",
+            post_id, attempts, detail,
+        )
+    except Exception:  # noqa: BLE001
+        # The row could not be updated. Log loudly: the post is still
+        # PROCESSING and will be re-claimed, which is the old behaviour, and
+        # somebody has to be able to see that this is why.
+        logger.exception(
+            "Publish %s failed AND could not be marked failed; it will be "
+            "re-claimed and is likely to loop. Original error: %s",
+            post_id, detail,
+        )
 
 
 def _record_failure(
