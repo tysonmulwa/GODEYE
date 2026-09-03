@@ -35,6 +35,7 @@ from ..db import (
 )
 from ..events import publish_event
 from ..media import presets
+from ..periodic_lock import once_per_tick
 from .products import attach_imported_photo
 
 logger = logging.getLogger(__name__)
@@ -115,6 +116,7 @@ def compute_slots(
 
 
 @app.task(name="godeye_engine.tasks.planner.plan_autopilot")
+@once_per_tick("plan-autopilot", 240)
 def plan_autopilot() -> int:
     now = utcnow()
     horizon = now + timedelta(hours=PLAN_HORIZON_HOURS)
@@ -411,6 +413,7 @@ def _queue_image_for_content(
 
 
 @app.task(name="godeye_engine.tasks.planner.recycle_evergreen")
+@once_per_tick("recycle-evergreen", 21000)
 def recycle_evergreen() -> int:
     """Requeue proven evergreen content for plans that opted in (max 1 per plan/run)."""
     now = utcnow()

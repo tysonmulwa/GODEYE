@@ -35,6 +35,7 @@ from ..db import (
     new_id,
     utcnow,
 )
+from ..periodic_lock import once_per_tick
 
 logger = logging.getLogger(__name__)
 
@@ -51,6 +52,7 @@ POST_HARD_LIMIT_SEC = 5 * 60
 
 
 @app.task(name="godeye_engine.tasks.product_posts.plan_product_posts")
+@once_per_tick("plan-product-posts", 42000)
 def plan_product_posts() -> dict:
     """One post per workspace that has auto-post on, and is still paying."""
     with get_session() as session:

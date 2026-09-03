@@ -32,6 +32,7 @@ from sqlalchemy import text
 
 from ..celery_app import app
 from ..db import get_engine
+from ..periodic_lock import once_per_tick
 
 logger = logging.getLogger(__name__)
 
@@ -68,6 +69,7 @@ def _delete_in_batches(conn, table: str, where: str, params: dict) -> int:
 
 
 @app.task(name="godeye_engine.tasks.retention.purge_expired_rows")
+@once_per_tick("purge-expired", 21000)
 def purge_expired_rows() -> dict:
     now = datetime.now(UTC)
     webhook_cutoff = now - timedelta(days=WEBHOOK_RETENTION_DAYS)

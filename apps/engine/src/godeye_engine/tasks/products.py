@@ -21,6 +21,7 @@ from sqlalchemy import select, update
 
 from ..celery_app import app
 from ..db import BusinessProfile, MediaAsset, Product, get_session, new_id, utcnow
+from ..periodic_lock import once_per_tick
 from ..products import sources
 
 logger = logging.getLogger(__name__)
@@ -186,6 +187,7 @@ def attach_imported_photo(org_id: str, content_id: str, now) -> bool:
 
 
 @app.task(name="godeye_engine.tasks.products.scheduled_imports")
+@once_per_tick("scheduled-imports", 21000)
 def scheduled_imports() -> dict:
     """Re-read the shops that asked to be re-read.
 

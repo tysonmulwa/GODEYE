@@ -38,6 +38,7 @@ from ..config import get_settings
 from ..db import SocialConnection, get_engine
 from ..events import publish_event
 from ..metrics_registry import CONNECTION_REFRESH
+from ..periodic_lock import once_per_tick
 from ..publishers.base import TransientPublishError
 from ..security import decrypt_credentials, encrypt_credentials
 
@@ -238,6 +239,7 @@ def _notify(org_id: str, connection: dict[str, Any], status: str, message: str) 
 
 
 @app.task(name="godeye_engine.tasks.token_refresh.refresh_expiring_connections")
+@once_per_tick("refresh-connections", 3000)
 def refresh_expiring_connections() -> dict:
     now = datetime.now(UTC).replace(tzinfo=None)
     due = _due(now)

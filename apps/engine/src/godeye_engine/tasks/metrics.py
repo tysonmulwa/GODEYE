@@ -9,6 +9,7 @@ from sqlalchemy import select
 
 from ..celery_app import app
 from ..db import AnalyticsSnapshot, ScheduledPost, SocialConnection, get_session, new_id, utcnow
+from ..periodic_lock import once_per_tick
 from ..publishers import get_publisher
 from ..security import decrypt_credentials
 
@@ -18,6 +19,7 @@ LOOKBACK_DAYS = 7
 
 
 @app.task(name="godeye_engine.tasks.metrics.collect_metrics")
+@once_per_tick("collect-metrics", 3000)
 def collect_metrics() -> int:
     """Fetch engagement for posts published in the last week; store snapshots."""
     since = utcnow() - timedelta(days=LOOKBACK_DAYS)
