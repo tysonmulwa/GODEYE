@@ -20,7 +20,8 @@
     "db:deploy": "pnpm --filter @godeye/db migrate:deploy",
     "db:seed": "pnpm --filter @godeye/db seed",
     "db:studio": "pnpm --filter @godeye/db studio",
-    "lint:rules": "node scripts/lint-rules.mjs"
+    "lint:rules": "node scripts/lint-rules.mjs",
+    "db:deploy:ci": "pnpm --filter @godeye/db migrate:ci"
   },
   "devDependencies": {
     "turbo": "^2.3.3",

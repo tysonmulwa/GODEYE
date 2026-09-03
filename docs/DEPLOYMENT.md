@@ -110,48 +110,88 @@ else. A value set in the Railway dashboard overrides both `railway.json` and the
 Dockerfile's `CMD`. Clearing it is usually the fix, because each image already
 knows how to run itself.
 
-### 6. Engine, one image, two services
+### Pre-deploy commands: leave them empty
 
-`apps/engine/Dockerfile` (context = repo root, includes ffmpeg). Deploy it as
-**two services sharing the same image**, overriding the start command on each:
+Every deployment stalling on **"Running pre-deploy command…"** while others sit
+at "Waiting for deployment slot" means a pre-deploy command is set and not
+finishing. It holds the slot, so nothing else can deploy — including the fix for
+whatever is broken.
+
+Three ways that command hangs rather than fails, all of them silent:
+
+1. **`prisma migrate dev` is interactive.** It prompts, and a container has no
+   TTY to answer, so it waits forever. Only `prisma migrate deploy` is safe
+   unattended. `pnpm db:migrate` is the `dev` one — do not point a pre-deploy at
+   it. Use `pnpm db:deploy:ci`, which is `prisma migrate deploy` with no
+   `dotenv-cli` (there is no `.env` file inside an image; the platform injects
+   `DATABASE_URL` directly).
+2. **Several services migrating at once.** `migrate deploy` takes a Postgres
+   advisory lock. Four services each running it on every deploy means three
+   block on the first, and a slow migration turns into four stuck deployments.
+3. **A script that does not exist.** `npm run migrate` in `apps/api` matches
+   nothing — there is no `migrate` script there — and the engine image is Python
+   with no npm at all.
+
+**Migrations are run deliberately, not on every deploy of every service:**
 
 ```bash
-# 1. api, receives enqueue calls from NestJS (this is the only one with a port)
-uvicorn godeye_engine.api:app --host 0.0.0.0 --port $PORT   # image default
-# 2. worker AND scheduler in one service
-celery -A godeye_engine.celery_app worker --beat --schedule=/tmp/celerybeat-schedule -Q background,publish,media --loglevel=info
+cd packages/db && npx dotenv -e ../../.env -- npx prisma migrate deploy
 ```
 
-Both need the same env: `DATABASE_URL`, `REDIS_URL`, `ENGINE_INTERNAL_SECRET`
-(must match the API), an LLM key (`ANTHROPIC_API_KEY` or `OPENAI_API_KEY`),
-`GOOGLE_API_KEY` / image keys, and the `S3_*` set. Leave `FFMPEG_PATH` blank,
-ffmpeg is on the image and found via PATH.
+They are expand-only, so applying them **before** shipping the code is both safe
+and correct: old code ignores new columns. That ordering also means a deploy
+never has to migrate to succeed, which is why the pre-deploy field should stay
+empty.
+
+### 6. Engine, one image, three services
+
+`apps/engine/Dockerfile` (context = repo root, includes ffmpeg). One image,
+three services, each overriding the start command:
+
+```bash
+# engine-api — the only one with a port. Receives enqueue calls from NestJS.
+uvicorn godeye_engine.api:app --host 0.0.0.0 --port $PORT      # image default
+
+# engine-worker — CONSUMER. No --beat.
+celery -A godeye_engine.celery_app worker   -Q background,publish,media   --loglevel=info --concurrency=2 --max-tasks-per-child=50
+
+# engine-beat — SCHEDULER. Exactly one replica.
+celery -A godeye_engine.celery_app beat   --schedule=/tmp/celerybeat-schedule --loglevel=info
+```
+
+All three need the same env: `DATABASE_URL`, `REDIS_URL`,
+`ENGINE_INTERNAL_SECRET` (must match the API), an LLM key, and the `S3_*` set.
+Leave `FFMPEG_PATH` blank; ffmpeg is on the image and found via PATH.
+
+#### The two ways this silently does nothing
 
 **`-Q` is not optional.** A Celery worker consumes only the queues named there,
-defaulting to `task_default_queue` (`background`) alone — it does NOT pick up a
-queue just because `task_routes` mentions it. `dispatch_due_posts` routes to
-`publish`, so a worker started without `-Q` schedules it forever and never runs
-it: beat logs "Sending due task" every 30 seconds, no error appears anywhere,
-and the unrouted `plan_autopilot` keeps landing on `background` and succeeding,
-so the worker looks healthy. Publishing, images and video were all dead this way.
-`/health` now reports `queues`, naming any queue with no consumer.
+defaulting to `task_default_queue` (`background`) alone. It does **not** pick up
+a queue because `task_routes` mentions one. `dispatch_due_posts`,
+`reap_stale_runs` and `reap_stuck_posts` all route to `publish`, so a worker
+started without `-Q` schedules them forever and runs none of them: beat logs
+"Sending due task" every 30 seconds, no error appears anywhere, and the unrouted
+tasks keep landing on `background` and succeeding — so the worker looks healthy
+while publishing, images and video are all dead.
 
-**Without the worker service nothing publishes.** The API accepts the schedule
-and no process ever dispatches it: posts sit at PENDING past their time with no
-error on the row and nothing in any log, because nothing ran.
+**Run beat OR `worker --beat`, never both.** Two schedulers fire every periodic
+task twice. `periodic_lock.py` makes that harmless rather than corrupting, but
+harmless is not intended, and each duplicate still costs a broker round trip.
+Beat has no leader election: **one replica**.
 
-`--beat` on the worker is what makes that one service both the scheduler and
-the consumer. It was previously documented as a third, separate beat service,
-which is a container to remember to create and whose absence is completely
-silent. If you scale the worker past **one replica**, split beat back out using
-`railway.beat.json` and drop `--beat` here: two workers with `--beat` are two
-schedulers.
+Both failures are now visible on `/health`:
 
-`/health` reports `beat` now, so this failure is visible:
+```
+"queues": "ok (background, media, publish)"
+"queues": "error: no consumer for media, publish. Tasks routed there are
+           queued and never run; add them to the worker's -Q list."
+"beat":   "ok (last dispatch 12s ago)"
+```
 
-    "beat": "ok (last dispatch 12s ago)"
-    "beat": "error: no beat heartbeat in the last 120s..."
-
+**engine-worker and engine-beat serve no HTTP.** Leave their healthcheck path
+empty and give them no public domain — Railway will otherwise wait forever for a
+port that nothing listens on, and the deploy never completes while the process
+is perfectly fine.
 
 ### 7. Web. Vercel
 

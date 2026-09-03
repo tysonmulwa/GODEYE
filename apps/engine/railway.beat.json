@@ -1,19 +1,18 @@
 {
   "$schema": "https://railway.app/railway.schema.json",
   "_comment": [
-    "A SEPARATE beat service, for anyone running more than one worker replica.",
+    "THE SCHEDULER, and there must be exactly one of it.",
     "",
-    "The default deployment does NOT use this file. railway.worker.json runs",
-    "`worker --beat`, so one service is both the scheduler and the consumer.",
-    "That is deliberate: a beat service is a fourth always-on container to pay",
-    "for, and its absence is silent -- scheduled posts simply stay PENDING with",
-    "no error anywhere, which is exactly what happened.",
+    "Beat only PRODUCES: it puts due tasks on the broker and consumes nothing.",
+    "So it needs no -Q, and it does no work itself -- if this service is running",
+    "and no worker consumes 'publish', posts still never publish.",
     "",
-    "`worker --beat` is only safe on a SINGLE replica. Two of them means two",
-    "schedulers. dispatch_due_posts is protected by FOR UPDATE SKIP LOCKED so",
-    "posts would still publish once, but the other periodic tasks have no such",
-    "guard. Scale the worker past one replica and you must split beat back out",
-    "using this file, and drop --beat from the worker's start command."
+    "Run this OR `worker --beat`, never both. Two schedulers means every periodic",
+    "task fires twice. periodic_lock.py makes that harmless rather than",
+    "corrupting, but harmless is not the same as intended, and the duplicate",
+    "still costs a broker round trip per task per tick.",
+    "",
+    "Replicas: exactly 1. Beat has no leader election of its own."
   ],
   "build": {
     "builder": "DOCKERFILE",

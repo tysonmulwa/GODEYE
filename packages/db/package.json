@@ -10,7 +10,8 @@
     "migrate:dev": "dotenv -e ../../.env -- prisma migrate dev",
     "migrate:deploy": "dotenv -e ../../.env -- prisma migrate deploy",
     "seed": "dotenv -e ../../.env -- tsx prisma/seed.ts",
-    "studio": "dotenv -e ../../.env -- prisma studio"
+    "studio": "dotenv -e ../../.env -- prisma studio",
+    "migrate:ci": "prisma migrate deploy"
   },
   "dependencies": {
     "@godeye/shared": "workspace:*",

@@ -5,23 +5,27 @@
     "dockerfilePath": "apps/engine/Dockerfile"
   },
   "deploy": {
-    "startCommand": "celery -A godeye_engine.celery_app worker --beat --schedule=/tmp/celerybeat-schedule -Q background,publish,media --loglevel=info --concurrency=2 --max-tasks-per-child=50",
+    "startCommand": "celery -A godeye_engine.celery_app worker -Q background,publish,media --loglevel=info --concurrency=2 --max-tasks-per-child=50",
     "restartPolicyType": "ON_FAILURE",
     "restartPolicyMaxRetries": 10
   },
   "_comment": [
+    "CONSUMER ONLY. No --beat here: engine-beat is its own service, and a worker",
+    "with --beat alongside it is a second scheduler. Every periodic task then",
+    "fires twice.",
+    "",
     "-Q is NOT optional. Without it a Celery worker consumes only",
     "task_default_queue ('background'), so everything task_routes sends to",
     "'publish' or 'media' is queued and never executed.",
     "",
-    "That is what stopped publishing. Beat logged 'Sending due task",
-    "dispatch-due-posts' every 30 seconds and the task was never once received,",
-    "because dispatch_due_posts is routed to 'publish'. Meanwhile plan_autopilot",
-    "is unrouted, so it landed on 'background', ran fine, and made the worker",
-    "look healthy. Image and video generation were dead for the same reason.",
+    "That is what stopped publishing, and the worker log partitions perfectly:",
+    "dispatch_due_posts, reap_stale_runs and reap_stuck_posts all route to",
+    "'publish' and were never once received, while collect_metrics,",
+    "plan_autopilot and refresh_expiring_connections are unrouted, landed on",
+    "'background', and ran fine -- which is what kept the worker looking healthy.",
     "",
-    "If the queues are ever split across services, each worker names its own",
-    "subset here and BETWEEN THEM they must cover all three. /health reports a",
-    "queue with no consumer."
+    "If queues are ever split across several worker services, each names its own",
+    "subset and BETWEEN THEM they must cover all three. /health reports a queue",
+    "with no consumer."
   ]
 }
