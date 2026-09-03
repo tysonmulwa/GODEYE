@@ -11,6 +11,26 @@ import { httpRequest, TIMEOUTS, type HttpRequestOptions } from "../common/http-c
  * Typed HTTP client for the Python automation engine (FastAPI).
  * All calls carry the shared internal secret; the engine rejects anything else.
  */
+/**
+ * Classify a fetch failure into something an operator can act on.
+ *
+ * Node wraps network errors as `TypeError: fetch failed` with the real error on
+ * `.cause`, so the useful code is one level down and the top-level message says
+ * nothing at all.
+ */
+export function failureKind(error: unknown): string {
+  const seen = new Set<unknown>();
+  let current: unknown = error;
+  while (current && !seen.has(current)) {
+    seen.add(current);
+    const code = (current as { code?: unknown }).code;
+    if (typeof code === "string") return code;
+    if (current instanceof Error && current.name === "AbortError") return "TIMEOUT";
+    current = (current as { cause?: unknown }).cause;
+  }
+  return error instanceof Error ? error.name : "UNKNOWN";
+}
+
 @Injectable()
 export class EngineService {
   private readonly logger = new Logger(EngineService.name);
@@ -195,11 +215,25 @@ export class EngineService {
       // wrong ENGINE_URL from an engine that just died mid-request.
       const cause = e instanceof Error ? e.message : String(e);
       this.logger.error(`Engine unreachable at ${env.engineUrl}${path}: ${cause}`);
-      throw new ServiceUnavailableException(
-        env.nodeEnv === "production"
-          ? "The automation engine is unreachable. It may be restarting, try again in a moment."
-          : "The automation engine is not running. Start it with: cd apps/engine && python -m godeye_engine.run",
-      );
+      throw new ServiceUnavailableException({
+        message:
+          env.nodeEnv === "production"
+            ? "The automation engine is unreachable. It may be restarting, try again in a moment."
+            : "The automation engine is not running. Start it with: cd apps/engine && python -m godeye_engine.run",
+        // The failure KIND, carried out to /health.
+        //
+        // Without it "unreachable" is all an operator gets, and the three
+        // causes need three different fixes: ENOTFOUND is a wrong or renamed
+        // ENGINE_URL, ECONNREFUSED is the right host with nothing listening,
+        // and a timeout is a reachable engine that is too slow. We spent an
+        // evening unable to tell them apart while the engine was up the whole
+        // time and answering its own /health with 200.
+        //
+        // The code only, never the URL: /health is unauthenticated, and an
+        // internal hostname is not something to publish. The full detail is in
+        // the log line above.
+        reason: failureKind(e),
+      });
     }
     if (!res.ok) {
       const body = await res.text();

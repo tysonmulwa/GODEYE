@@ -134,10 +134,22 @@ export class HealthController {
     } catch (e) {
       // The API being up while the engine is not is a normal state worth
       // reporting, not a 500.
+      // `reason` is the failure KIND from EngineService: ENOTFOUND means a
+      // wrong or renamed ENGINE_URL, ECONNREFUSED means the right host with
+      // nothing listening, TIMEOUT means reachable but too slow. Without it
+      // "unreachable" reads the same in all three cases, and they need three
+      // different fixes — which cost an evening once, while the engine was up
+      // and answering its own /health with 200 the entire time.
+      const response = (e as { getResponse?: () => unknown })?.getResponse?.();
+      const detail = (response ?? {}) as { message?: string; reason?: string };
       return {
         status: "degraded",
         api,
-        engine: { status: "unreachable", error: e instanceof Error ? e.message : String(e) },
+        engine: {
+          status: "unreachable",
+          reason: detail.reason ?? "UNKNOWN",
+          error: detail.message ?? (e instanceof Error ? e.message : String(e)),
+        },
       };
     }
   }
