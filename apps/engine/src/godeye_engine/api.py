@@ -137,14 +137,29 @@ def _beat_status() -> str:
 
     try:
         last = datetime.fromisoformat(raw.decode())
-    except (AttributeError, TypeError, ValueError):
+        # The writer is db.utcnow(), which is deliberately NAIVE: Prisma stores
+        # DateTime as timestamp(3) with no zone, so the whole engine works in
+        # naive UTC. isoformat() therefore carries no offset and this parses
+        # back naive, while now(UTC) is aware -- and subtracting one from the
+        # other raises TypeError.
+        #
+        # That took down /health entirely, with a 500 on every request, and it
+        # could only happen once beat was working: with no heartbeat this
+        # returns above, so the endpoint stayed up for as long as the thing it
+        # monitors was broken and started failing when it recovered. The
+        # healthcheck then held the deploy down.
+        #
+        # A naive value from this key is UTC by construction, so say so.
+        if last.tzinfo is None:
+            last = last.replace(tzinfo=UTC)
+        age = (datetime.now(UTC) - last).total_seconds()
+    except (AttributeError, TypeError, ValueError, OverflowError, OSError):
         # Anything that is not a timestamp we wrote. TypeError matters as much
         # as ValueError here: a client that hands back something other than
         # bytes must degrade to "unreadable" rather than 500 the health
         # endpoint, since this is the page somebody loads during an outage.
         return "error: beat heartbeat is unreadable"
 
-    age = (datetime.now(UTC) - last).total_seconds()
     return f"ok (last dispatch {int(age)}s ago)"
 
 

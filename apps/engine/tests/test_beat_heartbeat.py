@@ -87,3 +87,74 @@ class TestHealthReportsBeat:
 
         with patch("redis.Redis.from_url", side_effect=OSError("refused")):
             assert _beat_status().startswith("error")
+
+
+class TestTheWriterAndReaderAgreeOnFormat:
+    """The reader has to accept what the writer actually produces.
+
+    `/health` returned 500 on every request in production, and the healthcheck
+    held the deploy down for it. The cause was entirely inside this pair:
+
+        writer:  db.utcnow()  -> naive UTC, because Prisma stores
+                                 timestamp(3) with no zone
+        reader:  datetime.now(UTC) - datetime.fromisoformat(raw)
+                              -> aware minus naive -> TypeError
+
+    TestHealthReportsBeat above did not catch it because it builds its own
+    timestamp with `datetime.now(UTC).isoformat()`, which is AWARE. The test
+    invented a format the writer never emits, so reader and writer were each
+    tested against a different contract and the pair was never tested at all.
+
+    The failure mode is worth naming: with no heartbeat, `_beat_status` returns
+    early and /health answers fine. It could only break once beat was healthy
+    and writing keys. So the endpoint stayed up while the thing it monitors was
+    down, and started 500ing when it recovered -- and because Railway gates the
+    deploy on it, recovery is what blocked the deploy.
+
+    So these go through the real writer. Nothing here fabricates a timestamp.
+    """
+
+    def _round_trip(self, written_value):
+        """Write with the real writer, read with the real reader."""
+        from godeye_engine.api import _beat_status
+
+        store = {}
+        writer = MagicMock()
+        writer.set.side_effect = lambda key, value, **kw: store.__setitem__(key, value)
+        with patch("redis.Redis.from_url", return_value=writer):
+            _record_beat_heartbeat(written_value)
+
+        raw = store[BEAT_HEARTBEAT_KEY]
+        reader = MagicMock()
+        reader.get.return_value = raw.encode() if isinstance(raw, str) else raw
+        with patch("redis.Redis.from_url", return_value=reader):
+            return _beat_status()
+
+    def test_the_real_writers_timestamp_reads_ok(self):
+        """`dispatch_due_posts` calls `_record_beat_heartbeat(utcnow())`, so
+        this is the exact value production stores."""
+        from godeye_engine.db import utcnow
+
+        assert self._round_trip(utcnow()).startswith("ok")
+
+    def test_utcnow_is_naive_which_is_why_this_matters(self):
+        """Pins the premise. If utcnow() ever becomes aware this test should be
+        revisited rather than silently passing for a different reason."""
+        from godeye_engine.db import utcnow
+
+        assert utcnow().tzinfo is None
+
+    def test_an_aware_timestamp_still_reads_ok(self):
+        """Both shapes, because a naive key written before this fix can still
+        be in Redis alongside aware ones, and neither may 500."""
+        assert self._round_trip(datetime.now(UTC)).startswith("ok")
+
+    def test_the_age_is_right_and_not_off_by_a_timezone(self):
+        """Normalising to UTC rather than local time. Attaching the wrong zone
+        would still parse and subtract, and would report an age hours out --
+        which reads as "beat is dead" on a system that is fine."""
+        from godeye_engine.db import utcnow
+
+        status = self._round_trip(utcnow())
+        seconds = int(status.split("last dispatch ")[1].split("s ago")[0])
+        assert 0 <= seconds < 5, status
