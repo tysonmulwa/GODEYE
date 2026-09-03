@@ -84,12 +84,29 @@ that is not rate limiting — N replicas means N times the limit, and a rolling
 deploy resets every counter. `RedisThrottlerStorage` uses one atomic Lua
 `INCRBY` + `PEXPIRE` per request.
 
-**When Redis is unreachable:** production **refuses the request** (503). A rate
-limiter that opens under load is missing exactly when it is needed, and "Redis is
-struggling" is the same moment somebody is hammering the login route (§1.8).
-Outside production it falls back to per-process counters and logs a warning
-once — a developer without Redis should get a working API, not a wall of 503s
-that teaches them to disable the limiter.
+**When Redis is unreachable:** counters fall back to **per process**, in every
+environment. Limits still apply, but N replicas allow N times each limit until
+Redis answers again. Every failure increments
+`godeye_ratelimit_store_failures_total`, so `RateLimitStoreDown` pages.
+
+This previously refused the request in production, on the reasoning that a
+limiter which opens under load is missing when it is needed. That reasoning is
+right for authorization and was wrong here, for two reasons found the hard way:
+
+1. **It made one Redis outage a total API outage.** The throttler guard is
+   global, so every request 503'd, including `/health/ready` — the deploy
+   healthcheck. Deploys could never go healthy and retried for two days showing
+   "building", while `/health` could not report the cause because it was refused
+   too. Losing the ability to diagnose an incident, during the incident, is a
+   very high price for a counter.
+2. **It handed an attacker the outage for free.** Anyone able to pressure Redis
+   takes the whole API down with it. Failing closed here converts a degraded
+   dependency into a self-inflicted denial of service, which is a worse security
+   outcome than the one being defended against.
+
+The health endpoints are additionally marked `@SkipThrottle()`. A probe is
+infrastructure, not traffic: unauthenticated, constant-rate, and the one thing
+that has to keep answering while everything else is broken.
 
 ### Responses
 

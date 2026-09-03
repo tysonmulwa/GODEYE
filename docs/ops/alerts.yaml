@@ -179,11 +179,15 @@ groups:
         for: 2m
         labels: { severity: page }
         annotations:
-          summary: "The rate-limit store is unreachable and requests are being refused"
+          summary: "The rate-limit store is unreachable; limits are per replica"
           description: >-
-            Production fails closed here, deliberately: a limiter that opens
-            under load is missing exactly when it is needed. Correct behaviour
-            AND a full outage, so it pages.
+            Redis is not answering, so counters have degraded to per-process.
+            N replicas now allow N times each limit until it recovers, so this
+            pages: the limits are weakened, not enforced-and-shared.
+            This used to REFUSE every request instead, which turned one Redis
+            blip into a total API outage that also took /health/ready down with
+            it, so deploys could never go healthy. Degrading is the lesser
+            failure; it is still a failure.
           runbook: docs/security/RATE-LIMITING.md
 
       - alert: EgressBlockedSpike

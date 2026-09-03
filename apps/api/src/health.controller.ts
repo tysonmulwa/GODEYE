@@ -1,4 +1,5 @@
 import { Controller, Get, Query } from "@nestjs/common";
+import { SkipThrottle } from "@nestjs/throttler";
 import { ApiOperation, ApiTags } from "@nestjs/swagger";
 import { env } from "./common/env";
 import { EngineService } from "./engine/engine.service";
@@ -25,6 +26,22 @@ import { Public } from "./common/public.decorator";
  * engine can reach its dependencies, and it is most wanted exactly when signing
  * in is not working. It reveals no key and no plan code — booleans only.
  */
+/**
+ * Never throttled.
+ *
+ * The rate-limit store is Redis, and in production it fails CLOSED: unreachable
+ * counters mean the request is refused. Applied to a probe that is a cascade.
+ * Redis went down, so every request 503'd -- including /health/ready, which is
+ * Railway's healthcheck path. The deploy could then never become healthy, so it
+ * retried for two days while reporting "building", and /health could not say
+ * why because it was refused too.
+ *
+ * A probe is infrastructure, not traffic. It is unauthenticated, constant-rate,
+ * and the one thing that must keep answering while everything else is broken.
+ * Throttling it protects nothing and costs the ability to diagnose an incident
+ * during the incident.
+ */
+@SkipThrottle()
 @ApiTags("health")
 @Controller("health")
 export class HealthController {

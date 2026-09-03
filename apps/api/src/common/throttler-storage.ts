@@ -1,4 +1,4 @@
-import { Injectable, Logger, OnModuleDestroy, ServiceUnavailableException } from "@nestjs/common";
+import { Injectable, Logger, OnModuleDestroy } from "@nestjs/common";
 import type { ThrottlerStorage } from "@nestjs/throttler";
 import type { ThrottlerStorageRecord } from "@nestjs/throttler/dist/throttler-storage-record.interface";
 import Redis from "ioredis";
@@ -52,7 +52,7 @@ export interface CountingStorage extends ThrottlerStorage {
   ): Promise<ThrottlerStorageRecord>;
 }
 
-/** The in-process fallback, used only outside production. */
+/** The in-process fallback, used whenever Redis cannot answer. */
 class MemoryCounters {
   private readonly map = new Map<string, { hits: number; expiresAt: number }>();
 
@@ -136,14 +136,32 @@ export class RedisThrottlerStorage implements CountingStorage, OnModuleDestroy {
   /**
    * What to do when the counter store is unreachable.
    *
-   * Production fails closed: a rate limiter that opens under load is missing
-   * exactly when it is needed, and "Redis is struggling" is the same moment an
-   * attacker is hammering the login route. §1.8 — a check that cannot reach its
-   * dependency denies.
+   * It degrades to per-process counting, in every environment, and says so
+   * loudly once per outage. The metric still fires on every failure, so the
+   * RateLimitStoreDown alert still pages.
    *
-   * Outside production it degrades to per-process counting and says so, loudly
-   * and once. A developer without Redis running should get a working API, not a
-   * wall of 503s that teaches them to disable the limiter.
+   * ## This used to refuse the request in production, and that was wrong
+   *
+   * The reasoning was "a check that cannot reach its dependency denies", which
+   * is right for authorization and wrong here, for two reasons.
+   *
+   * **It made one Redis outage a total API outage, and a self-inflicted one.**
+   * The throttler guard is global, so every request 503'd -- including
+   * /health/ready, which is the deploy healthcheck. The deploy could then never
+   * go healthy, so it retried for two days showing "building", and /health
+   * could not report the cause because it was refused too. Losing the ability
+   * to diagnose an incident is a high price for a counter.
+   *
+   * **It handed an attacker the outage for free.** Anyone who can pressure
+   * Redis -- a noisy tenant, a memory spike, a restart -- takes the whole API
+   * down with it. Fail-closed here converts a degraded dependency into a denial
+   * of service against yourself, which is a worse security outcome than the one
+   * it was defending.
+   *
+   * The fallback is not "no limiting". Counters keep working per process, so N
+   * replicas allow N times the limit for the duration of the outage. That is a
+   * real weakening and it is bounded, logged, and measured -- against a
+   * previously unbounded, unmeasured, self-inflicted 100% outage.
    */
   private onStorageFailure(
     error: unknown,
@@ -153,20 +171,15 @@ export class RedisThrottlerStorage implements CountingStorage, OnModuleDestroy {
     cost: number,
   ): ThrottlerStorageRecord {
     const reason = error instanceof Error ? error.message : String(error);
-    if (env.nodeEnv === "production") {
-      this.logger.error(`Rate-limit store unreachable, refusing the request: ${reason}`);
-      // The alert this drives pages, because refusing is correct AND is an
-      // outage. See docs/ops/alerts.yaml RateLimitStoreDown.
-      rateLimitStoreFailures.add(1);
-      throw new ServiceUnavailableException(
-        "Service temporarily unavailable. Please retry in a moment.",
-      );
-    }
+    // Counted on every failure, not once: the alert needs the rate, and a
+    // once-only signal cannot tell a blip from a sustained outage.
+    rateLimitStoreFailures.add(1);
     if (!this.warnedAboutFallback) {
       this.warnedAboutFallback = true;
-      this.logger.warn(
-        `Rate-limit store unreachable (${reason}). Falling back to per-process counters. ` +
-          `This is a development-only behaviour; in production the request would be refused.`,
+      this.logger.error(
+        `Rate-limit store unreachable (${reason}). Falling back to per-process ` +
+          `counters: limits are now per replica rather than shared, until Redis ` +
+          `answers again. See docs/ops/alerts.yaml RateLimitStoreDown.`,
       );
     }
     const { hits, ttlMs } = this.memory.bump(key, ttl, Math.max(1, cost));
