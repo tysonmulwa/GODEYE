@@ -5,8 +5,23 @@
     "dockerfilePath": "apps/engine/Dockerfile"
   },
   "deploy": {
-    "startCommand": "celery -A godeye_engine.celery_app worker --beat --schedule=/tmp/celerybeat-schedule --loglevel=info --concurrency=2 --max-tasks-per-child=50",
+    "startCommand": "celery -A godeye_engine.celery_app worker --beat --schedule=/tmp/celerybeat-schedule -Q background,publish,media --loglevel=info --concurrency=2 --max-tasks-per-child=50",
     "restartPolicyType": "ON_FAILURE",
     "restartPolicyMaxRetries": 10
-  }
+  },
+  "_comment": [
+    "-Q is NOT optional. Without it a Celery worker consumes only",
+    "task_default_queue ('background'), so everything task_routes sends to",
+    "'publish' or 'media' is queued and never executed.",
+    "",
+    "That is what stopped publishing. Beat logged 'Sending due task",
+    "dispatch-due-posts' every 30 seconds and the task was never once received,",
+    "because dispatch_due_posts is routed to 'publish'. Meanwhile plan_autopilot",
+    "is unrouted, so it landed on 'background', ran fine, and made the worker",
+    "look healthy. Image and video generation were dead for the same reason.",
+    "",
+    "If the queues are ever split across services, each worker names its own",
+    "subset here and BETWEEN THEM they must cover all three. /health reports a",
+    "queue with no consumer."
+  ]
 }

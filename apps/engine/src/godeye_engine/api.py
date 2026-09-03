@@ -13,7 +13,7 @@ from prometheus_client import CONTENT_TYPE_LATEST
 from pydantic import BaseModel, Field
 from sqlalchemy import text
 
-from .celery_app import worker_builds
+from .celery_app import queue_coverage, worker_builds
 from .config import get_settings, validate_config
 from .db import get_engine
 from .metrics_registry import render, sample_queue_depths, sample_saturation
@@ -193,6 +193,26 @@ def health(render: str = "") -> dict:
         checks["workers"] = f"error: cannot confirm workers match this build ({build}): {detail}"
     else:
         checks["workers"] = f"ok ({len(workers)} on {build})"
+
+    # Which queues actually have somebody listening.
+    #
+    # A worker consumes only the queues named with `-Q`. Anything routed
+    # elsewhere is accepted by the broker and never run: no error, no dead
+    # letter, beat logging "Sending due task" forever. Publishing was dead for
+    # weeks this way while every other check on this page stayed green, because
+    # the one unrouted periodic task happened to land on the queue the worker
+    # did consume.
+    coverage = queue_coverage()
+    if coverage.get("error"):
+        checks["queues"] = f"error: cannot inspect queues: {coverage['error']}"
+    elif coverage["missing"]:
+        checks["queues"] = (
+            f"error: no consumer for {', '.join(coverage['missing'])}. "
+            f"Tasks routed there are queued and never run; add them to the "
+            f"worker's -Q list."
+        )
+    else:
+        checks["queues"] = f"ok ({', '.join(coverage['covered'])})"
 
     # Beat, which nothing above can see.
     #

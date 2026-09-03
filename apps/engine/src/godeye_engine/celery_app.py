@@ -61,10 +61,20 @@ app.conf.update(
     #   media       minutes of CPU: image and video generation
     #   background  everything else — crawls, imports, sweeps, metrics
     #
-    # A worker still consumes all three by default, so nothing changes until
-    # somebody runs a second worker with `-Q publish`. That is the point: the
-    # split has to exist in the code before it can be used in the deployment.
-    # See docs/ops/CAPACITY.md.
+    # A worker consumes ONLY the queues it is given with `-Q`, defaulting to
+    # task_default_queue alone. It does NOT pick up a queue merely because
+    # task_routes mentions it.
+    #
+    # This comment previously claimed the opposite, and the deployment believed
+    # it: the worker ran without -Q, so it consumed 'background' and nothing
+    # else. Beat logged "Sending due task dispatch-due-posts" every 30 seconds
+    # and the task was never once received, because it routes to 'publish'.
+    # plan_autopilot is unrouted, landed on 'background', ran fine, and kept the
+    # worker looking healthy while nothing published for weeks.
+    #
+    # Every worker must therefore name its queues, and between them they must
+    # cover all three. `queue_coverage()` below reports any queue with no
+    # consumer, and /health surfaces it. See docs/ops/CAPACITY.md.
     task_default_queue="background",
     task_routes={
         "godeye_engine.tasks.scheduler.dispatch_due_posts": {"queue": "publish"},
@@ -168,6 +178,43 @@ def _ffmpeg_status() -> str:
         return f"exited {proc.returncode}"
     first = (proc.stdout or "").splitlines()
     return first[0][:60] if first else "ok"
+
+
+#: Every queue a task can be routed to. A queue absent from this set is one
+#: nobody is watching; a queue present here with no consumer is an outage.
+REQUIRED_QUEUES = {"background", "publish", "media"}
+
+
+def queue_coverage(timeout: float = 2.0) -> dict:
+    """Which required queues currently have a consumer.
+
+    Exists because the failure it detects is completely silent. A worker
+    consumes only the queues named with `-Q`; anything routed elsewhere is
+    accepted by the broker, queued, and never run. Beat logs a cheerful
+    "Sending due task" every tick, no task errors, no dead letters, and every
+    other check stays green while the product does nothing.
+
+    Returns the covered and missing sets rather than a bare bool, so /health can
+    name the queue instead of saying something is wrong.
+    """
+    try:
+        with app.connection_for_write(connect_timeout=timeout) as conn:
+            conn.ensure_connection(max_retries=0, timeout=timeout)
+            active = app.control.inspect(timeout=timeout, connection=conn).active_queues() or {}
+    except Exception as e:  # noqa: BLE001, an unreachable broker is a report, not a crash
+        return {"error": str(e)[:200], "covered": [], "missing": []}
+
+    covered: set[str] = set()
+    for queues in active.values():
+        for queue in queues or []:
+            name = queue.get("name")
+            if name:
+                covered.add(name)
+
+    return {
+        "covered": sorted(covered & REQUIRED_QUEUES),
+        "missing": sorted(REQUIRED_QUEUES - covered),
+    }
 
 
 def worker_builds(timeout: float = 2.0) -> list[dict]:

@@ -96,7 +96,7 @@ Two images, and their start commands are **not interchangeable**:
 |---|---|---|
 | `GODEYE` (API) | `apps/api/Dockerfile` — **Node** | `node dist/main.js` |
 | engine api | `apps/engine/Dockerfile` — **Python** | `uvicorn godeye_engine.api:app --host 0.0.0.0 --port $PORT` |
-| engine worker | `apps/engine/Dockerfile` — **Python** | `celery -A godeye_engine.celery_app worker --beat --schedule=/tmp/celerybeat-schedule --loglevel=info --concurrency=2 --max-tasks-per-child=50` |
+| engine worker | `apps/engine/Dockerfile` — **Python** | `celery -A godeye_engine.celery_app worker --beat --schedule=/tmp/celerybeat-schedule -Q background,publish,media --loglevel=info --concurrency=2 --max-tasks-per-child=50` |
 
 A Celery command on the API service fails with **"The executable `celery` could
 not be found"**: the Node image has no Python in it. This is worth stating
@@ -119,13 +119,22 @@ knows how to run itself.
 # 1. api, receives enqueue calls from NestJS (this is the only one with a port)
 uvicorn godeye_engine.api:app --host 0.0.0.0 --port $PORT   # image default
 # 2. worker AND scheduler in one service
-celery -A godeye_engine.celery_app worker --beat --schedule=/tmp/celerybeat-schedule --loglevel=info
+celery -A godeye_engine.celery_app worker --beat --schedule=/tmp/celerybeat-schedule -Q background,publish,media --loglevel=info
 ```
 
 Both need the same env: `DATABASE_URL`, `REDIS_URL`, `ENGINE_INTERNAL_SECRET`
 (must match the API), an LLM key (`ANTHROPIC_API_KEY` or `OPENAI_API_KEY`),
 `GOOGLE_API_KEY` / image keys, and the `S3_*` set. Leave `FFMPEG_PATH` blank,
 ffmpeg is on the image and found via PATH.
+
+**`-Q` is not optional.** A Celery worker consumes only the queues named there,
+defaulting to `task_default_queue` (`background`) alone — it does NOT pick up a
+queue just because `task_routes` mentions it. `dispatch_due_posts` routes to
+`publish`, so a worker started without `-Q` schedules it forever and never runs
+it: beat logs "Sending due task" every 30 seconds, no error appears anywhere,
+and the unrouted `plan_autopilot` keeps landing on `background` and succeeding,
+so the worker looks healthy. Publishing, images and video were all dead this way.
+`/health` now reports `queues`, naming any queue with no consumer.
 
 **Without the worker service nothing publishes.** The API accepts the schedule
 and no process ever dispatches it: posts sit at PENDING past their time with no
