@@ -1,27 +1,36 @@
 {
   "$schema": "https://railway.app/railway.schema.json",
   "_comment": [
-    "NO `exec` prefix here. Railway's Dockerfile builder runs the start command directly as PID 1 with no shell, so the first token must be a real binary: `exec celery ...` fails with \"The executable `exec` could not be found\". It is also unnecessary \u2014 running as PID 1 is exactly what the exec was for, and Railway already does it, so celery receives SIGTERM directly.",
-    "",
     "THE SCHEDULER, and there must be exactly one of it.",
     "",
-    "Beat only PRODUCES: it puts due tasks on the broker and consumes nothing.",
-    "So it needs no -Q, and it does no work itself -- if this service is running",
-    "and no worker consumes 'publish', posts still never publish.",
+    "NO `exec` prefix. Railway's Dockerfile builder runs the start command",
+    "directly as PID 1 with no shell, so the first token must be a real",
+    "binary -- `exec` is a shell builtin and fails with \"The executable",
+    "`exec` could not be found\". It is also unnecessary: running as PID 1 is",
+    "exactly what it was for, and this builder already does it.",
     "",
-    "Run this OR `worker --beat`, never both. Two schedulers means every periodic",
-    "task fires twice. periodic_lock.py makes that harmless rather than",
-    "corrupting, but harmless is not the same as intended, and the duplicate",
-    "still costs a broker round trip per task per tick.",
+    "Beat only PRODUCES: it puts due tasks on the broker and consumes",
+    "nothing. So it needs no -Q, and it does no work itself. If this service",
+    "is running and no worker consumes 'publish', posts still never publish.",
     "",
-    "Replicas: exactly 1. Beat has no leader election of its own."
+    "Run this OR `worker --beat`, never both. Two schedulers fire every",
+    "periodic task twice. periodic_lock.py makes that harmless rather than",
+    "corrupting, but harmless is not intended.",
+    "",
+    "Replicas: exactly 1. Beat has no leader election of its own.",
+    "",
+    "This file is generated rather than hand-edited when it changes: two",
+    "successive hand fixes left `\"startCommand\": \"startCommand\": \"...\"`,",
+    "which is invalid JSON. Railway could not parse it, engine-beat failed,",
+    "and a failing service holds the deployment slot -- so nothing else in",
+    "the project could deploy either."
   ],
   "build": {
     "builder": "DOCKERFILE",
     "dockerfilePath": "apps/engine/Dockerfile"
   },
   "deploy": {
-    "startCommand": "startCommand": "celery -A godeye_engine.celery_app beat --schedule=/tmp/celerybeat-schedule --loglevel=info",
+    "startCommand": "celery -A godeye_engine.celery_app beat --schedule=/tmp/celerybeat-schedule --loglevel=info",
     "restartPolicyType": "ON_FAILURE",
     "restartPolicyMaxRetries": 10
   }
