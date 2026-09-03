@@ -131,3 +131,39 @@ class TestTheQueueRoutingSurvives:
 
         assert " beat " in f" {beat} ", "the beat service does not run beat"
         assert "--beat" not in worker, "worker runs its own scheduler: that is two beats"
+
+
+@pytest.mark.parametrize("path", CONFIGS, ids=lambda p: str(p.relative_to(REPO_ROOT)))
+def test_pre_deploy_command_is_declared_and_empty(path: Path):
+    """Declared, not merely cleared in the dashboard.
+
+    Railway's rule is that "configuration defined in code will always override
+    values from the dashboard" -- but only for fields the code actually names.
+    An undeclared field falls back to the dashboard value, and a redeploy
+    inherits the old manifest wholesale. So clearing this in the UI fixes one
+    service until the next redeploy; declaring it here is what makes it stay.
+
+    It has to be empty. A pre-deploy command that hangs rather than fails holds
+    the deployment slot, and every other service then sits at "Waiting for
+    deployment slot" -- including the deploy that would fix it. That is the
+    state the whole project was wedged in: five services queued behind a
+    pre-deploy that could never finish.
+
+    Emptiness costs nothing here because migrations are deliberate and
+    expand-only (docs/DEPLOYMENT.md): they are applied before the code that
+    needs them, old code ignores new columns, and so a deploy never has to
+    migrate in order to succeed.
+    """
+    deploy = json.loads(path.read_text(encoding="utf-8")).get("deploy", {})
+    assert "preDeployCommand" in deploy, (
+        f"{path.relative_to(REPO_ROOT)} does not declare preDeployCommand, so "
+        f"Railway falls back to whatever is set in the dashboard and every "
+        f"redeploy inherits it"
+    )
+    command = deploy["preDeployCommand"]
+    assert command in ([], None, ""), (
+        f"{path.relative_to(REPO_ROOT)} sets preDeployCommand to {command!r}. "
+        f"If a pre-deploy is genuinely needed, it must be non-interactive and "
+        f"must fail rather than hang: `prisma migrate dev` prompts for input a "
+        f"container cannot give, and waits forever holding the slot."
+    )

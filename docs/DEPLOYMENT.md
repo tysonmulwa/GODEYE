@@ -106,9 +106,21 @@ so Railway keeps the **previous** one serving and retries. The dashboard shows
 slow build rather than a broken command.
 
 If a service will not start, check its **custom start command** before anything
-else. A value set in the Railway dashboard overrides both `railway.json` and the
-Dockerfile's `CMD`. Clearing it is usually the fix, because each image already
-knows how to run itself.
+else.
+
+The precedence rule is per field, and getting it backwards costs hours.
+Railway's own wording is that "configuration defined in code will always
+override values from the dashboard" -- but that only covers fields the config
+file actually names. A field the file **omits** falls back to the dashboard
+value, and a redeploy reuses the previous deployment's whole manifest. So an
+unwanted dashboard value is invisible in the repo, survives every redeploy, and
+is only really removed by naming the field in `railway.json` with the value you
+want.
+
+That is the difference between clearing a field in the UI, which fixes one
+service until its next redeploy, and declaring it in code, which is what makes
+it stay. Every field we care about is declared in the config files for exactly
+this reason, empty ones included.
 
 ### Pre-deploy commands: leave them empty
 
@@ -142,6 +154,14 @@ They are expand-only, so applying them **before** shipping the code is both safe
 and correct: old code ignores new columns. That ordering also means a deploy
 never has to migrate to succeed, which is why the pre-deploy field should stay
 empty.
+
+Every `railway*.json` therefore declares `"preDeployCommand": []` explicitly,
+rather than leaving it out and trusting the dashboard to be empty. Leaving it
+out is what wedged the project: the field was set in the dashboard, nothing in
+the repo contradicted it, and each redeploy inherited it again -- so the
+services queued behind a pre-deploy that could never finish, including the
+deploys that would have fixed them. `apps/engine/tests/test_railway_config.py`
+fails if any config stops declaring it.
 
 ### 6. Engine, one image, three services
 
