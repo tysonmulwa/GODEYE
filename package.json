@@ -21,6 +21,8 @@
     "db:seed": "pnpm --filter @godeye/db seed",
     "db:studio": "pnpm --filter @godeye/db studio",
     "lint:rules": "node scripts/lint-rules.mjs",
+    "railway:drift": "node scripts/railway-drift.mjs",
+    "railway:drift:self-test": "node scripts/railway-drift.mjs --self-test",
     "db:deploy:ci": "pnpm --filter @godeye/db migrate:ci"
   },
   "devDependencies": {

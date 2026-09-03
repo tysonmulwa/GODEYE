@@ -131,3 +131,38 @@ class TestTheQueueRoutingSurvives:
 
         assert " beat " in f" {beat} ", "the beat service does not run beat"
         assert "--beat" not in worker, "worker runs its own scheduler: that is two beats"
+
+
+class TestPreDeployCommandTerminates:
+    """A pre-deploy command that never exits stops the whole environment.
+
+    `engine-worker` had one, set in the Railway dashboard: the Celery worker
+    itself. A pre-deploy command has to EXIT before Railway starts the real
+    process, and a Celery worker does not, so every deploy stopped there and sat
+    in "Deploying" with the container up. A deployment stuck in a non-terminal
+    state holds the environment's deploy slot, so the API, the engine and beat
+    all queued behind it and nothing shipped for most of a day.
+
+    That value lived only in Railway's settings, so nothing here could have seen
+    it -- `scripts/railway-drift.mjs` is what asks Railway. This covers the half
+    that is in the repo: the same command arriving through a config file, which
+    is a diff away and would fail in exactly the same silent shape.
+    """
+
+    #: First tokens of processes that run until they are killed.
+    NEVER_EXITS = ("celery", "uvicorn", "gunicorn")
+
+    @pytest.mark.parametrize("path", CONFIGS, ids=lambda p: str(p.relative_to(REPO_ROOT)))
+    def test_pre_deploy_command_is_not_a_server(self, path: Path):
+        deploy = json.loads(path.read_text(encoding="utf-8")).get("deploy", {})
+        commands = deploy.get("preDeployCommand") or []
+        if isinstance(commands, str):
+            commands = [commands]
+        for command in commands:
+            first = command.split()[0] if command.split() else ""
+            assert first not in self.NEVER_EXITS, (
+                f"{path.relative_to(REPO_ROOT)}: preDeployCommand starts {first!r}, which "
+                f"runs until killed. The deploy will never finish, and it takes every "
+                f"other service in the environment down with it. A pre-deploy command is "
+                f"for a migration -- something that ends."
+            )

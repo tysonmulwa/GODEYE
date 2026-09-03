@@ -34,6 +34,13 @@ jobs:
         with:
           node-version: 22
       - run: node scripts/lint-rules.mjs
+      # The drift checker's own logic, against the state production was in
+      # during the pre-deploy outage. The check itself needs Railway
+      # credentials and an environment to look at, so it cannot run on a pull
+      # request from a fork -- but its classification must not be allowed to
+      # rot silently in the meantime, because the day somebody needs it is the
+      # day production is already stuck.
+      - run: node scripts/railway-drift.mjs --self-test
 
   node:
     name: Node
