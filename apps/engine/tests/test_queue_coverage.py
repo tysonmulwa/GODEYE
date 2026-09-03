@@ -128,3 +128,43 @@ class TestHealthWording:
     def test_ok_lists_what_is_covered(self):
         message = self._checks({"covered": ["background", "media", "publish"], "missing": []})
         assert message.startswith("ok")
+
+
+class TestTheRealCeleryApi:
+    """The mocked tests above cannot catch a wrong call signature.
+
+    Every test in this file patches `app.control.inspect`, so `queue_coverage`
+    could pass a keyword Celery does not accept and they would all still be
+    green -- the check would then report "cannot inspect queues" forever, in
+    production, while looking tested.
+
+    `Control.inspect` is a cached_property returning the Inspect CLASS, so the
+    call is really a constructor. These assert against the real one.
+    """
+
+    def test_inspect_accepts_the_keywords_queue_coverage_passes(self):
+        import inspect as ins
+
+        from celery.app.control import Inspect
+
+        params = ins.signature(Inspect.__init__).parameters
+        assert "timeout" in params
+        assert "connection" in params
+
+    def test_queue_coverage_reports_rather_than_raises_on_a_dead_broker(self):
+        """Exercises the real code path end to end, with nothing patched. It
+        must come back with an error dict, because this runs inside /health."""
+        import os
+        from unittest.mock import patch
+
+        from godeye_engine.config import get_settings
+
+        get_settings.cache_clear()
+        with patch.dict(os.environ, {"REDIS_URL": "redis://127.0.0.1:6399/0"}):
+            get_settings.cache_clear()
+            from godeye_engine.celery_app import queue_coverage
+
+            result = queue_coverage(timeout=0.5)
+        get_settings.cache_clear()
+        assert "error" in result
+        assert result["missing"] == []
