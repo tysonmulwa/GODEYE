@@ -143,6 +143,24 @@ Three ways that command hangs rather than fails, all of them silent:
 3. **A script that does not exist.** `npm run migrate` in `apps/api` matches
    nothing — there is no `migrate` script there — and the engine image is Python
    with no npm at all.
+4. **The service's own start command, pasted into the pre-deploy field.** This
+   is the one that actually happened: `engine-worker` had
+   `celery … worker --beat …` as its pre-deploy command. It starts, it works, it
+   never exits. Three deployments were still "Deploying" with containers up
+   hours later, and the API, engine and beat queued behind them all day. Nothing
+   went red — a hung pre-deploy looks exactly like a slow one.
+
+**A warning in this file did not prevent number 4,** which is why there is now a
+check instead:
+
+```bash
+pnpm railway:drift        # asks Railway what it is running, compares to this repo
+```
+
+It reads every service's live config and reports anything set in the dashboard
+that no `railway*.json` declares — the class of setting that governs a deploy
+while appearing in no diff and no review. Run it after touching anything in the
+Railway UI, and when a deploy is stuck with no error to read.
 
 **Migrations are run deliberately, not on every deploy of every service:**
 
