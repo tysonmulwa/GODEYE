@@ -15,7 +15,7 @@ from datetime import time as dt_time
 from zoneinfo import ZoneInfo
 
 from croniter import croniter
-from sqlalchemy import func, select, update
+from sqlalchemy import func, or_, select, update
 
 from .. import intel
 from ..ai import content_agent
@@ -24,8 +24,10 @@ from ..db import (
     AgentRun,
     BusinessProfile,
     ContentItem,
+    MediaAsset,
     Organization,
     PostingPlan,
+    Product,
     ScheduledPost,
     SocialConnection,
     get_session,
@@ -242,6 +244,85 @@ def _record_failed_autopilot_run(plan, goal, topic, slot, error: BaseException) 
         )
 
 
+def _catalogue_fallback(plan, profile, slot_index: int):
+    """A post built from the workspace's own catalogue, needing no model.
+
+    Autopilot used to give up entirely when generation failed, and product
+    posts did not: `product_agent.generate` catches the same failure and falls
+    back to the product's own words, on the principle that a plain post beats
+    no post. So an empty model balance stopped autopilot dead while the same
+    workspace kept posting its catalogue, from the same broken dependency.
+
+    This gives autopilot the same escape. Nothing here is invented: the copy is
+    the shop's own title, description and price, and the picture is the shop's
+    own photograph. That is the reason to do it at all -- a fallback that made
+    up marketing copy from a topic string and published it under the customer's
+    brand would be worse than silence.
+
+    Returns (content, product), or (None, None) when there is nothing to post:
+    no catalogue, or every product used too recently. Callers must handle that,
+    because most workspaces have no catalogue at all.
+    """
+    from ..ai import product_agent
+    from .product_posts import REPOST_AFTER_DAYS
+
+    if profile is None:
+        return None, None
+    try:
+        with get_session() as session:
+            product = session.execute(
+                select(Product)
+                .where(
+                    Product.c.orgId == plan["orgId"],
+                    # Sending people to something unbuyable is worse than not
+                    # posting, which is why this is the one status acted on.
+                    or_(
+                        Product.c.availability.is_(None),
+                        Product.c.availability != "OutOfStock",
+                    ),
+                    or_(
+                        Product.c.lastPostedAt.is_(None),
+                        Product.c.lastPostedAt < utcnow() - timedelta(days=REPOST_AFTER_DAYS),
+                    ),
+                )
+                # Never posted first, then whichever has waited longest, so the
+                # catalogue rotates instead of repeating one product.
+                .order_by(
+                    Product.c.lastPostedAt.asc().nullsfirst(),
+                    Product.c.firstSeenAt.desc(),
+                )
+                .limit(1)
+            ).mappings().first()
+        if product is None:
+            return None, None
+
+        post = product_agent.generate(
+            dict(product),
+            dict(profile),
+            angle_index=product["postCount"] or 0,
+            locale=(profile.get("locale") if hasattr(profile, "get") else None),
+        )
+    except Exception:  # noqa: BLE001
+        # This is already the failure path. Raising here would replace the
+        # generation error with a second one and lose the first.
+        logger.exception("Autopilot catalogue fallback failed for plan %s", plan["id"])
+        return None, None
+
+    return (
+        content_agent.GeneratedContent(
+            title=(product["title"] or "")[:200],
+            body=post.body,
+            hashtags=post.hashtags,
+            variants={},
+            ab_variants=None,
+            # No model ran, so there is no usage to attribute. Callers check
+            # this rather than assuming a completion happened.
+            llm=None,
+        ),
+        product,
+    )
+
+
 @app.task(name="godeye_engine.tasks.planner.autopilot_generate")
 def autopilot_generate(plan_id: str, slot_iso: str, slot_index: int = 0) -> dict:
     slot = datetime.fromisoformat(slot_iso)
@@ -299,8 +380,20 @@ def autopilot_generate(plan_id: str, slot_iso: str, slot_index: int = 0) -> dict
         )
     except Exception as e:  # noqa: BLE001
         logger.exception("Autopilot generation failed for plan %s", plan_id)
-        _record_failed_autopilot_run(plan, goal, topic, slot, e)
-        return {"status": "FAILED", "error": str(e)}
+        # A workspace that imported its catalogue has real things to post
+        # about: its own products, its own descriptions, its own prices. That
+        # is a better post than nothing, and it needs no model at all.
+        result, fallback_product = _catalogue_fallback(plan, profile, slot_index)
+        if result is None:
+            _record_failed_autopilot_run(plan, goal, topic, slot, e)
+            return {"status": "FAILED", "error": str(e)}
+        logger.warning(
+            "Autopilot fell back to the catalogue for plan %s (%s): %s",
+            plan_id, type(e).__name__, e,
+        )
+
+    else:
+        fallback_product = None
 
     now = utcnow()
     content_id = new_id()
@@ -315,13 +408,21 @@ def autopilot_generate(plan_id: str, slot_iso: str, slot_index: int = 0) -> dict
                 orgId=plan["orgId"],
                 agent="CONTENT",
                 status="SUCCEEDED",
-                input={"autopilot": True, "planId": plan_id, "goal": goal, "topic": topic},
+                input={
+                    "autopilot": True,
+                    "planId": plan_id,
+                    "goal": goal,
+                    "topic": topic,
+                    # So "why is this post about a product?" has an answer.
+                    **({"fallback": "catalogue", "productId": fallback_product["id"]}
+                       if fallback_product else {}),
+                },
                 output={"contentItemId": content_id},
-                provider=result.llm.provider,
-                model=result.llm.model,
-                inputTokens=result.llm.input_tokens,
-                outputTokens=result.llm.output_tokens,
-                costUsd=round(result.llm.cost_usd, 6),
+                provider=result.llm.provider if result.llm else None,
+                model=result.llm.model if result.llm else None,
+                inputTokens=result.llm.input_tokens if result.llm else None,
+                outputTokens=result.llm.output_tokens if result.llm else None,
+                costUsd=round(result.llm.cost_usd, 6) if result.llm else None,
                 createdAt=now,
                 completedAt=now,
             )
@@ -350,6 +451,37 @@ def autopilot_generate(plan_id: str, slot_iso: str, slot_index: int = 0) -> dict
                 updatedAt=now,
             )
         )
+        if fallback_product is not None and fallback_product["imageUrl"]:
+            # The shop's own photograph, registered as an asset so publishing
+            # treats it exactly like an uploaded one. This is what stops the
+            # post going out as bare text, which Instagram refuses outright.
+            session.execute(
+                MediaAsset.insert().values(
+                    id=new_id(),
+                    orgId=plan["orgId"],
+                    contentItemId=content_id,
+                    kind="IMAGE",
+                    source="IMPORTED",
+                    # The shop hosts it, so there is no object of ours behind
+                    # this, but the column is NOT NULL.
+                    storageKey=fallback_product["imageUrl"],
+                    url=fallback_product["imageUrl"],
+                    mimeType="image/jpeg",
+                    createdAt=now,
+                )
+            )
+        if fallback_product is not None:
+            # Same bookkeeping create_product_post does, so the two paths share
+            # one rotation and neither reposts what the other just used.
+            session.execute(
+                update(Product)
+                .where(Product.c.id == fallback_product["id"])
+                .values(
+                    lastPostedAt=now,
+                    postCount=(fallback_product["postCount"] or 0) + 1,
+                    updatedAt=now,
+                )
+            )
         for index, conn in enumerate(connections):
             variant_key = None
             if plan["abTesting"] and result.ab_variants:
@@ -373,7 +505,12 @@ def autopilot_generate(plan_id: str, slot_iso: str, slot_index: int = 0) -> dict
         session.commit()
 
     # Optionally generate an on-brand image and attach it to this post.
-    if plan["generateImages"]:
+    if fallback_product is not None:
+        # It already carries the shop's photograph. Generating one here would
+        # ask for the model budget that just failed, and would replace a real
+        # photograph of the product with an invented picture of it.
+        pass
+    elif plan["generateImages"]:
         _queue_image_for_content(
             plan, content_id, result.title, topic or goal, connections, body=result.body
         )
