@@ -188,6 +188,60 @@ def plan_autopilot() -> int:
     return planned
 
 
+def _record_failed_autopilot_run(plan, goal, topic, slot, error: BaseException) -> None:
+    """Leave a record when autopilot cannot generate a post.
+
+    AgentRun was written only on success, so a generation failure produced
+    nothing at all: no run, no content, no scheduled post, and nothing in the
+    product to look at. The only trace was a line in the worker log.
+
+    That is worse here than it sounds, because the slot is already spent.
+    plan_autopilot advances lastPlannedAt as soon as it DISPATCHES this task,
+    not when it succeeds, so a failed slot is never planned again. Autopilot
+    then goes quiet permanently while every plan still reads "active", which is
+    what happened: the planner kept running every five minutes and the last
+    post it produced was eighteen days old.
+
+    Fixing the advance-on-dispatch behaviour is a separate change with real
+    duplicate-post risk. This one makes the failure visible and says which slot
+    was lost, which is what tells anybody it is happening at all.
+
+    Best effort: this runs because something already failed, so it must not
+    raise on top of it.
+    """
+    detail = str(error).strip() or f"{type(error).__name__} (no message)"
+    try:
+        now = utcnow()
+        with get_session() as session:
+            session.execute(
+                AgentRun.insert().values(
+                    id=new_id(),
+                    orgId=plan["orgId"],
+                    agent="CONTENT",
+                    status="FAILED",
+                    input={
+                        "autopilot": True,
+                        "planId": plan["id"],
+                        "goal": goal,
+                        "topic": topic,
+                        # The slot is the part that cannot be recovered, so it
+                        # is the part worth recording.
+                        "slot": slot.isoformat(),
+                    },
+                    error=detail[:2000],
+                    createdAt=now,
+                    completedAt=now,
+                )
+            )
+            session.commit()
+    except Exception:  # noqa: BLE001
+        logger.exception(
+            "Autopilot generation failed for plan %s AND the failure could not "
+            "be recorded. Original error: %s",
+            plan["id"], detail,
+        )
+
+
 @app.task(name="godeye_engine.tasks.planner.autopilot_generate")
 def autopilot_generate(plan_id: str, slot_iso: str, slot_index: int = 0) -> dict:
     slot = datetime.fromisoformat(slot_iso)
@@ -245,6 +299,7 @@ def autopilot_generate(plan_id: str, slot_iso: str, slot_index: int = 0) -> dict
         )
     except Exception as e:  # noqa: BLE001
         logger.exception("Autopilot generation failed for plan %s", plan_id)
+        _record_failed_autopilot_run(plan, goal, topic, slot, e)
         return {"status": "FAILED", "error": str(e)}
 
     now = utcnow()
