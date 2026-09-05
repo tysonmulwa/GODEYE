@@ -17,6 +17,16 @@ import { ThemeSwitch } from "./theme-switch";
  * the only places it is used, and both inherit the existing
  * prefers-reduced-transparency fallback.
  *
+ * The mobile drawer is a SIBLING of <header>, never a child, and that is
+ * load-bearing rather than tidiness. An element with `backdrop-filter` becomes
+ * the containing block for `position: fixed` descendants, exactly as
+ * `transform` does. The header only carries `m-glass-strong` once the page has
+ * moved, so a drawer nested inside it was full-screen at the top of the page
+ * and, after a single scroll, resolved `inset-0` against the header's 4.5rem
+ * box instead of the viewport: the black backdrop covered only that strip and
+ * the menu sat unreadable on top of the hero. Same markup, correct at one
+ * scroll position and broken at every other, which is what made it survive.
+ *
  * The integration pages are NOT in this nav. They are reference pages a visitor
  * reaches when they want detail about one platform, which puts them with
  * Privacy and Terms in the footer rather than in the primary path.
@@ -138,8 +148,9 @@ export function SiteNav() {
         </div>
       </nav>
 
+      </header>
       {drawer ? (
-        <div className="fixed inset-0 z-50 md:hidden">
+        <div className="fixed inset-0 z-[60] md:hidden">
           <button
             type="button"
             aria-label="Close menu"
@@ -192,7 +203,6 @@ export function SiteNav() {
           </div>
         </div>
       ) : null}
-      </header>
     </>
   );
 }
